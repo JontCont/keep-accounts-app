@@ -1,0 +1,10 @@
+{
+  "name": "@keep-accounts-app/web-e2e",
+  "version": "0.0.1",
+  "private": true,
+  "nx": {
+    "implicitDependencies": [
+      "@keep-accounts-app/web"
+    ]
+  }
+}
