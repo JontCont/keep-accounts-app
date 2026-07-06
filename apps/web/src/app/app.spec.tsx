@@ -1,3 +1,4 @@
+import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 
@@ -9,8 +10,8 @@ describe('App', () => {
     expect(baseElement).toBeTruthy();
   });
 
-  it('should have a greeting as the title', () => {
+  it('should have Keep Accounts as the title', () => {
     const { getAllByText } = render(<BrowserRouter><App /></BrowserRouter>);
-    expect(getAllByText(new RegExp('Welcome @keep-accounts-app/web', 'gi')).length > 0).toBeTruthy();
+    expect(getAllByText(new RegExp('Keep Accounts', 'gi')).length > 0).toBeTruthy();
   });
 });
