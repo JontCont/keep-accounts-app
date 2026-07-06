@@ -137,3 +137,40 @@ button {
 .fade-in {
   animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+/* Ionic Select & Action Sheet Glassmorphism Dark Mode Styling */
+ion-select {
+  --padding-start: 0;
+  --padding-end: 0;
+  --padding-top: 0;
+  --padding-bottom: 0;
+  cursor: pointer;
+}
+
+input:focus, select:focus, textarea:focus, ion-select:focus {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px var(--primary-glow);
+}
+
+ion-action-sheet {
+  --background: rgba(22, 22, 33, 0.85);
+  --backdrop-opacity: 0.65;
+  --color: #ffffff;
+  --button-color: #ffffff;
+  --button-background-selected: rgba(99, 102, 241, 0.15);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+ion-action-sheet::part(button) {
+  color: #ffffff;
+  background: transparent;
+  font-family: var(--font-family);
+  font-size: 0.95rem;
+}
+
+ion-action-sheet::part(button-active) {
+  background: rgba(255, 255, 255, 0.08);
+}
+

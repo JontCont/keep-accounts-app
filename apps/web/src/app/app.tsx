@@ -1,22 +1,25 @@
 import React, { useState, useEffect } from 'react';
+import { ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
+import { IonSelect, IonSelectOption } from '@ionic/react';
 
-interface Category {
+export interface Category {
   name: string;
   emoji: string;
   color: string;
   type: 'income' | 'expense';
 }
 
-interface AccountGroup {
+export interface AccountGroup {
   id: string;
   name: string;
   emoji: string;
   color: string;
   categories: Category[];
   description?: string;
+  budget?: number;
 }
 
-interface Transaction {
+export interface Transaction {
   id: string;
   description: string;
   amount: number;
@@ -109,6 +112,16 @@ const INITIAL_TRANSACTIONS: Transaction[] = [
   { id: '5', description: '定期存款存入', amount: 10000, type: 'income', category: '其他收入', date: new Date().toISOString().split('T')[0], accountGroupId: '3' }
 ];
 
+export const getCurrentMonthExpenseForGroup = (groupId: string, txs: Transaction[], referenceDate?: Date) => {
+  const ref = referenceDate || new Date();
+  const year = ref.getFullYear();
+  const month = String(ref.getMonth() + 1).padStart(2, '0');
+  const yearMonth = `${year}-${month}`; // "YYYY-MM"
+  return txs
+    .filter(tx => tx.accountGroupId === groupId && tx.type === 'expense' && tx.date.startsWith(yearMonth))
+    .reduce((sum, tx) => sum + tx.amount, 0);
+};
+
 export function App() {
   const [accountGroups, setAccountGroups] = useState<AccountGroup[]>(() => {
     const saved = localStorage.getItem('keep_accounts_groups');
@@ -190,6 +203,7 @@ export function App() {
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupEmoji, setNewGroupEmoji] = useState('💳');
   const [newGroupColor, setNewGroupColor] = useState('#6366f1');
+  const [newGroupBudget, setNewGroupBudget] = useState('');
 
   // State for Managing Categories (小項)
   const [catEditType, setCatEditType] = useState<'expense' | 'income'>('expense');
@@ -201,6 +215,7 @@ export function App() {
   const [filter, setFilter] = useState<'all' | 'income' | 'expense'>('all');
   const [filterGroup, setFilterGroup] = useState<string>('all');
   const [statsGroup, setStatsGroup] = useState<string>('all');
+  const [statsSubTab, setStatsSubTab] = useState<'category' | 'trend'>('category');
 
   // Sync form states with editingTx when modal opens or editingTx changes
   useEffect(() => {
@@ -293,6 +308,46 @@ export function App() {
     e.preventDefault();
     if (!description.trim() || !amount || parseFloat(amount) <= 0) return;
 
+    // Check budget limit threshold
+    const targetGroup = accountGroups.find(g => g.id === accountGroupId);
+    if (targetGroup && targetGroup.budget && targetGroup.budget > 0 && type === 'expense') {
+      let projectedTxs: Transaction[] = [];
+      if (editingTx) {
+        projectedTxs = transactions.map(tx => {
+          if (tx.id === editingTx.id) {
+            return {
+              ...tx,
+              amount: parseFloat(amount),
+              type,
+              category,
+              date,
+              accountGroupId
+            };
+          }
+          return tx;
+        });
+      } else {
+        projectedTxs = [
+          {
+            id: 'temp',
+            description: description.trim(),
+            amount: parseFloat(amount),
+            type,
+            category,
+            date,
+            accountGroupId
+          },
+          ...transactions
+        ];
+      }
+
+      const monthlyExpenses = getCurrentMonthExpenseForGroup(accountGroupId, projectedTxs);
+      if (monthlyExpenses > targetGroup.budget) {
+        const diff = monthlyExpenses - targetGroup.budget;
+        alert(`提醒：「${targetGroup.name}」已超出預算！(目前已支出 $${monthlyExpenses.toLocaleString('zh-TW')} / 預算 $${targetGroup.budget.toLocaleString('zh-TW')}，超支 $${diff.toLocaleString('zh-TW')})`);
+      }
+    }
+
     if (editingTx) {
       // Edit Mode
       const updatedTxs = transactions.map(tx => {
@@ -344,17 +399,21 @@ export function App() {
     e.preventDefault();
     if (!newGroupName.trim()) return;
 
+    const budgetVal = newGroupBudget.trim() ? Math.max(0, parseInt(newGroupBudget.trim(), 10)) : undefined;
+
     const newGroup: AccountGroup = {
       id: Date.now().toString(),
       name: newGroupName.trim(),
       emoji: newGroupEmoji,
       color: newGroupColor,
-      categories: getDefaultCategoriesForNewGroup()
+      categories: getDefaultCategoriesForNewGroup(),
+      budget: budgetVal
     };
 
     setAccountGroups([...accountGroups, newGroup]);
     setNewGroupName('');
     setNewGroupColor('#6366f1');
+    setNewGroupBudget('');
   };
 
   const handleDeleteAccountGroup = (groupId: string) => {
@@ -620,6 +679,38 @@ export function App() {
                       <div style={{ fontSize: '1.2rem', fontWeight: 700, marginTop: '12px', color: bal >= 0 ? '#fff' : 'var(--expense-color)' }}>
                         ${bal.toLocaleString('zh-TW')}
                       </div>
+
+                      {group.budget && group.budget > 0 ? (() => {
+                        const monthlyExpense = getCurrentMonthExpenseForGroup(group.id, transactions);
+                        const pct = Math.round((monthlyExpense / group.budget) * 100);
+                        let barColor = '#10b981'; // Green
+                        if (pct >= 80 && pct < 100) {
+                          barColor = '#f59e0b'; // Yellow/Orange
+                        } else if (pct >= 100) {
+                          barColor = '#ef4444'; // Red
+                        }
+                        const barWidth = Math.min(100, pct);
+                        return (
+                          <div style={{ marginTop: '12px', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '8px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '4px' }}>
+                              <span>預算 ${group.budget.toLocaleString('zh-TW')}</span>
+                              <span style={{ color: pct >= 100 ? '#ef4444' : pct >= 80 ? '#f59e0b' : 'var(--text-secondary)', fontWeight: 600 }}>{pct}%</span>
+                            </div>
+                            <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.06)', borderRadius: '3px', overflow: 'hidden' }}>
+                              <div style={{ 
+                                width: `${barWidth}%`, 
+                                height: '100%', 
+                                backgroundColor: barColor, 
+                                borderRadius: '3px',
+                                transition: 'width 0.3s ease-in-out'
+                              }} />
+                            </div>
+                            <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', marginTop: '4px', textAlign: 'right' }}>
+                              已花 ${monthlyExpense.toLocaleString('zh-TW')}
+                            </div>
+                          </div>
+                        );
+                      })() : null}
                       
                       {isEditingGroups && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', position: 'absolute', top: '4px', right: '4px' }}>
@@ -758,6 +849,30 @@ export function App() {
                       </button>
                     </div>
 
+                    {/* Budget Edit Section */}
+                    <div style={{ marginBottom: '16px', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '16px' }}>
+                      <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                        設定每月預算 (未設置或 0 表示不限制)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="例如: 10000"
+                        value={group.budget || ''}
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? undefined : Math.max(0, parseInt(e.target.value, 10));
+                          const updatedGroups = accountGroups.map(g => {
+                            if (g.id === group.id) {
+                              return { ...g, budget: val };
+                            }
+                            return g;
+                          });
+                          setAccountGroups(updatedGroups);
+                        }}
+                        style={{ width: '100%', padding: '8px', fontSize: '0.85rem', boxSizing: 'border-box' }}
+                      />
+                    </div>
+
                     {/* Type Switcher */}
                     <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', background: 'rgba(255,255,255,0.03)', padding: '4px', borderRadius: 'var(--border-radius-sm)' }}>
                       {(['expense', 'income'] as const).map(t => (
@@ -825,15 +940,16 @@ export function App() {
                       <h5 style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '10px', color: 'var(--text-secondary)' }}>新增分類小項</h5>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                         <div style={{ display: 'flex', gap: '8px' }}>
-                          <select
+                          <IonSelect
                             value={newCatEmoji}
-                            onChange={(e) => setNewCatEmoji(e.target.value)}
+                            interface="action-sheet"
+                            onIonChange={(e) => setNewCatEmoji(e.detail.value!)}
                             style={{ width: '70px', padding: '8px', fontSize: '0.85rem' }}
                           >
                             {['🍔', '🚗', '🎬', '🛍️', '🏠', '⚡', '🏷️', '💰', '💵', '📈', '🎁', '🏦', '💳', '🛡️', '🍕', '☕', '🎮', '🩺'].map(em => (
-                              <option key={em} value={em}>{em}</option>
+                              <IonSelectOption key={em} value={em}>{em}</IonSelectOption>
                             ))}
-                          </select>
+                          </IonSelect>
                           <input
                             type="text"
                             placeholder="分類名稱"
@@ -895,13 +1011,14 @@ export function App() {
                   <h4 style={{ fontSize: '0.9rem', marginBottom: '12px', fontWeight: 600 }}>新增資金大項</h4>
                   <form onSubmit={handleAddAccountGroup} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     <div style={{ display: 'flex', gap: '8px' }}>
-                      <select 
+                      <IonSelect 
                         value={newGroupEmoji} 
-                        onChange={(e) => setNewGroupEmoji(e.target.value)}
+                        interface="action-sheet"
+                        onIonChange={(e) => setNewGroupEmoji(e.detail.value!)}
                         style={{ width: '70px', padding: '8px' }}
                       >
-                        {ACCOUNT_EMOJIS.map(e => <option key={e} value={e}>{e}</option>)}
-                      </select>
+                        {ACCOUNT_EMOJIS.map(e => <IonSelectOption key={e} value={e}>{e}</IonSelectOption>)}
+                      </IonSelect>
                       <input 
                         type="text" 
                         placeholder="帳戶大項名稱" 
@@ -909,6 +1026,18 @@ export function App() {
                         onChange={(e) => setNewGroupName(e.target.value)}
                         style={{ flex: 1, padding: '8px' }}
                         required
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>每月預算 (選填，未設定或0為不限制)</label>
+                      <input 
+                        type="number" 
+                        min="0"
+                        placeholder="每月預算金額 ($)" 
+                        value={newGroupBudget} 
+                        onChange={(e) => setNewGroupBudget(e.target.value)}
+                        style={{ padding: '8px', fontSize: '0.85rem' }}
                       />
                     </div>
 
@@ -1099,16 +1228,17 @@ export function App() {
             {/* Filter Group Selector */}
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
               <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>帳戶：</span>
-              <select 
+              <IonSelect 
                 value={filterGroup} 
-                onChange={(e) => setFilterGroup(e.target.value)}
+                interface="action-sheet"
+                onIonChange={(e) => setFilterGroup(e.detail.value!)}
                 style={{ padding: '8px 12px', fontSize: '0.85rem', borderRadius: 'var(--border-radius-sm)' }}
               >
-                <option value="all">顯示全部帳戶</option>
+                <IonSelectOption value="all">顯示全部帳戶</IonSelectOption>
                 {accountGroups.map(g => (
-                  <option key={g.id} value={g.id}>{g.emoji} {g.name}</option>
+                  <IonSelectOption key={g.id} value={g.id}>{g.emoji} {g.name}</IonSelectOption>
                 ))}
-              </select>
+              </IonSelect>
             </div>
 
             {/* Filter buttons for type */}
@@ -1256,17 +1386,18 @@ export function App() {
                 {/* Account Group selection */}
                 <div>
                   <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>選擇資金帳戶大項</label>
-                  <select 
+                  <IonSelect 
                     value={accountGroupId} 
-                    onChange={(e) => setAccountGroupId(e.target.value)}
+                    interface="action-sheet"
+                    onIonChange={(e) => setAccountGroupId(e.detail.value!)}
                     style={{ width: '100%', padding: '10px', borderRadius: 'var(--border-radius-sm)', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' }}
                   >
                     {accountGroups.map(group => (
-                      <option key={group.id} value={group.id} style={{ background: '#1c1c24', color: '#fff' }}>
+                      <IonSelectOption key={group.id} value={group.id}>
                         {group.emoji} {group.name}
-                      </option>
+                      </IonSelectOption>
                     ))}
-                  </select>
+                  </IonSelect>
                 </div>
 
                 {/* Amount */}
@@ -1300,17 +1431,18 @@ export function App() {
                 {/* Category */}
                 <div>
                   <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>選擇分類</label>
-                  <select 
+                  <IonSelect 
                     value={category} 
-                    onChange={(e) => setCategory(e.target.value)}
+                    interface="action-sheet"
+                    onIonChange={(e) => setCategory(e.detail.value!)}
                     style={{ width: '100%', padding: '10px', borderRadius: 'var(--border-radius-sm)', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' }}
                   >
                     {(accountGroups.find(g => g.id === accountGroupId)?.categories.filter(c => c.type === type) || []).map(cat => (
-                      <option key={cat.name} value={cat.name} style={{ background: '#1c1c24', color: '#fff' }}>
+                      <IonSelectOption key={cat.name} value={cat.name}>
                         {cat.emoji} {cat.name}
-                      </option>
+                      </IonSelectOption>
                     ))}
-                  </select>
+                  </IonSelect>
                 </div>
 
                 {/* Date */}
@@ -1417,16 +1549,17 @@ export function App() {
               {/* Account Group Selector for Stats */}
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                 <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>帳戶：</span>
-                <select 
+                <IonSelect 
                   value={statsGroup} 
-                  onChange={(e) => setStatsGroup(e.target.value)}
+                  interface="action-sheet"
+                  onIonChange={(e) => setStatsGroup(e.detail.value!)}
                   style={{ padding: '8px 12px', fontSize: '0.85rem', borderRadius: 'var(--border-radius-sm)' }}
                 >
-                  <option value="all">顯示全部帳戶</option>
+                  <IonSelectOption value="all">顯示全部帳戶</IonSelectOption>
                   {accountGroups.map(g => (
-                    <option key={g.id} value={g.id}>{g.emoji} {g.name}</option>
+                    <IonSelectOption key={g.id} value={g.id}>{g.emoji} {g.name}</IonSelectOption>
                   ))}
-                </select>
+                </IonSelect>
               </div>
 
               {/* Overview stats */}
@@ -1445,6 +1578,140 @@ export function App() {
                   </div>
                 </div>
               </div>
+
+              {(() => {
+                const dailyMap = statsTxs.reduce((acc: { [key: string]: number }, tx) => {
+                  acc[tx.date] = (acc[tx.date] || 0) + tx.amount;
+                  return acc;
+                }, {});
+
+                const trendData = Object.entries(dailyMap)
+                  .map(([date, amount]) => ({ date, amount }))
+                  .sort((a, b) => a.date.localeCompare(b.date));
+
+                const pieData = sortedStats.filter(item => item.amount > 0);
+
+                const CustomPieTooltip = ({ active, payload }: any) => {
+                  if (active && payload && payload.length) {
+                    const data = payload[0].payload;
+                    return (
+                      <div className="glass-card" style={{ padding: '8px 12px', border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(20, 20, 25, 0.95)', fontSize: '0.8rem' }}>
+                        <p style={{ margin: 0, fontWeight: 600 }}>{data.emoji} {data.name}</p>
+                        <p style={{ margin: '4px 0 0 0', color: 'var(--text-secondary)' }}>金額: ${data.amount.toLocaleString('zh-TW')}</p>
+                        <p style={{ margin: '2px 0 0 0', color: 'var(--primary-color)', fontWeight: 500 }}>
+                          佔比: {statsTotalExpense > 0 ? Math.round((data.amount / statsTotalExpense) * 100) : 0}%
+                        </p>
+                      </div>
+                    );
+                  }
+                  return null;
+                };
+
+                const CustomBarTooltip = ({ active, payload }: any) => {
+                  if (active && payload && payload.length) {
+                    const data = payload[0].payload;
+                    return (
+                      <div className="glass-card" style={{ padding: '8px 12px', border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(20, 20, 25, 0.95)', fontSize: '0.8rem' }}>
+                        <p style={{ margin: 0, fontWeight: 600 }}>📅 {data.date}</p>
+                        <p style={{ margin: '4px 0 0 0', color: 'var(--expense-color)', fontWeight: 600 }}>支出: ${data.amount.toLocaleString('zh-TW')}</p>
+                      </div>
+                    );
+                  }
+                  return null;
+                };
+
+                return (
+                  <>
+                    {/* View Switcher Segmented Control */}
+                    {statsTotalExpense > 0 && (
+                      <div style={{ display: 'flex', gap: '8px', background: 'rgba(255,255,255,0.03)', padding: '4px', borderRadius: 'var(--border-radius-sm)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                        <button
+                          type="button"
+                          onClick={() => setStatsSubTab('category')}
+                          style={{
+                            flex: 1,
+                            padding: '8px',
+                            borderRadius: '4px',
+                            fontSize: '0.8rem',
+                            fontWeight: 600,
+                            background: statsSubTab === 'category' ? 'rgba(255,255,255,0.08)' : 'transparent',
+                            color: statsSubTab === 'category' ? '#fff' : 'var(--text-secondary)'
+                          }}
+                        >
+                          類別佔比
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setStatsSubTab('trend')}
+                          style={{
+                            flex: 1,
+                            padding: '8px',
+                            borderRadius: '4px',
+                            fontSize: '0.8rem',
+                            fontWeight: 600,
+                            background: statsSubTab === 'trend' ? 'rgba(255,255,255,0.08)' : 'transparent',
+                            color: statsSubTab === 'trend' ? '#fff' : 'var(--text-secondary)'
+                          }}
+                        >
+                          趨勢分析
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Active Chart Card */}
+                    {statsTotalExpense > 0 && (
+                      <div className="glass-card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        <h4 style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                          {statsSubTab === 'category' ? '支出類別佔比圖' : '支出金額趨勢圖'}
+                        </h4>
+                        
+                        {statsSubTab === 'category' ? (
+                          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '220px' }}>
+                            <ResponsiveContainer width="100%" height={220}>
+                              <PieChart>
+                                <Pie
+                                  data={pieData}
+                                  cx="50%"
+                                  cy="50%"
+                                  innerRadius={55}
+                                  outerRadius={80}
+                                  paddingAngle={2}
+                                  dataKey="amount"
+                                >
+                                  {pieData.map((entry, idx) => (
+                                    <Cell key={`cell-${idx}`} fill={entry.color} />
+                                  ))}
+                                </Pie>
+                                <Tooltip content={<CustomPieTooltip />} />
+                              </PieChart>
+                            </ResponsiveContainer>
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '220px' }}>
+                            <ResponsiveContainer width="100%" height={220}>
+                              <BarChart data={trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                <XAxis 
+                                  dataKey="date" 
+                                  tick={{ fill: 'var(--text-tertiary)', fontSize: 10 }}
+                                  axisLine={{ stroke: 'rgba(255,255,255,0.08)' }}
+                                  tickLine={false}
+                                />
+                                <YAxis 
+                                  tick={{ fill: 'var(--text-tertiary)', fontSize: 10 }}
+                                  axisLine={{ stroke: 'rgba(255,255,255,0.08)' }}
+                                  tickLine={false}
+                                />
+                                <Tooltip content={<CustomBarTooltip />} />
+                                <Bar dataKey="amount" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
 
               {/* Category Bars */}
               <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
