@@ -68,3 +68,12 @@ jobs:
 
       - name: Build iOS App
         run: npx nx run @keep-accounts-app/web:build-ios
+
+      - name: Compress iOS App
+        run: zip -r App.app.zip apps/web/ios/App/build/Debug-iphoneos/App.app
+
+      - name: Upload iOS App Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: App.app.zip
+          path: App.app.zip
