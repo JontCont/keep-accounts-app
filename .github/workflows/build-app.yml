@@ -69,11 +69,14 @@ jobs:
       - name: Build iOS App
         run: npx nx run @keep-accounts-app/web:build-ios
 
-      - name: Compress iOS App
-        run: zip -r App.app.zip apps/web/ios/App/build/Build/Products/Debug-iphoneos/App.app
+      - name: Package iOS IPA
+        run: |
+          mkdir Payload
+          cp -r apps/web/ios/App/build/Build/Products/Debug-iphoneos/App.app Payload/
+          zip -r App.ipa Payload
 
-      - name: Upload iOS App Artifact
+      - name: Upload iOS IPA Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: App.app.zip
-          path: App.app.zip
+          name: App.ipa
+          path: App.ipa
