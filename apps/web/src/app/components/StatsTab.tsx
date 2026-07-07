@@ -321,12 +321,12 @@ export const StatsTab: React.FC<StatsTabProps> = ({
                   >
                     <XAxis
                       dataKey="date"
-                      tick={{ fill: 'var(--text-tertiary)', fontSize: 10 }}
+                      tick={{ fill: '#8f93a7', fontSize: 10 }}
                       axisLine={{ stroke: 'rgba(255,255,255,0.08)' }}
                       tickLine={false}
                     />
                     <YAxis
-                      tick={{ fill: 'var(--text-tertiary)', fontSize: 10 }}
+                      tick={{ fill: '#8f93a7', fontSize: 10 }}
                       axisLine={{ stroke: 'rgba(255,255,255,0.08)' }}
                       tickLine={false}
                     />

@@ -24,6 +24,20 @@
   --border-radius-md: 14px;
   --border-radius-sm: 8px;
   --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Ionic Dark Mode Custom Overrides */
+  --ion-text-color: var(--text-primary);
+  --ion-text-color-rgb: 255, 255, 255;
+  --ion-background-color: transparent;
+  --ion-font-family: var(--font-family);
+}
+
+body, ion-app, ion-content, ion-page {
+  color: var(--text-primary);
+}
+
+label {
+  color: var(--text-secondary);
 }
 
 * {
@@ -43,6 +57,10 @@ body {
     radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.12) 0px, transparent 50%),
     radial-gradient(at 100% 100%, rgba(244, 63, 94, 0.08) 0px, transparent 50%);
   background-attachment: fixed;
+}
+
+ion-content {
+  --background: transparent;
 }
 
 /* Custom Scrollbar */
@@ -70,6 +88,7 @@ body {
   box-shadow: var(--card-shadow);
   padding: 24px;
   transition: var(--transition-smooth);
+  color: var(--text-primary);
 }
 .glass-card:hover {
   border-color: rgba(255, 255, 255, 0.15);
@@ -154,6 +173,8 @@ ion-select {
   --padding-top: 0;
   --padding-bottom: 0;
   cursor: pointer;
+  color: var(--text-primary) !important;
+  --placeholder-color: var(--text-secondary);
 }
 
 input:focus, select:focus, textarea:focus, ion-select:focus {

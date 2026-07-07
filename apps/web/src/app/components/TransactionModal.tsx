@@ -80,6 +80,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     onSave(description, amount, type, category, date, accountGroupId);
   };
 
+  if (!isOpen) return null;
+
   return (
     <IonModal
       isOpen={isOpen}
