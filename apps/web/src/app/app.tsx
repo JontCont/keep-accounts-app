@@ -470,6 +470,10 @@ export function App() {
   };
 
   const handleDeleteAccountGroup = (groupId: string) => {
+    if (groupId === '1') {
+      alert('「日常開銷」為系統核心帳戶，不能刪除！');
+      return;
+    }
     if (accountGroups.length <= 1) {
       alert('必須保留至少一個資金帳戶！');
       return;
@@ -572,7 +576,7 @@ export function App() {
 
   // Daily allowed consumption calculations for "日常開銷" (Group '1')
   const dailyExpenseGroup = accountGroups.find(g => g.id === '1');
-  const group1Budget = dailyExpenseGroup?.budget || 0;
+  const group1Budget = dailyExpenseGroup?.budget || 30000;
   const todayDay = new Date().getDate();
   const dailyAllowance = Math.round(group1Budget / 30);
   
@@ -755,7 +759,7 @@ export function App() {
                 </div>
               </div>
 
-              {period === 'today' && dailyExpenseGroup && dailyExpenseGroup.budget && dailyExpenseGroup.budget > 0 ? (
+              {period === 'today' && dailyExpenseGroup ? (
                 <div style={{
                   marginTop: '16px',
                   paddingTop: '16px',
@@ -766,17 +770,23 @@ export function App() {
                   gap: '6px'
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ color: 'var(--text-secondary)' }}>今日允許消費 (日常開銷)</span>
+                    <span style={{ color: 'var(--text-secondary)' }}>當日可消費 (累計昨天)</span>
                     <span style={{ fontWeight: 600, color: '#fff' }}>${allowedToday.toLocaleString('zh-TW')}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ color: 'var(--text-secondary)' }}>今日剩餘額度</span>
-                    <span style={{
-                      fontWeight: 600,
-                      color: remainingToday >= 0 ? 'var(--income-color)' : 'var(--expense-color)'
-                    }}>
-                      {remainingToday >= 0 ? `$${remainingToday.toLocaleString('zh-TW')}` : `超支 $${Math.abs(remainingToday).toLocaleString('zh-TW')}`}
-                    </span>
+                    <div>
+                      <span style={{ color: 'var(--text-secondary)' }}>當日消費: </span>
+                      <span style={{ fontWeight: 600, color: '#fff' }}>${todayExpenseForDailyGroup.toLocaleString('zh-TW')}</span>
+                    </div>
+                    <div>
+                      <span style={{ color: 'var(--text-secondary)' }}>當日剩餘: </span>
+                      <span style={{
+                        fontWeight: 600,
+                        color: remainingToday >= 0 ? 'var(--income-color)' : 'var(--expense-color)'
+                      }}>
+                        {remainingToday >= 0 ? `$${remainingToday.toLocaleString('zh-TW')}` : `超支 $${Math.abs(remainingToday).toLocaleString('zh-TW')}`}
+                      </span>
+                    </div>
                   </div>
                   <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.06)', borderRadius: '2px', overflow: 'hidden', marginTop: '2px' }}>
                     <div style={{
@@ -939,25 +949,27 @@ export function App() {
                             
                             {isEditingGroups && (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', position: 'absolute', top: '4px', right: '4px' }}>
-                                <button 
-                                  type="button"
-                                  onClick={() => handleDeleteAccountGroup(group.id)}
-                                  style={{
-                                    background: '#f43f5e',
-                                    color: '#fff',
-                                    width: '18px',
-                                    height: '18px',
-                                    borderRadius: '50%',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    fontSize: '0.7rem',
-                                    fontWeight: 700
-                                  }}
-                                  title="刪除帳戶"
-                                >
-                                  ✕
-                                </button>
+                                {group.id !== '1' && (
+                                  <button 
+                                    type="button"
+                                    onClick={() => handleDeleteAccountGroup(group.id)}
+                                    style={{
+                                      background: '#f43f5e',
+                                      color: '#fff',
+                                      width: '18px',
+                                      height: '18px',
+                                      borderRadius: '50%',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      fontSize: '0.7rem',
+                                      fontWeight: 700
+                                    }}
+                                    title="刪除帳戶"
+                                  >
+                                    ✕
+                                  </button>
+                                )}
                                 <button 
                                   type="button"
                                   onClick={() => setEditingGroupId(editingGroupId === group.id ? null : group.id)}

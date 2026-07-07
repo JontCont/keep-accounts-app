@@ -134,9 +134,9 @@ describe('App', () => {
     
     localStorage.setItem('keep_accounts_transactions', JSON.stringify(mockTxs));
     
-    const { getByText, queryByText } = render(<BrowserRouter><App /></BrowserRouter>);
+    const { getByText, queryByText, getAllByText } = render(<BrowserRouter><App /></BrowserRouter>);
     
-    expect(queryByText(/今日允許消費/)).toBeNull();
+    expect(queryByText(/當日可消費/)).toBeNull();
     
     const todayToggle = getByText('今日');
     fireEvent.click(todayToggle);
@@ -144,10 +144,47 @@ describe('App', () => {
     const expectedAllowed = todayDay * 1000 - cumulativeYesterday;
     const expectedRemaining = expectedAllowed - 300;
     
-    expect(getByText('今日允許消費 (日常開銷)')).toBeTruthy();
+    expect(getByText('當日可消費 (累計昨天)')).toBeTruthy();
     expect(getByText(`$${expectedAllowed.toLocaleString('zh-TW')}`)).toBeTruthy();
-    expect(getByText('今日剩餘額度')).toBeTruthy();
+    expect(getByText(/當日消費/)).toBeTruthy();
+    expect(getByText(/當日剩餘/)).toBeTruthy();
     expect(getByText(`$${expectedRemaining.toLocaleString('zh-TW')}`)).toBeTruthy();
+  });
+
+  it('should fallback to 30,000 budget and calculate daily allowed consumption when no budget is configured', () => {
+    const groups = [
+      { id: '1', name: '日常開銷', emoji: '💳', color: '#6366f1', targetRatio: 30, categories: [] },
+      { id: '2', name: '投資理財', emoji: '📈', color: '#3b82f6', targetRatio: 30, categories: [] },
+      { id: '3', name: '長期儲蓄', emoji: '🐷', color: '#10b981', targetRatio: 40, categories: [] }
+    ];
+    localStorage.setItem('keep_accounts_groups', JSON.stringify(groups));
+
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    const todayDay = now.getDate();
+    
+    localStorage.setItem('keep_accounts_transactions', JSON.stringify([]));
+    
+    const { getByText, getAllByText } = render(<BrowserRouter><App /></BrowserRouter>);
+    
+    const todayToggle = getByText('今日');
+    fireEvent.click(todayToggle);
+    
+    const expectedAllowed = todayDay * 1000;
+    
+    expect(getByText('當日可消費 (累計昨天)')).toBeTruthy();
+    expect(getAllByText(`$${expectedAllowed.toLocaleString('zh-TW')}`).length).toBe(2);
+  });
+
+  it('should not render delete button for core Daily Expense account in edit mode', () => {
+    const { getByText, queryAllByTitle } = render(<BrowserRouter><App /></BrowserRouter>);
+    
+    const editBtn = getByText(/編輯帳戶/);
+    fireEvent.click(editBtn);
+    
+    // There are 3 default groups, but "日常開銷" (id '1') is not deletable, so only 2 delete buttons should render
+    const deleteBtns = queryAllByTitle('刪除帳戶');
+    expect(deleteBtns.length).toBe(2);
   });
 });
 

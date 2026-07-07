@@ -1,5 +1,50 @@
 {
   "name": "@keep-accounts-app/web",
   "version": "0.0.1",
-  "private": true
+  "private": true,
+  "nx": {
+    "targets": {
+      "build": {
+        "executor": "nx:run-commands",
+        "options": {
+          "command": "vite build",
+          "cwd": "apps/web"
+        },
+        "cache": true,
+        "outputs": ["{projectRoot}/dist"]
+      },
+      "dev": {
+        "executor": "nx:run-commands",
+        "options": {
+          "command": "vite",
+          "cwd": "apps/web"
+        }
+      },
+      "test": {
+        "executor": "nx:run-commands",
+        "options": {
+          "command": "vitest run",
+          "cwd": "apps/web"
+        },
+        "cache": true,
+        "outputs": ["{projectRoot}/test-output/vitest/coverage"]
+      },
+      "build-android": {
+        "executor": "nx:run-commands",
+        "options": {
+          "command": "npx cap sync android && node -e \"const exec = require('child_process').execSync; const cmd = process.platform === 'win32' ? 'gradlew.bat assembleDebug' : './gradlew assembleDebug'; exec(cmd, { cwd: 'android', stdio: 'inherit' });\"",
+          "cwd": "apps/web"
+        },
+        "dependsOn": ["build"]
+      },
+      "build-ios": {
+        "executor": "nx:run-commands",
+        "options": {
+          "command": "npx cap sync ios && node -e \"const exec = require('child_process').execSync; const cmd = process.platform === 'win32' ? 'echo iOS build skipped on Windows' : 'xcodebuild -workspace App.xcworkspace -scheme App -configuration Debug -destination generic/platform=iOS CODE_SIGNING_ALLOWED=NO'; exec(cmd, { cwd: 'ios/App', stdio: 'inherit' });\"",
+          "cwd": "apps/web"
+        },
+        "dependsOn": ["build"]
+      }
+    }
+  }
 }

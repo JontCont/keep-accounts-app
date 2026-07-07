@@ -5,6 +5,7 @@
   "scripts": {},
   "private": true,
   "dependencies": {
+    "@capacitor/core": "^6.2.1",
     "@ionic/react": "^8.8.13",
     "ionicons": "^8.0.13",
     "react": "^19.0.0",
@@ -13,6 +14,9 @@
     "recharts": "^3.9.2"
   },
   "devDependencies": {
+    "@capacitor/android": "^6.2.1",
+    "@capacitor/cli": "^6.2.1",
+    "@capacitor/ios": "^6.2.1",
     "@eslint/js": "^9.8.0",
     "@nx/devkit": "23.0.1",
     "@nx/eslint": "23.0.1",
