@@ -193,6 +193,18 @@ ion-action-sheet {
   -webkit-backdrop-filter: blur(16px);
 }
 
+ion-action-sheet .action-sheet-button {
+  color: #ffffff !important;
+  background: transparent;
+  font-family: var(--font-family);
+  font-size: 0.95rem;
+}
+
+ion-action-sheet .action-sheet-selected {
+  color: var(--primary-color) !important;
+  font-weight: 600;
+}
+
 ion-action-sheet::part(button) {
   color: #ffffff;
   background: transparent;
