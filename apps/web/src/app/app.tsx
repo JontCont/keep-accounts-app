@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
-import { IonApp, IonContent, IonInput, IonPage, IonSelect, IonSelectOption } from '@ionic/react';
+import { IonApp, IonContent, IonDatetime, IonDatetimeButton, IonInput, IonModal, IonPage, IonSelect, IonSelectOption } from '@ionic/react';
 
 export interface Category {
   name: string;
@@ -108,12 +108,22 @@ const DEFAULT_ACCOUNT_GROUPS: AccountGroup[] = [
   }
 ];
 
+const getLocalISOString = (d: Date = new Date()): string => {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const offset = -d.getTimezoneOffset();
+  const sign = offset >= 0 ? '+' : '-';
+  const absOffset = Math.abs(offset);
+  const offsetH = pad(Math.floor(absOffset / 60));
+  const offsetM = pad(absOffset % 60);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}${sign}${offsetH}:${offsetM}`;
+};
+
 const INITIAL_TRANSACTIONS: Transaction[] = [
-  { id: '1', description: '午餐牛肉麵', amount: 150, type: 'expense', category: '餐飲食品', date: new Date().toISOString().split('T')[0], accountGroupId: '1' },
-  { id: '2', description: '發放月薪', amount: 45000, type: 'income', category: '薪資收入', date: new Date().toISOString().split('T')[0], accountGroupId: '1' },
-  { id: '3', description: '悠遊卡加值', amount: 200, type: 'expense', category: '交通出行', date: new Date().toISOString().split('T')[0], accountGroupId: '1' },
-  { id: '4', description: '購買美股 ETF', amount: 5000, type: 'expense', category: '投資理財', date: new Date().toISOString().split('T')[0], accountGroupId: '2' },
-  { id: '5', description: '定期存款存入', amount: 10000, type: 'income', category: '其他收入', date: new Date().toISOString().split('T')[0], accountGroupId: '3' }
+  { id: '1', description: '午餐牛肉麵', amount: 150, type: 'expense', category: '餐飲食品', date: getLocalISOString(), accountGroupId: '1' },
+  { id: '2', description: '發放月薪', amount: 45000, type: 'income', category: '薪資收入', date: getLocalISOString(), accountGroupId: '1' },
+  { id: '3', description: '悠遊卡加值', amount: 200, type: 'expense', category: '交通出行', date: getLocalISOString(), accountGroupId: '1' },
+  { id: '4', description: '購買美股 ETF', amount: 5000, type: 'expense', category: '投資理財', date: getLocalISOString(), accountGroupId: '2' },
+  { id: '5', description: '定期存款存入', amount: 10000, type: 'income', category: '其他收入', date: getLocalISOString(), accountGroupId: '3' }
 ];
 
 export const getCurrentMonthExpenseForGroup = (groupId: string, txs: Transaction[], referenceDate?: Date) => {
@@ -243,7 +253,7 @@ export function App() {
   const [amount, setAmount] = useState('');
   const [type, setType] = useState<'income' | 'expense'>('expense');
   const [category, setCategory] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(getLocalISOString());
   const [accountGroupId, setAccountGroupId] = useState('1');
 
   // Form State for Adding Account Group
@@ -279,7 +289,7 @@ export function App() {
       setAmount('');
       setType('expense');
       setAccountGroupId(accountGroups[0]?.id || '1');
-      setDate(new Date().toISOString().split('T')[0]);
+      setDate(getLocalISOString());
     }
   }, [editingTx, showTxModal, accountGroups]);
 
@@ -430,7 +440,7 @@ export function App() {
     // Reset and Close Modal
     setDescription('');
     setAmount('');
-    setDate(new Date().toISOString().split('T')[0]);
+    setDate(getLocalISOString());
     setShowTxModal(false);
     setEditingTx(null);
     setActiveTab('dashboard');
@@ -566,12 +576,12 @@ export function App() {
 
   const displayIncome = transactions
     .filter(tx => tx.type === 'income')
-    .filter(tx => period === 'today' ? tx.date === todayStr : tx.date.startsWith(currentMonthStr))
+    .filter(tx => period === 'today' ? tx.date.substring(0, 10) === todayStr : tx.date.startsWith(currentMonthStr))
     .reduce((sum, tx) => sum + tx.amount, 0);
 
   const displayExpense = transactions
     .filter(tx => tx.type === 'expense')
-    .filter(tx => period === 'today' ? tx.date === todayStr : tx.date.startsWith(currentMonthStr))
+    .filter(tx => period === 'today' ? tx.date.substring(0, 10) === todayStr : tx.date.startsWith(currentMonthStr))
     .reduce((sum, tx) => sum + tx.amount, 0);
 
   // Daily allowed consumption calculations for "日常開銷" (Group '1')
@@ -585,7 +595,7 @@ export function App() {
       tx.accountGroupId === '1' && 
       tx.type === 'expense' && 
       tx.date.startsWith(currentMonthStr) && 
-      tx.date < todayStr
+      tx.date.substring(0, 10) < todayStr
     )
     .reduce((sum, tx) => sum + tx.amount, 0);
 
@@ -595,7 +605,7 @@ export function App() {
     .filter(tx => 
       tx.accountGroupId === '1' && 
       tx.type === 'expense' && 
-      tx.date === todayStr
+      tx.date.substring(0, 10) === todayStr
     )
     .reduce((sum, tx) => sum + tx.amount, 0);
 
@@ -651,9 +661,10 @@ export function App() {
 
   // Grouping Helpers
   const getGroupKey = (dateStr: string, mode: 'day' | 'month' | 'year') => {
-    if (mode === 'day') return dateStr;
-    if (mode === 'month') return dateStr.substring(0, 7);
-    return dateStr.substring(0, 4);
+    const datePart = dateStr.substring(0, 10);
+    if (mode === 'day') return datePart;
+    if (mode === 'month') return datePart.substring(0, 7);
+    return datePart.substring(0, 4);
   };
 
   const formatGroupHeader = (key: string, mode: 'day' | 'month' | 'year') => {
@@ -1356,7 +1367,9 @@ export function App() {
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 {(() => {
-                  const dashboardTxs = transactions.filter(tx => tx.date === todayStr);
+                  const dashboardTxs = transactions
+                    .filter(tx => tx.date.substring(0, 10) === todayStr)
+                    .sort((a, b) => b.date.localeCompare(a.date));
                   const dashboardGrouped = dashboardTxs.reduce((acc: { [key: string]: Transaction[] }, tx) => {
                     const key = getGroupKey(tx.date, 'day');
                     if (!acc[key]) acc[key] = [];
@@ -1505,7 +1518,11 @@ export function App() {
               {transactions
                 .filter(tx => filter === 'all' || tx.type === filter)
                 .filter(tx => filterGroup === 'all' || tx.accountGroupId === filterGroup)
-                .map(tx => (
+                .sort((a, b) => b.date.localeCompare(a.date))
+                .map(tx => {
+                  const datePart = tx.date.substring(0, 10);
+                  const timePart = tx.date.includes('T') ? tx.date.substring(11, 16) : '';
+                  return (
                   <div key={tx.id} className="glass-card" style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderRadius: 'var(--border-radius-md)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                       <div style={{ 
@@ -1523,7 +1540,7 @@ export function App() {
                       <div>
                         <div style={{ fontWeight: 500, fontSize: '0.95rem' }}>{tx.description}</div>
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
-                          {tx.category} • {getGroupName(tx.accountGroupId)} • {tx.date}
+                          {tx.category} • {getGroupName(tx.accountGroupId)} • {datePart}{timePart ? ` ${timePart}` : ''}
                         </div>
                       </div>
                     </div>
@@ -1542,7 +1559,7 @@ export function App() {
                       </button>
                     </div>
                   </div>
-                ))}
+                );})}
               {transactions
                 .filter(tx => filter === 'all' || tx.type === filter)
                 .filter(tx => filterGroup === 'all' || tx.accountGroupId === filterGroup).length === 0 && (
@@ -1683,16 +1700,21 @@ export function App() {
                   </IonSelect>
                 </div>
 
-                {/* Date */}
+                {/* Date & Time */}
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>交易日期</label>
-                  <IonInput 
-                    type="date" 
-                    value={date} 
-                    onIonChange={(e) => setDate(e.detail.value ?? '')} 
-                    style={{ width: '100%', fontSize: '1rem', '--padding-start': '10px', '--padding-end': '10px', '--padding-top': '10px', '--padding-bottom': '10px', borderRadius: 'var(--border-radius-sm)', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' } as React.CSSProperties}
-                    required 
-                  />
+                  <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>交易日期與時間</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <IonDatetimeButton datetime="tx-datetime" style={{ '--background': 'rgba(255,255,255,0.04)', '--border-radius': 'var(--border-radius-sm)' } as React.CSSProperties} />
+                  </div>
+                  <IonModal keepContentsMounted={true}>
+                    <IonDatetime
+                      id="tx-datetime"
+                      presentation="date-time"
+                      value={date}
+                      onIonChange={(e) => setDate(Array.isArray(e.detail.value) ? e.detail.value[0] ?? getLocalISOString() : e.detail.value ?? getLocalISOString())}
+                      style={{ '--background': 'rgba(20, 20, 25, 0.98)', '--background-rgb': '20, 20, 25' } as React.CSSProperties}
+                    />
+                  </IonModal>
                 </div>
 
                 {/* Submit Buttons */}
@@ -1819,7 +1841,8 @@ export function App() {
 
               {(() => {
                 const dailyMap = statsTxs.reduce((acc: { [key: string]: number }, tx) => {
-                  acc[tx.date] = (acc[tx.date] || 0) + tx.amount;
+                  const dateKey = tx.date.substring(0, 10);
+                  acc[dateKey] = (acc[dateKey] || 0) + tx.amount;
                   return acc;
                 }, {});
 
