@@ -18,6 +18,9 @@ export default defineConfig(() => ({
   // worker: {
   //  plugins: [],
   // },
+  resolve: {
+    conditions: ['@keep-accounts-app/source'],
+  },
   build: {
     outDir: './dist',
     emptyOutDir: true,

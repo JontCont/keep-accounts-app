@@ -8,6 +8,12 @@
     },
     {
       "path": "./apps/web"
+    },
+    {
+      "path": "./libs/shared/domain"
+    },
+    {
+      "path": "./libs/shared/state"
     }
   ]
 }

@@ -1,8 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, fireEvent } from '@testing-library/react';
+import { render, fireEvent, renderHook, act } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
+import { useKeepAccounts } from '@keep-accounts-app/state';
 
-import App, { getCurrentMonthExpenseForGroup, Transaction } from './app';
+import App from './app';
+import { getCurrentMonthExpenseForGroup, Transaction } from '@keep-accounts-app/domain';
 
 describe('App', () => {
   beforeEach(() => {
@@ -67,9 +69,9 @@ describe('App', () => {
     expect(inputs.length).toBeGreaterThanOrEqual(3);
     
     // Verifying default target migration rules were applied: (Group 1 -> 30, Group 2 -> 30, Group 3 -> 40)
-    expect(inputs[0].value).toBe('30');
-    expect(inputs[1].value).toBe('30');
-    expect(inputs[2].value).toBe('40');
+    expect(Number(inputs[0].value)).toBe(30);
+    expect(Number(inputs[1].value)).toBe(30);
+    expect(Number(inputs[2].value)).toBe(40);
   });
 
   it('should display period-specific sums (today vs this month)', () => {
@@ -205,5 +207,49 @@ describe('getCurrentMonthExpenseForGroup', () => {
   it('should return 0 when there are no matching transactions', () => {
     const total = getCurrentMonthExpenseForGroup('1', [], new Date('2026-07-15'));
     expect(total).toBe(0);
+  });
+});
+
+describe('useKeepAccounts defensive checks', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('should throw an error when saving a transaction with a negative amount', () => {
+    const { result } = renderHook(() => useKeepAccounts());
+    expect(() => {
+      act(() => {
+        result.current.saveTransaction(
+          'Test negative',
+          '-100',
+          'expense',
+          '日常雜項',
+          '2026-07-07T20:00:00+08:00',
+          '1',
+          null
+        );
+      });
+    }).toThrow('Transaction amount cannot be negative');
+  });
+
+  it('should throw an error when saving account groups with ratios not summing to 100%', () => {
+    const { result } = renderHook(() => useKeepAccounts());
+    const invalidGroups = [
+      { id: '1', name: '日常開銷', emoji: '💳', color: '#6366f1', targetRatio: 50, categories: [] },
+      { id: '2', name: '投資理財', emoji: '📈', color: '#3b82f6', targetRatio: 40, categories: [] }
+    ];
+    expect(() => {
+      act(() => {
+        result.current.saveAccountGroups(invalidGroups);
+      });
+    }).toThrow('Allocation target ratios must sum to exactly 100%');
+  });
+
+  it('should fall back to defaults silently when localStorage has corrupted JSON', () => {
+    localStorage.setItem('keep_accounts_groups', '{invalid json');
+    localStorage.setItem('keep_accounts_transactions', '{invalid json');
+    const { result } = renderHook(() => useKeepAccounts());
+    expect(result.current.accountGroups.length).toBeGreaterThan(0);
+    expect(result.current.transactions.length).toBeGreaterThan(0);
   });
 });
