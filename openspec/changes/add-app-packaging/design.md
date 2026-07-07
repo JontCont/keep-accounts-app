@@ -28,11 +28,16 @@ This project is an Nx monorepo containing a React web application under `apps/we
 - **Rationale**: Setting up developer credentials, certificates, and profiles in GitHub Secrets is complex and poses security management overhead. For verification purposes, building an unsigned Android debug APK (which uses the default debug keystore) and building iOS with `CODE_SIGNING_ALLOWED=NO` is sufficient to check that the codebase compiles successfully and packaging works.
 - **Alternatives Considered**: Signing builds on CI. Rejected due to the complexity of managing developer certificates at this stage.
 
+### Decision: Use Ionic Layout Components for Safe Area Insets
+- **Rationale**: The custom PWA HTML/CSS shell currently overlaps with status bars (notches) and bottom home indicators on mobile packaging. Since `@ionic/react` is already present as a dependency in the project, utilizing `IonApp`, `IonPage`, and `IonContent` to wrap the app shell is the most robust and standard approach. These components automatically handle viewport safe area padding and native-like scrolling.
+- **Alternatives Considered**: Inline CSS calculations with `env(safe-area-inset-*)`. Rejected because custom CSS can be less reliable across different screen scales, keyboards, and devices compared to Ionic's layout system.
+
 ## Implementation Contract
 
 - **Behavior**: 
   - Running `npx nx run web:build-android` (or clicking it in Nx Console) compiles the web application, synchronizes assets to Android, and outputs a debug APK.
   - Running `npx nx run web:build-ios` (or clicking it in Nx Console) compiles the web application, synchronizes assets to iOS, and compiles the iOS app (without code signing).
+  - Web views on iOS and Android automatically respect status bars and bottom home indicators via Ionic layout wrapping and `viewport-fit=cover`.
 - **Interface / Data Shape**:
   - `nx` target properties inside `apps/web/package.json`:
     - `sync-android`, `build-android`, `build-ios` using the `"executor": "nx:run-commands"` executor.
@@ -47,6 +52,7 @@ This project is an Nx monorepo containing a React web application under `apps/we
   - Execution of `npx nx run web:build-android` succeeds and output exists at `apps/web/android/app/build/outputs/apk/debug/app-debug.apk`.
   - Execution of `npx nx run web:build-ios` succeeds without signing errors.
   - The GitHub Actions workflow compiles both platforms successfully without warnings or failures.
+  - Application UI elements (header and bottom navigation) do not overlap with phone notches, status bars, or home indicators on mobile packaging.
 - **Scope Boundaries**:
   - **In Scope**:
     - Adding Capacitor core/cli packages.
@@ -54,8 +60,10 @@ This project is an Nx monorepo containing a React web application under `apps/we
     - Creating native wrapper structures (`apps/web/android`, `apps/web/ios`).
     - Modifying `apps/web/package.json` to include target scripts.
     - Adding `.github/workflows/build-app.yml`.
+    - Adjusting `apps/web/index.html` to add `viewport-fit=cover`.
+    - Modifying `apps/web/src/app/app.tsx` to wrap with `IonApp`, `IonPage`, `IonContent`, and adjust navigation/header padding.
   - **Out of Scope**:
-    - Changes to files under `apps/web/src/app/` or `apps/web/src/main.tsx`.
+    - Invoking native Capacitor APIs/plugins beyond standard rendering.
 
 ## Risks / Trade-offs
 

@@ -110,7 +110,8 @@ button {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  padding: 20px 16px 80px 16px; /* Space for bottom tab bar */
+  /* Space for top status bar and bottom tab bar, including safe area insets */
+  padding: calc(20px + env(safe-area-inset-top)) 16px calc(80px + env(safe-area-inset-bottom)) 16px;
 }
 
 /* Animations */
@@ -136,6 +137,14 @@ button {
 
 .fade-in {
   animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Bottom floating navigation bar: sits above home indicator on notched devices */
+.bottom-nav {
+  position: fixed;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 /* Ionic Select & Action Sheet Glassmorphism Dark Mode Styling */

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
-import { IonSelect, IonSelectOption } from '@ionic/react';
+import { IonApp, IonContent, IonInput, IonPage, IonSelect, IonSelectOption } from '@ionic/react';
 
 export interface Category {
   name: string;
@@ -683,9 +683,12 @@ export function App() {
 
 
   return (
-    <div className="app-container">
-      {/* Header */}
-      <header style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <IonApp>
+      <IonPage>
+        <IonContent fullscreen>
+          <div className="app-container">
+            {/* Header */}
+            <header style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h1 style={{ fontSize: '1.6rem', fontWeight: 700, background: 'linear-gradient(90deg, #6366f1, #a855f7)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
             Keep Accounts
@@ -1023,13 +1026,14 @@ export function App() {
                       <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px' }}>
                         設定每月預算 (未設置或 0 表示不限制)
                       </label>
-                      <input
+                      <IonInput
                         type="number"
-                        min="0"
+                        min={0}
                         placeholder="例如: 10000"
-                        value={group.budget || ''}
-                        onChange={(e) => {
-                          const val = e.target.value === '' ? undefined : Math.max(0, parseInt(e.target.value, 10));
+                        value={group.budget ?? ''}
+                        onIonInput={(e) => {
+                          const raw = e.detail.value ?? '';
+                          const val = raw === '' ? undefined : Math.max(0, parseInt(raw, 10));
                           if (editingGroups) {
                             const updated = editingGroups.map(eg => {
                               if (eg.id === group.id) {
@@ -1048,7 +1052,7 @@ export function App() {
                             setAccountGroups(updatedGroups);
                           }
                         }}
-                        style={{ width: '100%', padding: '8px', fontSize: '0.85rem', boxSizing: 'border-box' }}
+                        style={{ width: '100%', fontSize: '1rem', '--padding-start': '8px', '--padding-end': '8px', '--padding-top': '8px', '--padding-bottom': '8px', background: 'rgba(255,255,255,0.05)', borderRadius: 'var(--border-radius-sm)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' } as React.CSSProperties}
                       />
                     </div>
 
@@ -1129,12 +1133,12 @@ export function App() {
                               <IonSelectOption key={em} value={em}>{em}</IonSelectOption>
                             ))}
                           </IonSelect>
-                          <input
+                          <IonInput
                             type="text"
                             placeholder="分類名稱"
                             value={newCatName}
-                            onChange={(e) => setNewCatName(e.target.value)}
-                            style={{ flex: 1, padding: '8px', fontSize: '0.85rem' }}
+                            onIonInput={(e) => setNewCatName(e.detail.value ?? '')}
+                            style={{ flex: 1, fontSize: '1rem', '--padding-start': '8px', '--padding-end': '8px', '--padding-top': '8px', '--padding-bottom': '8px', background: 'rgba(255,255,255,0.05)', borderRadius: 'var(--border-radius-sm)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' } as React.CSSProperties}
                           />
                         </div>
                         
@@ -1201,14 +1205,15 @@ export function App() {
                             <span>{group.name}</span>
                           </span>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <input
+                            <IonInput
                               type="number"
-                              min="0"
-                              max="100"
+                              min={0}
+                              max={100}
                               placeholder="0"
                               value={group.targetRatio ?? ''}
-                              onChange={(e) => {
-                                const val = e.target.value === '' ? 0 : Math.max(0, parseInt(e.target.value, 10));
+                              onIonInput={(e) => {
+                                const raw = e.detail.value ?? '';
+                                const val = raw === '' ? 0 : Math.max(0, parseInt(raw, 10));
                                 const updated = editingGroups.map(eg => {
                                   if (eg.id === group.id) {
                                     return { ...eg, targetRatio: val };
@@ -1217,7 +1222,7 @@ export function App() {
                                 });
                                 setEditingGroups(updated);
                               }}
-                              style={{ width: '80px', padding: '6px 8px', fontSize: '0.85rem', textAlign: 'right', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '4px' }}
+                              style={{ width: '80px', fontSize: '1rem', '--padding-start': '6px', '--padding-end': '6px', '--padding-top': '6px', '--padding-bottom': '6px', '--text-align': 'right', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '4px' } as React.CSSProperties}
                             />
                             <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>%</span>
                           </div>
@@ -1256,25 +1261,25 @@ export function App() {
                       >
                         {ACCOUNT_EMOJIS.map(e => <IonSelectOption key={e} value={e}>{e}</IonSelectOption>)}
                       </IonSelect>
-                      <input 
+                      <IonInput 
                         type="text" 
                         placeholder="帳戶大項名稱" 
                         value={newGroupName} 
-                        onChange={(e) => setNewGroupName(e.target.value)}
-                        style={{ flex: 1, padding: '8px' }}
+                        onIonInput={(e) => setNewGroupName(e.detail.value ?? '')}
+                        style={{ flex: 1, fontSize: '1rem', '--padding-start': '8px', '--padding-end': '8px', '--padding-top': '8px', '--padding-bottom': '8px', background: 'rgba(255,255,255,0.05)', borderRadius: 'var(--border-radius-sm)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' } as React.CSSProperties}
                         required
                       />
                     </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                       <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>每月預算 (選填，未設定或0為不限制)</label>
-                      <input 
+                      <IonInput 
                         type="number" 
-                        min="0"
+                        min={0}
                         placeholder="每月預算金額 ($)" 
                         value={newGroupBudget} 
-                        onChange={(e) => setNewGroupBudget(e.target.value)}
-                        style={{ padding: '8px', fontSize: '0.85rem' }}
+                        onIonInput={(e) => setNewGroupBudget(e.detail.value ?? '')}
+                        style={{ fontSize: '1rem', '--padding-start': '8px', '--padding-end': '8px', '--padding-top': '8px', '--padding-bottom': '8px', background: 'rgba(255,255,255,0.05)', borderRadius: 'var(--border-radius-sm)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' } as React.CSSProperties}
                       />
                     </div>
 
@@ -1637,14 +1642,13 @@ export function App() {
                 {/* Amount */}
                 <div>
                   <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>金額 ($)</label>
-                  <input 
+                  <IonInput 
                     type="number" 
-                    pattern="[0-9]*"
-                    inputMode="decimal"
+                    inputmode="decimal"
                     placeholder="輸入金額" 
                     value={amount} 
-                    onChange={(e) => setAmount(e.target.value)} 
-                    style={{ width: '100%', padding: '10px', borderRadius: 'var(--border-radius-sm)', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' }}
+                    onIonInput={(e) => setAmount(e.detail.value ?? '')} 
+                    style={{ width: '100%', fontSize: '1rem', '--padding-start': '10px', '--padding-end': '10px', '--padding-top': '10px', '--padding-bottom': '10px', borderRadius: 'var(--border-radius-sm)', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' } as React.CSSProperties}
                     required 
                   />
                 </div>
@@ -1652,12 +1656,12 @@ export function App() {
                 {/* Description */}
                 <div>
                   <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>交易說明</label>
-                  <input 
+                  <IonInput 
                     type="text" 
                     placeholder="例如: 買咖啡、午餐、薪水" 
                     value={description} 
-                    onChange={(e) => setDescription(e.target.value)} 
-                    style={{ width: '100%', padding: '10px', borderRadius: 'var(--border-radius-sm)', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' }}
+                    onIonInput={(e) => setDescription(e.detail.value ?? '')} 
+                    style={{ width: '100%', fontSize: '1rem', '--padding-start': '10px', '--padding-end': '10px', '--padding-top': '10px', '--padding-bottom': '10px', borderRadius: 'var(--border-radius-sm)', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' } as React.CSSProperties}
                     required 
                   />
                 </div>
@@ -1682,11 +1686,11 @@ export function App() {
                 {/* Date */}
                 <div>
                   <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>交易日期</label>
-                  <input 
+                  <IonInput 
                     type="date" 
                     value={date} 
-                    onChange={(e) => setDate(e.target.value)} 
-                    style={{ width: '100%', padding: '10px', borderRadius: 'var(--border-radius-sm)', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' }}
+                    onIonChange={(e) => setDate(e.detail.value ?? '')} 
+                    style={{ width: '100%', fontSize: '1rem', '--padding-start': '10px', '--padding-end': '10px', '--padding-top': '10px', '--padding-bottom': '10px', borderRadius: 'var(--border-radius-sm)', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' } as React.CSSProperties}
                     required 
                   />
                 </div>
@@ -1990,26 +1994,24 @@ export function App() {
           );
         })()}
       </main>
+          </div>
+        </IonContent>
 
-      {/* Bottom Tab Bar Navigation */}
-      <nav style={{
-        position: 'fixed',
-        bottom: '16px',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        width: 'calc(100% - 32px)',
-        maxWidth: '448px',
-        background: 'rgba(15, 15, 20, 0.75)',
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
-        borderRadius: '24px',
-        display: 'flex',
-        justifyContent: 'space-around',
-        padding: '8px 6px',
-        boxShadow: '0 8px 30px rgba(0, 0, 0, 0.5)',
-        zIndex: 1000
-      }}>
+        {/* Bottom Tab Bar Navigation */}
+        <nav className="bottom-nav" style={{
+          width: 'calc(100% - 32px)',
+          maxWidth: '448px',
+          background: 'rgba(15, 15, 20, 0.75)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          borderRadius: '24px',
+          display: 'flex',
+          justifyContent: 'space-around',
+          padding: '8px 6px',
+          boxShadow: '0 8px 30px rgba(0, 0, 0, 0.5)',
+          zIndex: 1000
+        }}>
         <button 
           onClick={() => setActiveTab('dashboard')}
           style={{
@@ -2063,7 +2065,8 @@ export function App() {
           <span>分析</span>
         </button>
       </nav>
-    </div>
+      </IonPage>
+    </IonApp>
   );
 }
 

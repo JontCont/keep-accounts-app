@@ -27,3 +27,15 @@
 - [x] 4.1 Create the Automated CI Builds for Mobile Platforms workflow and apply Decision: Unsigned compiles and Debug APK builds in CI/CD.
   - **Behavior**: Create .github/workflows/build-app.yml defining GitHub Actions build jobs for Android and iOS that compile without signing credentials.
   - **Verification**: Push the workflow and verify the CI run executes successfully on GitHub, completing the gradle build and Xcode compilation checks.
+
+## 5. Safe Area and Mobile Layout Adjustment
+
+- [x] 5.1 Enable viewport-fit=cover in web index.html.
+  - **Behavior**: Update index.html to add `viewport-fit=cover` to the viewport meta tag.
+  - **Verification**: Verify viewport meta tag exists and check in browser inspector.
+- [x] 5.2 Wrap application with Ionic Layout Components in app.tsx and implement Decision: Use Ionic Layout Components for Safe Area Insets.
+  - **Behavior**: Import IonApp, IonPage, and IonContent in app.tsx. Wrap the main layout inside these components.
+  - **Verification**: Ensure the app starts without errors.
+- [x] 5.3 Adjust top header and bottom floating navigation bar positioning.
+  - **Behavior**: Set CSS paddings and bottom values on the floating navigation bar to utilize safe-area insets (`env(safe-area-inset-top)` / `env(safe-area-inset-bottom)` or `--ion-safe-area-*` variables).
+  - **Verification**: Verify on mobile simulator or package the app to verify elements are no longer cut off by the status bar or overlapping with the home indicator.
