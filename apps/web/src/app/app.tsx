@@ -17,6 +17,7 @@ export interface AccountGroup {
   categories: Category[];
   description?: string;
   budget?: number;
+  targetRatio?: number;
 }
 
 export interface Transaction {
@@ -58,6 +59,7 @@ const DEFAULT_ACCOUNT_GROUPS: AccountGroup[] = [
     emoji: '💳',
     color: '#6366f1',
     description: '日常開銷：支付房租、水電、餐費與交通。',
+    targetRatio: 30,
     categories: [
       { name: '餐飲食品', emoji: '🍔', color: '#f59e0b', type: 'expense' },
       { name: '交通出行', emoji: '🚗', color: '#3b82f6', type: 'expense' },
@@ -77,6 +79,7 @@ const DEFAULT_ACCOUNT_GROUPS: AccountGroup[] = [
     emoji: '📈',
     color: '#3b82f6',
     description: '投資理財：投入股市、基金等，用於創造被動收入與資產增值。',
+    targetRatio: 30,
     categories: [
       { name: '股市投資', emoji: '📉', color: '#3b82f6', type: 'expense' },
       { name: '基金認購', emoji: '🏦', color: '#8b5cf6', type: 'expense' },
@@ -93,6 +96,7 @@ const DEFAULT_ACCOUNT_GROUPS: AccountGroup[] = [
     emoji: '🐷',
     color: '#10b981',
     description: '長期儲蓄：存入銀行或作為緊急預備金，確保財務安全。',
+    targetRatio: 40,
     categories: [
       { name: '定存儲蓄', emoji: '🏦', color: '#8b5cf6', type: 'expense' },
       { name: '緊急備用', emoji: '🛡️', color: '#ef4444', type: 'expense' },
@@ -128,7 +132,7 @@ export function App() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        return parsed.map((g: any, index: number) => {
+        let migrated = parsed.map((g: any, index: number) => {
           let name = g.name;
           let description = g.description;
           let categories = g.categories;
@@ -154,15 +158,40 @@ export function App() {
           }
 
           const defaultGroup = DEFAULT_ACCOUNT_GROUPS.find(dg => dg.id === g.id);
+          const ratio = typeof g.targetRatio === 'number' && !isNaN(g.targetRatio) ? g.targetRatio : (defaultGroup?.targetRatio ?? 0);
           return {
             id: g.id,
             name: name,
             emoji: g.emoji,
             color: g.color || defaultGroup?.color || ACCOUNT_COLORS[index % ACCOUNT_COLORS.length],
             description: description || defaultGroup?.description,
-            categories: categories || defaultGroup?.categories || getDefaultCategoriesForNewGroup()
+            categories: categories || defaultGroup?.categories || getDefaultCategoriesForNewGroup(),
+            targetRatio: ratio,
+            budget: g.budget
           };
         });
+
+        // Validate sum equals 100%
+        const sum = migrated.reduce((s: number, g: any) => s + g.targetRatio, 0);
+        if (sum !== 100) {
+          if (migrated.length === 3 && migrated.some((g: any) => g.id === '1') && migrated.some((g: any) => g.id === '2') && migrated.some((g: any) => g.id === '3')) {
+            migrated = migrated.map((g: any) => {
+              let r = 0;
+              if (g.id === '1') r = 30;
+              else if (g.id === '2') r = 30;
+              else if (g.id === '3') r = 40;
+              return { ...g, targetRatio: r };
+            });
+          } else {
+            const avg = Math.floor(100 / migrated.length);
+            const remainder = 100 % migrated.length;
+            migrated = migrated.map((g: any, i: number) => {
+              const r = avg + (i < remainder ? 1 : 0);
+              return { ...g, targetRatio: r };
+            });
+          }
+        }
+        return migrated;
       } catch (e) {
         console.error(e);
       }
@@ -185,11 +214,29 @@ export function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'history' | 'stats'>('dashboard');
   const [isEditingGroups, setIsEditingGroups] = useState(false);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [editingGroups, setEditingGroups] = useState<AccountGroup[] | null>(null);
+
+  const handleStartEditGroups = () => {
+    setEditingGroups(JSON.parse(JSON.stringify(accountGroups)));
+    setIsEditingGroups(true);
+  };
+
+  const handleSaveEditGroups = () => {
+    if (!editingGroups) return;
+    const sum = editingGroups.reduce((s, g) => s + (g.targetRatio || 0), 0);
+    if (sum !== 100) {
+      alert('目標比例加總必須為 100%！');
+      return;
+    }
+    setAccountGroups(editingGroups);
+    localStorage.setItem('keep_accounts_groups', JSON.stringify(editingGroups));
+    setIsEditingGroups(false);
+    setEditingGroups(null);
+  };
 
   // Simplified Dashboard & Grouping States
   const [showTxModal, setShowTxModal] = useState(false);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
-  const [grouping, setGrouping] = useState<'day' | 'month' | 'year'>('day');
 
   // Form State for Transactions
   const [description, setDescription] = useState('');
@@ -216,6 +263,7 @@ export function App() {
   const [filterGroup, setFilterGroup] = useState<string>('all');
   const [statsGroup, setStatsGroup] = useState<string>('all');
   const [statsSubTab, setStatsSubTab] = useState<'category' | 'trend'>('category');
+  const [period, setPeriod] = useState<'today' | 'month'>('month');
 
   // Sync form states with editingTx when modal opens or editingTx changes
   useEffect(() => {
@@ -407,10 +455,15 @@ export function App() {
       emoji: newGroupEmoji,
       color: newGroupColor,
       categories: getDefaultCategoriesForNewGroup(),
-      budget: budgetVal
+      budget: budgetVal,
+      targetRatio: 0
     };
 
-    setAccountGroups([...accountGroups, newGroup]);
+    const updated = [...accountGroups, newGroup];
+    setAccountGroups(updated);
+    if (editingGroups) {
+      setEditingGroups([...editingGroups, newGroup]);
+    }
     setNewGroupName('');
     setNewGroupColor('#6366f1');
     setNewGroupBudget('');
@@ -436,6 +489,9 @@ export function App() {
 
       setTransactions(updatedTxs);
       setAccountGroups(remainingGroups);
+      if (editingGroups) {
+        setEditingGroups(editingGroups.filter(g => g.id !== groupId));
+      }
       if (editingGroupId === groupId) {
         setEditingGroupId(null);
       }
@@ -445,7 +501,7 @@ export function App() {
   const handleAddCategory = (groupId: string, name: string, emoji: string, color: string, type: 'income' | 'expense') => {
     if (!name.trim()) return;
 
-    const updatedGroups = accountGroups.map(g => {
+    const updateInList = (list: AccountGroup[]) => list.map(g => {
       if (g.id === groupId) {
         if (g.categories.some(c => c.name === name.trim() && c.type === type)) {
           alert('此分類名稱已存在！');
@@ -458,7 +514,11 @@ export function App() {
       }
       return g;
     });
-    setAccountGroups(updatedGroups);
+
+    setAccountGroups(updateInList(accountGroups));
+    if (editingGroups) {
+      setEditingGroups(updateInList(editingGroups));
+    }
   };
 
   const handleDeleteCategory = (groupId: string, catName: string, type: 'income' | 'expense') => {
@@ -469,7 +529,7 @@ export function App() {
     }
 
     if (confirm(`確定要刪除「${catName}」分類小項嗎？\n舊有的交易明細仍會保留此分類名稱，但將改用預設樣式。`)) {
-      const updatedGroups = accountGroups.map(g => {
+      const updateInList = (list: AccountGroup[]) => list.map(g => {
         if (g.id === groupId) {
           return {
             ...g,
@@ -478,7 +538,11 @@ export function App() {
         }
         return g;
       });
-      setAccountGroups(updatedGroups);
+
+      setAccountGroups(updateInList(accountGroups));
+      if (editingGroups) {
+        setEditingGroups(updateInList(editingGroups));
+      }
     }
   };
 
@@ -492,6 +556,46 @@ export function App() {
     .reduce((sum, tx) => sum + tx.amount, 0);
 
   const totalBalance = totalIncome - totalExpense;
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const currentMonthStr = todayStr.substring(0, 7);
+
+  const displayIncome = transactions
+    .filter(tx => tx.type === 'income')
+    .filter(tx => period === 'today' ? tx.date === todayStr : tx.date.startsWith(currentMonthStr))
+    .reduce((sum, tx) => sum + tx.amount, 0);
+
+  const displayExpense = transactions
+    .filter(tx => tx.type === 'expense')
+    .filter(tx => period === 'today' ? tx.date === todayStr : tx.date.startsWith(currentMonthStr))
+    .reduce((sum, tx) => sum + tx.amount, 0);
+
+  // Daily allowed consumption calculations for "日常開銷" (Group '1')
+  const dailyExpenseGroup = accountGroups.find(g => g.id === '1');
+  const group1Budget = dailyExpenseGroup?.budget || 0;
+  const todayDay = new Date().getDate();
+  const dailyAllowance = Math.round(group1Budget / 30);
+  
+  const cumulativeExpenseUpToYesterday = transactions
+    .filter(tx => 
+      tx.accountGroupId === '1' && 
+      tx.type === 'expense' && 
+      tx.date.startsWith(currentMonthStr) && 
+      tx.date < todayStr
+    )
+    .reduce((sum, tx) => sum + tx.amount, 0);
+
+  const allowedToday = todayDay * dailyAllowance - cumulativeExpenseUpToYesterday;
+
+  const todayExpenseForDailyGroup = transactions
+    .filter(tx => 
+      tx.accountGroupId === '1' && 
+      tx.type === 'expense' && 
+      tx.date === todayStr
+    )
+    .reduce((sum, tx) => sum + tx.amount, 0);
+
+  const remainingToday = allowedToday - todayExpenseForDailyGroup;
 
   // Group Balances
   const getGroupBalance = (groupId: string) => {
@@ -572,15 +676,7 @@ export function App() {
     return { income, expense };
   };
 
-  // Grouped Transactions
-  const groupedTransactions = transactions.reduce((acc: { [key: string]: Transaction[] }, tx) => {
-    const key = getGroupKey(tx.date, grouping);
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(tx);
-    return acc;
-  }, {});
 
-  const sortedGroupKeys = Object.keys(groupedTransactions).sort((a, b) => b.localeCompare(a));
 
   return (
     <div className="app-container">
@@ -611,21 +707,88 @@ export function App() {
               position: 'relative',
               overflow: 'hidden'
             }}>
-              <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px' }}>目前總餘額</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px' }}>目前總餘額</div>
+                <div style={{ display: 'flex', gap: '4px', background: 'rgba(255,255,255,0.03)', padding: '2px', borderRadius: 'var(--border-radius-sm)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                  <button
+                    type="button"
+                    onClick={() => setPeriod('today')}
+                    style={{
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      background: period === 'today' ? 'rgba(255,255,255,0.08)' : 'transparent',
+                      color: period === 'today' ? '#fff' : 'var(--text-secondary)'
+                    }}
+                  >
+                    今日
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPeriod('month')}
+                    style={{
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      background: period === 'month' ? 'rgba(255,255,255,0.08)' : 'transparent',
+                      color: period === 'month' ? '#fff' : 'var(--text-secondary)'
+                    }}
+                  >
+                    本月
+                  </button>
+                </div>
+              </div>
               <div style={{ fontSize: '2.5rem', fontWeight: 700, margin: '8px 0', color: totalBalance >= 0 ? '#fff' : 'var(--expense-color)' }}>
                 ${totalBalance.toLocaleString('zh-TW')}
               </div>
               
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '20px', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '16px' }}>
                 <div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>總收入</div>
-                  <div style={{ color: 'var(--income-color)', fontWeight: 600, fontSize: '1.1rem' }}>+${totalIncome.toLocaleString('zh-TW')}</div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>{period === 'today' ? '今日收入' : '本月收入'}</div>
+                  <div style={{ color: 'var(--income-color)', fontWeight: 600, fontSize: '1.1rem' }}>+${displayIncome.toLocaleString('zh-TW')}</div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>總支出</div>
-                  <div style={{ color: 'var(--expense-color)', fontWeight: 600, fontSize: '1.1rem' }}>-${totalExpense.toLocaleString('zh-TW')}</div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>{period === 'today' ? '今日支出' : '本月支出'}</div>
+                  <div style={{ color: 'var(--expense-color)', fontWeight: 600, fontSize: '1.1rem' }}>-${displayExpense.toLocaleString('zh-TW')}</div>
                 </div>
               </div>
+
+              {period === 'today' && dailyExpenseGroup && dailyExpenseGroup.budget && dailyExpenseGroup.budget > 0 ? (
+                <div style={{
+                  marginTop: '16px',
+                  paddingTop: '16px',
+                  borderTop: '1px dashed rgba(255,255,255,0.1)',
+                  fontSize: '0.85rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>今日允許消費 (日常開銷)</span>
+                    <span style={{ fontWeight: 600, color: '#fff' }}>${allowedToday.toLocaleString('zh-TW')}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>今日剩餘額度</span>
+                    <span style={{
+                      fontWeight: 600,
+                      color: remainingToday >= 0 ? 'var(--income-color)' : 'var(--expense-color)'
+                    }}>
+                      {remainingToday >= 0 ? `$${remainingToday.toLocaleString('zh-TW')}` : `超支 $${Math.abs(remainingToday).toLocaleString('zh-TW')}`}
+                    </span>
+                  </div>
+                  <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.06)', borderRadius: '2px', overflow: 'hidden', marginTop: '2px' }}>
+                    <div style={{
+                      width: `${Math.min(100, Math.max(0, allowedToday > 0 ? (todayExpenseForDailyGroup / allowedToday) * 100 : 100))}%`,
+                      height: '100%',
+                      backgroundColor: todayExpenseForDailyGroup > allowedToday ? 'var(--expense-color)' : 'var(--income-color)',
+                      borderRadius: '2px',
+                      transition: 'width 0.3s ease-in-out'
+                    }} />
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             {/* Account Groups List */}
@@ -633,205 +796,199 @@ export function App() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                 <h3 style={{ fontSize: '1.05rem', fontWeight: 600 }}>資金大項帳戶</h3>
                 <button 
-                  onClick={() => setIsEditingGroups(!isEditingGroups)} 
+                  onClick={() => {
+                    if (isEditingGroups) {
+                      handleSaveEditGroups();
+                    } else {
+                      handleStartEditGroups();
+                    }
+                  }} 
                   style={{ background: 'transparent', color: 'var(--primary-color)', fontSize: '0.85rem', fontWeight: 500 }}
+                  disabled={isEditingGroups && (!editingGroups || editingGroups.reduce((s, g) => s + (g.targetRatio || 0), 0) !== 100)}
                 >
                   {isEditingGroups ? '完成編輯' : '⚙️ 編輯帳戶'}
                 </button>
               </div>
 
-              {/* Accounts scroll container */}
-              <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '8px', scrollbarWidth: 'none' }}>
-                {accountGroups.map(group => {
-                  const bal = getGroupBalance(group.id);
-                  return (
-                    <div 
-                      key={group.id} 
-                      className="glass-card" 
-                      style={{ 
-                        flexShrink: 0, 
-                        width: '140px', 
-                        padding: '16px', 
-                        borderRadius: 'var(--border-radius-md)', 
-                        background: 'rgba(255, 255, 255, 0.03)',
-                        position: 'relative'
-                      }}
-                    >
-                      <div style={{ fontSize: '0.9rem', fontWeight: 500, display: 'flex', gap: '6px', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span style={{ display: 'flex', gap: '4px', alignItems: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>
-                          <span>{group.emoji}</span>
-                          <span>{group.name}</span>
-                        </span>
-                        {totalBalance > 0 && bal > 0 && (
-                          <span style={{ 
-                            fontSize: '0.7rem', 
-                            padding: '2px 5px', 
-                            borderRadius: '8px', 
-                            background: 'rgba(99, 102, 241, 0.15)', 
-                            color: '#818cf8', 
-                            fontWeight: 600,
-                            flexShrink: 0
-                          }}>
-                            {Math.round((bal / totalBalance) * 100)}%
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ fontSize: '1.2rem', fontWeight: 700, marginTop: '12px', color: bal >= 0 ? '#fff' : 'var(--expense-color)' }}>
-                        ${bal.toLocaleString('zh-TW')}
-                      </div>
-
-                      {group.budget && group.budget > 0 ? (() => {
-                        const monthlyExpense = getCurrentMonthExpenseForGroup(group.id, transactions);
-                        const pct = Math.round((monthlyExpense / group.budget) * 100);
-                        let barColor = '#10b981'; // Green
-                        if (pct >= 80 && pct < 100) {
-                          barColor = '#f59e0b'; // Yellow/Orange
-                        } else if (pct >= 100) {
-                          barColor = '#ef4444'; // Red
-                        }
-                        const barWidth = Math.min(100, pct);
-                        return (
-                          <div style={{ marginTop: '12px', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '8px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '4px' }}>
-                              <span>預算 ${group.budget.toLocaleString('zh-TW')}</span>
-                              <span style={{ color: pct >= 100 ? '#ef4444' : pct >= 80 ? '#f59e0b' : 'var(--text-secondary)', fontWeight: 600 }}>{pct}%</span>
-                            </div>
-                            <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.06)', borderRadius: '3px', overflow: 'hidden' }}>
-                              <div style={{ 
-                                width: `${barWidth}%`, 
-                                height: '100%', 
-                                backgroundColor: barColor, 
-                                borderRadius: '3px',
-                                transition: 'width 0.3s ease-in-out'
-                              }} />
-                            </div>
-                            <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', marginTop: '4px', textAlign: 'right' }}>
-                              已花 ${monthlyExpense.toLocaleString('zh-TW')}
-                            </div>
-                          </div>
-                        );
-                      })() : null}
-                      
-                      {isEditingGroups && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', position: 'absolute', top: '4px', right: '4px' }}>
-                          <button 
-                            onClick={() => handleDeleteAccountGroup(group.id)}
-                            style={{
-                              background: '#f43f5e',
-                              color: '#fff',
-                              width: '18px',
-                              height: '18px',
-                              borderRadius: '50%',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              fontSize: '0.65rem'
-                            }}
-                          >
-                            ✕
-                          </button>
-                          <button 
-                            onClick={() => setEditingGroupId(editingGroupId === group.id ? null : group.id)}
-                            style={{
-                              background: editingGroupId === group.id ? 'var(--primary-color)' : 'rgba(255,255,255,0.1)',
-                              color: '#fff',
-                              width: '18px',
-                              height: '18px',
-                              borderRadius: '50%',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              fontSize: '0.65rem'
-                            }}
-                            title="管理分類小項"
-                          >
-                            ⚙️
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Stacked Progress Bar for Asset Allocation */}
-              {!isEditingGroups && (() => {
+              {/* Stacked Progress Bar for Asset Allocation at the top */}
+              {(() => {
                 const totalPositive = accountGroups
                   .map(g => getGroupBalance(g.id))
                   .filter(b => b > 0)
                   .reduce((sum, b) => sum + b, 0);
 
-                if (totalPositive <= 0) return null;
-
                 return (
-                  <div className="glass-card fade-in" style={{ padding: '16px', marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '12px', background: 'rgba(255,255,255,0.01)' }}>
-                    <div style={{ fontSize: '0.85rem', fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ color: 'var(--text-secondary)' }}>📊 333 法則配比分析 (總資金佔比)</span>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>總資產: ${totalPositive.toLocaleString('zh-TW')}</span>
-                    </div>
-                    
-                    {/* Stacked Bar */}
-                    <div style={{ 
-                      width: '100%', 
-                      height: '10px', 
-                      background: 'rgba(255,255,255,0.04)', 
-                      borderRadius: '5px', 
-                      display: 'flex', 
-                      overflow: 'hidden' 
-                    }}>
+                  <>
+                    {!isEditingGroups && totalPositive > 0 && (
+                      <div style={{ 
+                        width: '100%', 
+                        height: '12px', 
+                        background: 'rgba(255,255,255,0.04)', 
+                        borderRadius: '6px', 
+                        display: 'flex', 
+                        overflow: 'hidden',
+                        marginBottom: '16px'
+                      }}>
+                        {accountGroups.map(group => {
+                          const bal = getGroupBalance(group.id);
+                          if (bal <= 0) return null;
+                          const pct = (bal / totalPositive) * 100;
+                          return (
+                            <div 
+                              key={group.id} 
+                              style={{ 
+                                width: `${pct}%`, 
+                                height: '100%', 
+                                backgroundColor: group.color || '#6366f1',
+                                transition: 'width 0.5s ease-in-out'
+                              }}
+                              title={`${group.name}: ${Math.round(pct)}%`}
+                            />
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Accounts scroll container */}
+                    <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '8px', scrollbarWidth: 'none' }}>
                       {accountGroups.map(group => {
                         const bal = getGroupBalance(group.id);
-                        if (bal <= 0) return null;
-                        const pct = (bal / totalPositive) * 100;
+                        const actualPct = totalPositive > 0 ? Math.round((Math.max(0, bal) / totalPositive) * 100) : 0;
+                        const targetRatio = group.targetRatio || 0;
+                        const comparisonRatio = targetRatio > 0 ? Math.round((actualPct / targetRatio) * 100) : 0;
+
                         return (
                           <div 
                             key={group.id} 
+                            className="glass-card" 
                             style={{ 
-                              width: `${pct}%`, 
-                              height: '100%', 
-                              backgroundColor: group.color || '#6366f1',
-                              transition: 'width 0.5s ease-in-out'
+                              flexShrink: 0, 
+                              width: '150px', 
+                              padding: '16px', 
+                              borderRadius: 'var(--border-radius-md)', 
+                              background: 'rgba(255, 255, 255, 0.03)',
+                              position: 'relative'
                             }}
-                            title={`${group.name}: ${Math.round(pct)}%`}
-                          />
-                        );
-                      })}
-                    </div>
-                    
-                    {/* Legends */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
-                      {accountGroups.map(group => {
-                        const bal = getGroupBalance(group.id);
-                        if (bal <= 0) return null;
-                        const pct = Math.round((bal / totalPositive) * 100);
-                        return (
-                          <div key={group.id} style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem' }}>
-                              <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: group.color || '#6366f1' }} />
-                              <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>
-                                {group.emoji} {group.name}
+                          >
+                            <div style={{ fontSize: '0.9rem', fontWeight: 500, display: 'flex', gap: '6px', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <span style={{ display: 'flex', gap: '4px', alignItems: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>
+                                <span>{group.emoji}</span>
+                                <span>{group.name}</span>
                               </span>
-                              <span style={{ color: 'var(--text-secondary)', marginLeft: '6px' }}>
-                                ${bal.toLocaleString('zh-TW')}
+                              <span style={{ 
+                                fontSize: '0.7rem', 
+                                padding: '2px 5px', 
+                                borderRadius: '8px', 
+                                background: 'rgba(255,255,255,0.06)', 
+                                color: 'var(--text-secondary)', 
+                                fontWeight: 600,
+                                flexShrink: 0
+                              }}>
+                                {actualPct}%
                               </span>
-                              <span style={{ fontWeight: 600, color: 'var(--primary-color)', marginLeft: 'auto' }}>{pct}%</span>
                             </div>
-                            {group.description && (
-                              <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', paddingLeft: '16px' }}>
-                                {group.description}
+                            <div style={{ fontSize: '1.2rem', fontWeight: 700, marginTop: '12px', color: bal >= 0 ? '#fff' : 'var(--expense-color)' }}>
+                              ${bal.toLocaleString('zh-TW')}
+                            </div>
+
+                            {/* Target Progress Bar */}
+                            <div style={{ marginTop: '12px', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '8px' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-tertiary)', marginBottom: '4px' }}>
+                                <span>目標 {targetRatio}%</span>
+                                <span>達標 {comparisonRatio}%</span>
+                              </div>
+                              <div style={{ width: '100%', height: '5px', background: 'rgba(255,255,255,0.06)', borderRadius: '2.5px', overflow: 'hidden' }}>
+                                <div style={{ 
+                                  width: `${Math.min(100, comparisonRatio)}%`, 
+                                  height: '100%', 
+                                  backgroundColor: group.color, 
+                                  borderRadius: '2.5px',
+                                  transition: 'width 0.3s ease-in-out'
+                                }} />
+                              </div>
+                            </div>
+
+                            {group.budget && group.budget > 0 ? (() => {
+                              const monthlyExpense = getCurrentMonthExpenseForGroup(group.id, transactions);
+                              const pct = Math.round((monthlyExpense / group.budget) * 100);
+                              let barColor = '#10b981'; // Green
+                              if (pct >= 80 && pct < 100) {
+                                barColor = '#f59e0b'; // Yellow/Orange
+                              } else if (pct >= 100) {
+                                barColor = '#ef4444'; // Red
+                              }
+                              const barWidth = Math.min(100, pct);
+                              return (
+                                <div style={{ marginTop: '12px', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '8px' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-tertiary)', marginBottom: '4px' }}>
+                                    <span>預算 ${group.budget.toLocaleString('zh-TW')}</span>
+                                    <span style={{ color: pct >= 100 ? '#ef4444' : pct >= 80 ? '#f59e0b' : 'var(--text-secondary)', fontWeight: 600 }}>{pct}%</span>
+                                  </div>
+                                  <div style={{ width: '100%', height: '5px', background: 'rgba(255,255,255,0.06)', borderRadius: '2.5px', overflow: 'hidden' }}>
+                                    <div style={{ 
+                                      width: `${barWidth}%`, 
+                                      height: '100%', 
+                                      backgroundColor: barColor, 
+                                      borderRadius: '2.5px',
+                                      transition: 'width 0.3s ease-in-out'
+                                    }} />
+                                  </div>
+                                </div>
+                              );
+                            })() : null}
+                            
+                            {isEditingGroups && (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', position: 'absolute', top: '4px', right: '4px' }}>
+                                <button 
+                                  type="button"
+                                  onClick={() => handleDeleteAccountGroup(group.id)}
+                                  style={{
+                                    background: '#f43f5e',
+                                    color: '#fff',
+                                    width: '18px',
+                                    height: '18px',
+                                    borderRadius: '50%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: '0.7rem',
+                                    fontWeight: 700
+                                  }}
+                                  title="刪除帳戶"
+                                >
+                                  ✕
+                                </button>
+                                <button 
+                                  type="button"
+                                  onClick={() => setEditingGroupId(editingGroupId === group.id ? null : group.id)}
+                                  style={{
+                                    background: editingGroupId === group.id ? 'var(--primary-color)' : 'rgba(255,255,255,0.1)',
+                                    color: '#fff',
+                                    width: '18px',
+                                    height: '18px',
+                                    borderRadius: '50%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: '0.65rem'
+                                  }}
+                                  title="管理分類小項"
+                                >
+                                  ⚙️
+                                </button>
                               </div>
                             )}
                           </div>
                         );
                       })}
                     </div>
-                  </div>
+                  </>
                 );
               })()}
 
               {/* Category Management Sub-panel */}
               {isEditingGroups && editingGroupId && (() => {
-                const group = accountGroups.find(g => g.id === editingGroupId);
+                const group = (editingGroups || accountGroups).find(g => g.id === editingGroupId);
                 if (!group) return null;
                 const filteredCats = group.categories.filter(c => c.type === catEditType);
                 return (
@@ -861,13 +1018,23 @@ export function App() {
                         value={group.budget || ''}
                         onChange={(e) => {
                           const val = e.target.value === '' ? undefined : Math.max(0, parseInt(e.target.value, 10));
-                          const updatedGroups = accountGroups.map(g => {
-                            if (g.id === group.id) {
-                              return { ...g, budget: val };
-                            }
-                            return g;
-                          });
-                          setAccountGroups(updatedGroups);
+                          if (editingGroups) {
+                            const updated = editingGroups.map(eg => {
+                              if (eg.id === group.id) {
+                                return { ...eg, budget: val };
+                              }
+                              return eg;
+                            });
+                            setEditingGroups(updated);
+                          } else {
+                            const updatedGroups = accountGroups.map(g => {
+                              if (g.id === group.id) {
+                                return { ...g, budget: val };
+                              }
+                              return g;
+                            });
+                            setAccountGroups(updatedGroups);
+                          }
                         }}
                         style={{ width: '100%', padding: '8px', fontSize: '0.85rem', boxSizing: 'border-box' }}
                       />
@@ -1005,6 +1172,64 @@ export function App() {
                 );
               })()}
 
+              {/* Target Ratio Editor Panel */}
+              {isEditingGroups && editingGroups && (() => {
+                const targetSum = editingGroups.reduce((s, g) => s + (g.targetRatio || 0), 0);
+                const isInvalid = targetSum !== 100;
+
+                return (
+                  <div className="glass-card fade-in" style={{ padding: '16px', marginTop: '12px', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                    <h4 style={{ fontSize: '0.95rem', fontWeight: 600, marginBottom: '12px' }}>🎯 設定資金大項目標配比</h4>
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      {editingGroups.map((group) => (
+                        <div key={group.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+                          <span style={{ fontSize: '0.9rem', display: 'flex', gap: '4px', alignItems: 'center' }}>
+                            <span>{group.emoji}</span>
+                            <span>{group.name}</span>
+                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              placeholder="0"
+                              value={group.targetRatio ?? ''}
+                              onChange={(e) => {
+                                const val = e.target.value === '' ? 0 : Math.max(0, parseInt(e.target.value, 10));
+                                const updated = editingGroups.map(eg => {
+                                  if (eg.id === group.id) {
+                                    return { ...eg, targetRatio: val };
+                                  }
+                                  return eg;
+                                });
+                                setEditingGroups(updated);
+                              }}
+                              style={{ width: '80px', padding: '6px 8px', fontSize: '0.85rem', textAlign: 'right', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '4px' }}
+                            />
+                            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>%</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div style={{ marginTop: '16px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem' }}>
+                        <span style={{ color: 'var(--text-secondary)' }}>配比總和:</span>
+                        <span style={{ fontWeight: 600, color: isInvalid ? 'var(--expense-color)' : 'var(--income-color)' }}>
+                          {targetSum}%
+                        </span>
+                      </div>
+                      {isInvalid && (
+                        <div style={{ color: 'var(--expense-color)', fontSize: '0.8rem', marginTop: '6px', fontWeight: 500 }}>
+                          ⚠️ 目標比例加總必須為 100%（目前: {targetSum}%）
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Inline Account group editor panel */}
               {isEditingGroups && (
                 <div className="glass-card fade-in" style={{ padding: '16px', marginTop: '12px', borderStyle: 'dashed' }}>
@@ -1109,112 +1334,109 @@ export function App() {
             {/* Grouped Transaction Ledger */}
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h3 style={{ fontSize: '1.05rem', fontWeight: 600 }}>記帳明細</h3>
-                {/* Grouping Toggle */}
-                <div style={{ display: 'flex', gap: '4px', background: 'rgba(255,255,255,0.03)', padding: '2px', borderRadius: 'var(--border-radius-sm)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                  {(['day', 'month', 'year'] as const).map(mode => (
-                    <button
-                      key={mode}
-                      onClick={() => setGrouping(mode)}
-                      style={{
-                        padding: '4px 10px',
-                        borderRadius: '4px',
-                        fontSize: '0.75rem',
-                        fontWeight: 600,
-                        background: grouping === mode ? 'rgba(255,255,255,0.08)' : 'transparent',
-                        color: grouping === mode ? '#fff' : 'var(--text-secondary)',
-                        transition: 'all 0.2s'
-                      }}
-                    >
-                      {mode === 'day' ? '日' : mode === 'month' ? '月' : '年'}
-                    </button>
-                  ))}
-                </div>
+                <h3 style={{ fontSize: '1.05rem', fontWeight: 600 }}>今日記帳明細</h3>
               </div>
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {sortedGroupKeys.map(groupKey => {
-                  const groupTxs = groupedTransactions[groupKey];
-                  const { income, expense } = getGroupTotals(groupTxs);
+                {(() => {
+                  const dashboardTxs = transactions.filter(tx => tx.date === todayStr);
+                  const dashboardGrouped = dashboardTxs.reduce((acc: { [key: string]: Transaction[] }, tx) => {
+                    const key = getGroupKey(tx.date, 'day');
+                    if (!acc[key]) acc[key] = [];
+                    acc[key].push(tx);
+                    return acc;
+                  }, {});
+                  const sortedDashboardKeys = Object.keys(dashboardGrouped).sort((a, b) => b.localeCompare(a));
+
                   return (
-                    <div key={groupKey} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      {/* Group Header */}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 4px', fontSize: '0.85rem' }}>
-                        <span style={{ fontWeight: 600, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          📅 {formatGroupHeader(groupKey, grouping)}
-                        </span>
-                        <span style={{ color: 'var(--text-tertiary)', fontSize: '0.8rem' }}>
-                          {income > 0 && <span style={{ color: 'var(--income-color)', marginRight: '8px' }}>+{income}</span>}
-                          {expense > 0 && <span style={{ color: 'var(--expense-color)' }}>-{expense}</span>}
-                        </span>
-                      </div>
-                      
-                      {/* Group Items */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        {groupTxs.map(tx => (
-                          <div key={tx.id} className="glass-card" style={{ padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderRadius: 'var(--border-radius-md)' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', overflow: 'hidden' }}>
-                              <div style={{ 
-                                fontSize: '1.3rem', 
-                                width: '36px', 
-                                height: '36px', 
-                                borderRadius: '50%', 
-                                background: tx.type === 'income' ? 'var(--income-bg)' : 'var(--expense-bg)',
-                                display: 'flex', 
-                                alignItems: 'center', 
-                                justifyContent: 'center',
-                                flexShrink: 0
-                              }}>
-                                {getCategoryEmoji(tx.category, tx.accountGroupId)}
-                              </div>
-                              <div style={{ overflow: 'hidden' }}>
-                                <div style={{ fontWeight: 500, fontSize: '0.9rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tx.description}</div>
-                                <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                  {tx.category} • {getGroupName(tx.accountGroupId)} {grouping !== 'day' && `• ${tx.date}`}
-                                </div>
-                              </div>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
-                              <span style={{ 
-                                fontWeight: 600, 
-                                fontSize: '0.95rem',
-                                color: tx.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)' 
-                              }}>
-                                {tx.type === 'income' ? '+' : '-'}${tx.amount}
+                    <>
+                      {sortedDashboardKeys.map(groupKey => {
+                        const groupTxs = dashboardGrouped[groupKey];
+                        const { income, expense } = getGroupTotals(groupTxs);
+                        return (
+                          <div key={groupKey} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            {/* Group Header */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 4px', fontSize: '0.85rem' }}>
+                              <span style={{ fontWeight: 600, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                📅 {formatGroupHeader(groupKey, 'day')}
                               </span>
-                              
-                              {/* Edit & Delete Action Buttons */}
-                              <div style={{ display: 'flex', gap: '4px' }}>
-                                <button 
-                                  onClick={() => {
-                                    setEditingTx(tx);
-                                    setShowTxModal(true);
-                                  }}
-                                  style={{ background: 'transparent', color: 'var(--text-tertiary)', fontSize: '0.85rem', padding: '4px', opacity: 0.7 }}
-                                  title="編輯"
-                                >
-                                  ✏️
-                                </button>
-                                <button 
-                                  onClick={() => handleDeleteTransaction(tx.id)}
-                                  style={{ background: 'transparent', color: 'var(--text-tertiary)', fontSize: '0.85rem', padding: '4px', opacity: 0.7 }}
-                                  title="刪除"
-                                >
-                                  🗑️
-                                </button>
-                              </div>
+                              <span style={{ color: 'var(--text-tertiary)', fontSize: '0.8rem' }}>
+                                {income > 0 && <span style={{ color: 'var(--income-color)', marginRight: '8px' }}>+{income}</span>}
+                                {expense > 0 && <span style={{ color: 'var(--expense-color)' }}>-{expense}</span>}
+                              </span>
+                            </div>
+                            
+                            {/* Group Items */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                              {groupTxs.map(tx => (
+                                <div key={tx.id} className="glass-card" style={{ padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderRadius: 'var(--border-radius-md)' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', overflow: 'hidden' }}>
+                                    <div style={{ 
+                                      fontSize: '1.3rem', 
+                                      width: '36px', 
+                                      height: '36px', 
+                                      borderRadius: '50%', 
+                                      background: tx.type === 'income' ? 'var(--income-bg)' : 'var(--expense-bg)',
+                                      display: 'flex', 
+                                      alignItems: 'center', 
+                                      justifyContent: 'center',
+                                      flexShrink: 0
+                                    }}>
+                                      {getCategoryEmoji(tx.category, tx.accountGroupId)}
+                                    </div>
+                                    <div style={{ overflow: 'hidden' }}>
+                                      <div style={{ fontWeight: 500, fontSize: '0.9rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tx.description}</div>
+                                      <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                        {tx.category} • {getGroupName(tx.accountGroupId)}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
+                                    <span style={{ 
+                                      fontWeight: 600, 
+                                      fontSize: '0.95rem',
+                                      color: tx.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)' 
+                                    }}>
+                                      {tx.type === 'income' ? '+' : '-'}${tx.amount}
+                                    </span>
+                                    
+                                    {/* Edit & Delete Action Buttons */}
+                                    <div style={{ display: 'flex', gap: '4px' }}>
+                                      <button 
+                                        type="button"
+                                        onClick={() => {
+                                          setEditingTx(tx);
+                                          setShowTxModal(true);
+                                        }}
+                                        style={{ background: 'transparent', color: 'var(--text-tertiary)', fontSize: '0.85rem', padding: '4px', opacity: 0.7 }}
+                                        title="編輯"
+                                      >
+                                        ✏️
+                                      </button>
+                                      <button 
+                                        type="button"
+                                        onClick={() => handleDeleteTransaction(tx.id)}
+                                        style={{ background: 'transparent', color: 'var(--text-tertiary)', fontSize: '0.85rem', padding: '4px', opacity: 0.7 }}
+                                        title="刪除"
+                                      >
+                                        🗑️
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
                             </div>
                           </div>
-                        ))}
-                      </div>
-                    </div>
+                        );
+                      })}
+                      {dashboardTxs.length === 0 && (
+                        <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-tertiary)', fontSize: '0.9rem' }}>
+                          今日尚無交易紀錄
+                        </div>
+                      )}
+                    </>
                   );
-                })}
-                {transactions.length === 0 && (
-                  <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-tertiary)', fontSize: '0.9rem' }}>
-                    尚無交易紀錄，點擊上方按鈕開始記帳吧！
-                  </div>
-                )}
+                })()}
               </div>
             </div>
           </div>
