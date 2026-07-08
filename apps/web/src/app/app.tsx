@@ -7,6 +7,7 @@ import { HistoryTab } from './components/HistoryTab';
 import { StatsTab } from './components/StatsTab';
 import { TransactionModal } from './components/TransactionModal';
 import { GroupSettingsModal } from './components/GroupSettingsModal';
+import { AppIcon } from './components/AppIcon';
 import {
   isNativePlatform,
   getImportHistory,
@@ -281,26 +282,34 @@ export function App() {
               <div>
                 <h1
                   style={{
-                    fontSize: '1.6rem',
+                    fontSize: activeTab === 'dashboard' ? '1.6rem' : '1.3rem',
                     fontWeight: 700,
                     background: 'linear-gradient(90deg, #6366f1, #a855f7)',
                     WebkitBackgroundClip: 'text',
                     WebkitTextFillColor: 'transparent',
                     margin: 0,
+                    transition: 'font-size 0.2s ease',
                   }}
                 >
-                  Keep Accounts
+                  {activeTab === 'dashboard' && 'Keep Accounts'}
+                  {activeTab === 'history' && '歷史交易明細'}
+                  {activeTab === 'stats' && '支出統計分析'}
+                  {activeTab === 'settings' && '系統設定'}
                 </h1>
-                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0 }}>
-                  精緻微型記帳系統
-                </p>
+                {activeTab === 'dashboard' && (
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0 }}>
+                    精緻微型記帳系統
+                  </p>
+                )}
               </div>
-              <div style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', textAlign: 'right' }}>
-                <div>{new Date().toLocaleDateString('zh-TW', { weekday: 'long' })}</div>
-                <div style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>
-                  {new Date().toLocaleDateString('zh-TW')}
+              {activeTab === 'dashboard' && (
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', textAlign: 'right' }}>
+                  <div>{new Date().toLocaleDateString('zh-TW', { weekday: 'long' })}</div>
+                  <div style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>
+                    {new Date().toLocaleDateString('zh-TW')}
+                  </div>
                 </div>
-              </div>
+              )}
             </header>
 
             {/* Main Content Area */}
@@ -363,9 +372,6 @@ export function App() {
               {activeTab === 'settings' && (
                 <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                   <div className="glass-card" style={{ padding: '20px' }}>
-                    <h2 style={{ fontSize: '1.2rem', fontWeight: 600, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      💾 備份與還原 (Backup & Restore)
-                    </h2>
                     
                     {/* Native automatic backup toggle */}
                     {isNative && (
@@ -403,7 +409,7 @@ export function App() {
                           gap: '8px'
                         }}
                       >
-                        📤 匯出資料備份 (.zip)
+                        <AppIcon name="upload" size={18} /> 匯出資料備份 (.zip)
                       </button>
                       
                       <div style={{ position: 'relative' }}>
@@ -425,7 +431,7 @@ export function App() {
                             gap: '8px'
                           }}
                         >
-                          📥 匯入資料還原 (.zip)
+                          <AppIcon name="download" size={18} /> 匯入資料還原 (.zip)
                         </button>
                         <input
                           type="file"
@@ -455,7 +461,7 @@ export function App() {
                             gap: '8px'
                           }}
                         >
-                          🔄 從本機自動備份檔還原
+                          <AppIcon name="refresh" size={18} /> 從本機自動備份檔還原
                         </button>
                       )}
                     </div>
@@ -464,7 +470,7 @@ export function App() {
                   {/* Import history logs */}
                   <div className="glass-card" style={{ padding: '20px' }}>
                     <h3 style={{ fontSize: '1.05rem', fontWeight: 600, marginBottom: '12px' }}>
-                      📋 歷史匯入紀錄
+                      <AppIcon name="book-open" size={18} style={{ marginRight: '6px' }} /> 歷史匯入紀錄
                     </h3>
                     {importHistory.length === 0 ? (
                       <div style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', textAlign: 'center', padding: '16px 0' }}>
@@ -563,7 +569,7 @@ export function App() {
               cursor: 'pointer',
             }}
           >
-            <span style={{ fontSize: '1.2rem' }}>🏠</span>
+            <AppIcon name="home" size={20} />
             <span>總覽</span>
           </button>
           <button
@@ -582,7 +588,7 @@ export function App() {
               cursor: 'pointer',
             }}
           >
-            <span style={{ fontSize: '1.2rem' }}>📖</span>
+            <AppIcon name="book-open" size={20} />
             <span>明細</span>
           </button>
 
@@ -602,7 +608,7 @@ export function App() {
               cursor: 'pointer',
             }}
           >
-            <span style={{ fontSize: '1.2rem' }}>📊</span>
+            <AppIcon name="bar-chart" size={20} />
             <span>分析</span>
           </button>
 
@@ -622,7 +628,7 @@ export function App() {
               cursor: 'pointer',
             }}
           >
-            <span style={{ fontSize: '1.2rem' }}>⚙️</span>
+            <AppIcon name="settings" size={20} />
             <span>設定</span>
           </button>
         </nav>

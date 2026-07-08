@@ -4,6 +4,7 @@ import {
   AccountGroup,
   getCurrentMonthExpenseForGroup,
 } from '@keep-accounts-app/domain';
+import { AppIcon } from './AppIcon';
 
 interface DashboardTabProps {
   accountGroups: AccountGroup[];
@@ -414,7 +415,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                         maxWidth: '70%',
                       }}
                     >
-                      <span>{group.emoji}</span>
+                      <AppIcon name={group.emoji} size={18} />
                       <span>{group.name}</span>
                     </span>
                     <span
@@ -667,7 +668,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                             flexShrink: 0,
                           }}
                         >
-                          {getCategoryEmoji(tx.category, tx.accountGroupId)}
+                          <AppIcon name={getCategoryEmoji(tx.category, tx.accountGroupId)} size={20} />
                         </div>
                         <div style={{ overflow: 'hidden' }}>
                           <div

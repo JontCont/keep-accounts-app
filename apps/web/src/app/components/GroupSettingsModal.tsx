@@ -9,6 +9,7 @@ import {
   ACCOUNT_EMOJIS,
   ACCOUNT_COLORS,
 } from '@keep-accounts-app/domain';
+import { AppIcon } from './AppIcon';
 
 interface GroupSettingsModalProps {
   isOpen: boolean;
@@ -173,7 +174,7 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
                     maxWidth: '70%',
                   }}
                 >
-                  <span>{group.emoji}</span>
+                  <AppIcon name={group.emoji} size={18} />
                   <span>{group.name}</span>
                 </span>
               </div>
@@ -265,7 +266,7 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
               }}
             >
               <span style={{ fontSize: '0.9rem', display: 'flex', gap: '4px', alignItems: 'center' }}>
-                <span>{group.emoji}</span>
+                <AppIcon name={group.emoji} size={18} />
                 <span>{group.name}</span>
               </span>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -367,7 +368,7 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
                   margin: 0,
                 }}
               >
-                <span>{group.emoji}</span>
+                <AppIcon name={group.emoji} size={18} />
                 <span>管理「{group.name}」分類小項</span>
               </h4>
               <button
@@ -484,7 +485,7 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
                     fontSize: '0.8rem',
                   }}
                 >
-                  <span>{cat.emoji}</span>
+                  <AppIcon name={cat.emoji} size={16} />
                   <span>{cat.name}</span>
                   <button
                     type="button"
@@ -553,27 +554,24 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
                     style={{ width: '70px', padding: '8px', fontSize: '0.85rem' }}
                   >
                     {[
-                      '🍔',
-                      '🚗',
-                      '🎬',
-                      '🛍️',
-                      '🏠',
-                      '⚡',
-                      '🏷️',
-                      '💰',
-                      '💵',
-                      '📈',
-                      '🎁',
-                      '🏦',
-                      '💳',
-                      '🛡️',
-                      '🍕',
-                      '☕',
-                      '🎮',
-                      '🩺',
+                      'coffee',
+                      'car',
+                      'film',
+                      'shopping-cart',
+                      'home',
+                      'zap',
+                      'tag',
+                      'briefcase',
+                      'gift',
+                      'landmark',
+                      'credit-card',
+                      'shield',
                     ].map((em) => (
                       <IonSelectOption key={em} value={em}>
-                        {em}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <AppIcon name={em} size={16} />
+                          {em}
+                        </div>
                       </IonSelectOption>
                     ))}
                   </IonSelect>

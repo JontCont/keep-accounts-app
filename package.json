@@ -11,6 +11,7 @@
     "@ionic/react": "^8.8.13",
     "fflate": "^0.8.3",
     "ionicons": "^8.0.13",
+    "lucide-react": "^1.23.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "6.30.3",

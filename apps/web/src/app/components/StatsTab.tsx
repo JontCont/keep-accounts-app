@@ -11,11 +11,8 @@ import {
   Tooltip,
 } from 'recharts';
 import { IonSelect, IonSelectOption } from '@ionic/react';
-import {
-  Transaction,
-  AccountGroup,
-  ACCOUNT_COLORS,
-} from '@keep-accounts-app/domain';
+import { Transaction, AccountGroup, ACCOUNT_COLORS } from '@keep-accounts-app/domain';
+import { AppIcon } from './AppIcon';
 
 interface StatsTabProps {
   accountGroups: AccountGroup[];
@@ -107,8 +104,8 @@ export const StatsTab: React.FC<StatsTabProps> = ({
             fontSize: '0.8rem',
           }}
         >
-          <p style={{ margin: 0, fontWeight: 600 }}>
-            {data.emoji} {data.name}
+          <p style={{ margin: 0, fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <AppIcon name={data.emoji} size={16} /> {data.name}
           </p>
           <p style={{ margin: '4px 0 0 0', color: 'var(--text-secondary)' }}>
             金額: ${data.amount.toLocaleString('zh-TW')}
@@ -147,7 +144,6 @@ export const StatsTab: React.FC<StatsTabProps> = ({
 
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      <h3 style={{ fontSize: '1.2rem', fontWeight: 600, margin: 0 }}>支出統計分析</h3>
 
       {/* Account Group Selector for Stats */}
       <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -370,7 +366,7 @@ export const StatsTab: React.FC<StatsTabProps> = ({
                   }}
                 >
                   <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span>{cat.emoji}</span>
+                    <AppIcon name={cat.emoji} size={16} />
                     <span style={{ fontWeight: 500 }}>{cat.name}</span>
                   </span>
                   <span style={{ color: 'var(--text-secondary)' }}>

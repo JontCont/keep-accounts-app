@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { IonSelect, IonSelectOption } from '@ionic/react';
 import { Transaction, AccountGroup } from '@keep-accounts-app/domain';
+import { AppIcon } from './AppIcon';
 
 interface HistoryTabProps {
   accountGroups: AccountGroup[];
@@ -27,7 +28,6 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
 
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      <h3 style={{ fontSize: '1.2rem', fontWeight: 600, margin: 0 }}>歷史交易明細</h3>
 
       {/* Filter Group Selector */}
       <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -119,7 +119,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
                     justifyContent: 'center',
                   }}
                 >
-                  {getCategoryEmoji(tx.category, tx.accountGroupId)}
+                  <AppIcon name={getCategoryEmoji(tx.category, tx.accountGroupId)} size={22} />
                 </div>
                 <div>
                   <div style={{ fontWeight: 500, fontSize: '0.95rem' }}>{tx.description}</div>
