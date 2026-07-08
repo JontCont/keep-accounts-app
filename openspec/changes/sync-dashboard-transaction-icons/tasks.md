@@ -1,0 +1,3 @@
+## 1. Sync Transaction Action Icons in DashboardTab.tsx
+
+- [x] 1.1 Implement Consistent Transaction Action Icons in `apps/web/src/app/components/DashboardTab.tsx` by replacing the raw pencil emoji `✏️` and trash bin emoji `🗑️` with `<AppIcon name="edit" size={16} />` and `<AppIcon name="trash-2" size={16} />` respectively on the transaction rows. Adjust the button styles to use flexbox centering and consistent padding to match the History tab. Verification: Run the app and check the transaction rows on the Dashboard tab to manually assert that they use flat edit and trash-2 icons and look identical to those in the History tab.

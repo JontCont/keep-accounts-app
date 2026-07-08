@@ -721,27 +721,37 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                             style={{
                               background: 'transparent',
                               color: 'var(--text-tertiary)',
-                              fontSize: '0.85rem',
+                              fontSize: '0.9rem',
                               padding: '4px',
-                              opacity: 0.7,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
                             }}
                             title="編輯"
                           >
-                            ✏️
+                            <AppIcon name="edit" size={16} />
                           </button>
                           <button
                             type="button"
-                            onClick={() => onDeleteTransaction(tx.id)}
+                            onClick={() => {
+                              if (confirm('確定要刪除此筆記帳嗎？')) {
+                                onDeleteTransaction(tx.id);
+                              }
+                            }}
                             style={{
                               background: 'transparent',
                               color: 'var(--text-tertiary)',
-                              fontSize: '0.85rem',
+                              fontSize: '0.9rem',
                               padding: '4px',
-                              opacity: 0.7,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
                             }}
                             title="刪除"
                           >
-                            🗑️
+                            <AppIcon name="trash-2" size={16} />
                           </button>
                         </div>
                       </div>
