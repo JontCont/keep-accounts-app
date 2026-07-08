@@ -357,6 +357,14 @@ export function App() {
                   onDeleteTransaction={deleteTransaction}
                   getCategoryEmoji={getCategoryEmoji}
                   getGroupName={getGroupName}
+                  onEditTransaction={(tx) => {
+                    setEditingTx(tx);
+                    setShowTxModal(true);
+                  }}
+                  onAddTransaction={() => {
+                    setEditingTx(null);
+                    setShowTxModal(true);
+                  }}
                 />
               )}
 

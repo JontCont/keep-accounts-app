@@ -1,10 +1,22 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, fireEvent, renderHook, act } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { useKeepAccounts } from '@keep-accounts-app/state';
 
 import App from './app';
 import { getCurrentMonthExpenseForGroup, Transaction } from '@keep-accounts-app/domain';
+
+vi.mock('@ionic/react', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@ionic/react')>();
+  const React = await import('react');
+  return {
+    ...original,
+    IonModal: ({ children, isOpen }: any) => {
+      if (!isOpen) return null;
+      return React.createElement('div', { 'data-testid': 'ion-modal' }, children);
+    },
+  };
+});
 
 describe('App', () => {
   beforeEach(() => {
@@ -187,6 +199,52 @@ describe('App', () => {
     // There are 3 default groups, but "日常開銷" (id '1') is not deletable, so only 2 delete buttons should render
     const deleteBtns = queryAllByTitle('刪除帳戶');
     expect(deleteBtns.length).toBe(2);
+  });
+
+  it('should open empty TransactionModal in creation mode when clicking FAB in HistoryTab', () => {
+    const { getByText, getByTitle } = render(<BrowserRouter><App /></BrowserRouter>);
+    
+    // Switch to History tab
+    const historyTabBtn = getByText('明細');
+    fireEvent.click(historyTabBtn);
+    
+    // Clicking the FAB (+ button)
+    const fabBtn = getByTitle('新增記帳');
+    fireEvent.click(fabBtn);
+    
+    // Modal header "新增收支記帳" should be visible
+    expect(getByText('新增收支記帳')).toBeTruthy();
+  });
+
+  it('should open TransactionModal populated with transaction data when clicking edit on a row in HistoryTab', () => {
+    const mockTxs: Transaction[] = [
+      { id: 'tx-test-id', description: 'test-history-item', amount: 500, type: 'expense', category: '餐飲食品', date: '2026-07-08T12:00:00.000Z', accountGroupId: '1' }
+    ];
+    localStorage.setItem('keep_accounts_transactions', JSON.stringify(mockTxs));
+    
+    const { getByText, getByTitle, container } = render(<BrowserRouter><App /></BrowserRouter>);
+    
+    // Switch to History tab
+    const historyTabBtn = getByText('明細');
+    fireEvent.click(historyTabBtn);
+    
+    // We should see the mock transaction description in the list
+    expect(getByText('test-history-item')).toBeTruthy();
+    
+    // Click the edit button
+    const editBtn = getByTitle('編輯');
+    fireEvent.click(editBtn);
+    
+    // Modal header "修改收支記帳" should be visible
+    expect(getByText('修改收支記帳')).toBeTruthy();
+    // Modal inputs should be populated with the transaction data
+    const descInput = container.querySelector('ion-input[placeholder*="例如"]') as any;
+    expect(descInput).toBeTruthy();
+    expect(descInput.value).toBe('test-history-item');
+    
+    const amountInput = container.querySelector('ion-input[placeholder*="金額"]') as any;
+    expect(amountInput).toBeTruthy();
+    expect(amountInput.value.toString()).toBe('500');
   });
 });
 

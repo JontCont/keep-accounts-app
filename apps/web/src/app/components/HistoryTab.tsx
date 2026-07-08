@@ -9,6 +9,8 @@ interface HistoryTabProps {
   onDeleteTransaction: (id: string) => void;
   getCategoryEmoji: (catName: string, groupId: string) => string;
   getGroupName: (groupId: string) => string;
+  onEditTransaction: (tx: Transaction) => void;
+  onAddTransaction: () => void;
 }
 
 export const HistoryTab: React.FC<HistoryTabProps> = ({
@@ -17,6 +19,8 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
   onDeleteTransaction,
   getCategoryEmoji,
   getGroupName,
+  onEditTransaction,
+  onAddTransaction,
 }) => {
   const [filter, setFilter] = useState<'all' | 'income' | 'expense'>('all');
   const [filterGroup, setFilterGroup] = useState<string>('all');
@@ -27,7 +31,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
     .sort((a, b) => b.date.localeCompare(a.date));
 
   return (
-    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingBottom: '80px', position: 'relative' }}>
 
       {/* Filter Group Selector */}
       <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -139,6 +143,22 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
                   {tx.type === 'income' ? '+' : '-'}${tx.amount}
                 </span>
                 <button
+                  onClick={() => onEditTransaction(tx)}
+                  style={{
+                    background: 'transparent',
+                    color: 'var(--text-tertiary)',
+                    fontSize: '0.9rem',
+                    padding: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                  }}
+                  title="編輯"
+                >
+                  <AppIcon name="edit" size={16} />
+                </button>
+                <button
                   onClick={() => {
                     if (confirm('確定要刪除此筆記帳嗎？')) {
                       onDeleteTransaction(tx.id);
@@ -149,9 +169,14 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
                     color: 'var(--text-tertiary)',
                     fontSize: '0.9rem',
                     padding: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
                   }}
+                  title="刪除"
                 >
-                  🗑️
+                  <AppIcon name="trash" size={16} />
                 </button>
               </div>
             </div>
@@ -170,6 +195,42 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
           </div>
         )}
       </div>
+
+      {/* Floating Action Button (FAB) */}
+      <button
+        onClick={onAddTransaction}
+        style={{
+          position: 'fixed',
+          bottom: '96px',
+          right: '24px',
+          width: '56px',
+          height: '56px',
+          borderRadius: '50%',
+          background: 'rgba(99, 102, 241, 0.75)',
+          backdropFilter: 'blur(10px)',
+          WebkitBackdropFilter: 'blur(10px)',
+          border: '1px solid rgba(255, 255, 255, 0.2)',
+          boxShadow: '0 8px 32px rgba(99, 102, 241, 0.3)',
+          color: '#fff',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          zIndex: 999,
+          transition: 'transform 0.2s, background-color 0.2s',
+        }}
+        onMouseOver={(e) => {
+          e.currentTarget.style.transform = 'scale(1.05)';
+          e.currentTarget.style.backgroundColor = 'rgba(99, 102, 241, 0.9)';
+        }}
+        onMouseOut={(e) => {
+          e.currentTarget.style.transform = 'scale(1)';
+          e.currentTarget.style.backgroundColor = 'rgba(99, 102, 241, 0.75)';
+        }}
+        title="新增記帳"
+      >
+        <AppIcon name="plus" size={24} />
+      </button>
     </div>
   );
 };

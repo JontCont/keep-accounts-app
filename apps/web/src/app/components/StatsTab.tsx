@@ -388,7 +388,7 @@ export const StatsTab: React.FC<StatsTabProps> = ({
                     style={{
                       width: `${pct}%`,
                       height: '100%',
-                      background: `linear-gradient(90deg, ${cat.color}, #f43f5e)`,
+                      background: cat.color,
                       borderRadius: '4px',
                       transition: 'width 0.8s ease-out',
                     }}

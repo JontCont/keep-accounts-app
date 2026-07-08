@@ -40,7 +40,15 @@ export function useKeepAccounts() {
             }
           }
 
+          // Sync category colors from current defaults (ensures color updates in constants.ts propagate to existing data)
           const defaultGroup = DEFAULT_ACCOUNT_GROUPS.find((dg) => dg.id === g.id);
+          if (categories && defaultGroup) {
+            categories = categories.map((cat: any) => {
+              const defaultCat = defaultGroup.categories.find((dc) => dc.name === cat.name);
+              return defaultCat ? { ...cat, color: defaultCat.color } : cat;
+            });
+          }
+
           const ratio =
             typeof g.targetRatio === 'number' && !isNaN(g.targetRatio)
               ? g.targetRatio
