@@ -6,7 +6,10 @@
   "private": true,
   "dependencies": {
     "@capacitor/core": "^6.2.1",
+    "@capacitor/filesystem": "^6.0.4",
+    "@capacitor/share": "^6.0.4",
     "@ionic/react": "^8.8.13",
+    "fflate": "^0.8.3",
     "ionicons": "^8.0.13",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
