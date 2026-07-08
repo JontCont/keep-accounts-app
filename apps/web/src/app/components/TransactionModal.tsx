@@ -93,7 +93,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.65)',
+        backgroundColor: 'var(--modal-backdrop-bg)',
         backdropFilter: 'blur(10px)',
         WebkitBackdropFilter: 'blur(10px)',
         display: 'flex',
@@ -108,13 +108,14 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         style={{
           width: '100%',
           maxWidth: '400px',
+          maxHeight: '85vh',
+          overflow: 'hidden',
           padding: '24px',
           borderRadius: 'var(--border-radius-lg)',
-          border: '1px solid rgba(255, 255, 255, 0.12)',
-          background: 'rgba(20, 20, 25, 0.95)',
+          border: '1px solid var(--card-border)',
+          background: 'var(--modal-card-bg)',
           display: 'flex',
           flexDirection: 'column',
-          gap: '16px',
           margin: 'auto',
         }}
       >
@@ -124,6 +125,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             fontWeight: 700,
             textAlign: 'center',
             margin: 0,
+            marginBottom: '16px',
           }}
         >
           {editingTx ? '修改收支記帳' : '新增收支記帳'}
@@ -131,8 +133,25 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
         <form
           onSubmit={handleSubmit}
-          style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            flex: 1,
+            overflow: 'hidden',
+          }}
         >
+          {/* Scrollable form fields wrapper */}
+          <div
+            style={{
+              flex: 1,
+              overflowY: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '16px',
+              paddingRight: '4px',
+              paddingBottom: '16px',
+            }}
+          >
           {/* Type Switcher */}
           <div>
             <label
@@ -149,7 +168,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               style={{
                 display: 'flex',
                 gap: '8px',
-                background: 'rgba(255,255,255,0.03)',
+                background: 'var(--input-bg)',
                 padding: '4px',
                 borderRadius: 'var(--border-radius-md)',
               }}
@@ -205,11 +224,6 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               onIonChange={(e) => setAccountGroupId(e.detail.value!)}
               style={{
                 width: '100%',
-                padding: '10px',
-                borderRadius: 'var(--border-radius-sm)',
-                background: 'rgba(255,255,255,0.04)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                color: '#fff',
               }}
             >
               {accountGroups.map((group) => (
@@ -238,20 +252,6 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               placeholder="輸入金額"
               value={amount}
               onIonInput={(e) => setAmount(e.detail.value ?? '')}
-              style={
-                {
-                  width: '100%',
-                  fontSize: '1rem',
-                  '--padding-start': '10px',
-                  '--padding-end': '10px',
-                  '--padding-top': '10px',
-                  '--padding-bottom': '10px',
-                  borderRadius: 'var(--border-radius-sm)',
-                  background: 'rgba(255,255,255,0.04)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  color: '#fff',
-                } as React.CSSProperties
-              }
               required
             />
           </div>
@@ -273,20 +273,6 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               placeholder="例如: 買咖啡、午餐、薪水"
               value={description}
               onIonInput={(e) => setDescription(e.detail.value ?? '')}
-              style={
-                {
-                  width: '100%',
-                  fontSize: '1rem',
-                  '--padding-start': '10px',
-                  '--padding-end': '10px',
-                  '--padding-top': '10px',
-                  '--padding-bottom': '10px',
-                  borderRadius: 'var(--border-radius-sm)',
-                  background: 'rgba(255,255,255,0.04)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  color: '#fff',
-                } as React.CSSProperties
-              }
               required
             />
           </div>
@@ -309,11 +295,6 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               onIonChange={(e) => setCategory(e.detail.value!)}
               style={{
                 width: '100%',
-                padding: '10px',
-                borderRadius: 'var(--border-radius-sm)',
-                background: 'rgba(255,255,255,0.04)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                color: '#fff',
               }}
             >
               {(
@@ -345,7 +326,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 datetime="tx-datetime"
                 style={
                   {
-                    '--background': 'rgba(255,255,255,0.04)',
+                    '--background': 'var(--input-bg)',
+                    '--color': 'var(--text-primary)',
                     '--border-radius': 'var(--border-radius-sm)',
                   } as React.CSSProperties
                 }
@@ -365,16 +347,25 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 }
                 style={
                   {
-                    '--background': 'rgba(20, 20, 25, 0.98)',
-                    '--background-rgb': '20, 20, 25',
+                    '--background': 'var(--modal-card-bg)',
                   } as React.CSSProperties
                 }
               />
             </IonModal>
           </div>
 
+          </div>
+
           {/* Submit Buttons */}
-          <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+          <div
+            style={{
+              display: 'flex',
+              gap: '10px',
+              paddingTop: '16px',
+              borderTop: '1px solid var(--card-border)',
+              background: 'var(--modal-card-bg)',
+            }}
+          >
             <button
               type="button"
               onClick={onClose}
@@ -382,8 +373,9 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 flex: 1,
                 padding: '12px',
                 borderRadius: 'var(--border-radius-sm)',
-                background: 'rgba(255,255,255,0.06)',
-                color: 'var(--text-secondary)',
+                background: 'var(--input-bg)',
+                border: '1px solid var(--input-border)',
+                color: 'var(--text-primary)',
                 fontWeight: 600,
               }}
             >

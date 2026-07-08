@@ -292,9 +292,9 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
                     fontSize: '1rem',
                     padding: '6px',
                     textAlign: 'right',
-                    background: 'rgba(255, 255, 255, 0.03)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    color: '#fff',
+                    background: 'var(--input-bg)',
+                    border: '1px solid var(--input-border)',
+                    color: 'var(--text-primary)',
                     borderRadius: '4px',
                   }}
                 />
@@ -424,14 +424,6 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
                   {
                     width: '100%',
                     fontSize: '1rem',
-                    '--padding-start': '8px',
-                    '--padding-end': '8px',
-                    '--padding-top': '8px',
-                    '--padding-bottom': '8px',
-                    background: 'rgba(255,255,255,0.05)',
-                    borderRadius: 'var(--border-radius-sm)',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    color: '#fff',
                   } as React.CSSProperties
                 }
               />
@@ -439,13 +431,12 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
 
             {/* Type Switcher */}
             <div
+              className="segment-btn-group"
               style={{
                 display: 'flex',
                 gap: '8px',
                 marginBottom: '16px',
-                background: 'rgba(255,255,255,0.03)',
                 padding: '4px',
-                borderRadius: 'var(--border-radius-sm)',
               }}
             >
               {(['expense', 'income'] as const).map((t) => (
@@ -453,15 +444,13 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
                   key={t}
                   type="button"
                   onClick={() => setCatEditType(t)}
+                  className={`segment-btn ${catEditType === t ? 'active' : ''}`}
                   style={{
                     flex: 1,
                     padding: '6px',
                     borderRadius: '6px',
                     fontSize: '0.8rem',
                     fontWeight: 500,
-                    background:
-                      catEditType === t ? 'rgba(255,255,255,0.08)' : 'transparent',
-                    color: catEditType === t ? '#fff' : 'var(--text-secondary)',
                   }}
                 >
                   {t === 'expense' ? '支出分類' : '收入分類'}
@@ -584,14 +573,6 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
                       {
                         flex: 1,
                         fontSize: '1rem',
-                        '--padding-start': '8px',
-                        '--padding-end': '8px',
-                        '--padding-top': '8px',
-                        '--padding-bottom': '8px',
-                        background: 'rgba(255,255,255,0.05)',
-                        borderRadius: 'var(--border-radius-sm)',
-                        border: '1px solid rgba(255,255,255,0.1)',
-                        color: '#fff',
                       } as React.CSSProperties
                     }
                   />
@@ -684,7 +665,7 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
               value={newGroupEmoji}
               interface="action-sheet"
               onIonChange={(e) => setNewGroupEmoji(e.detail.value!)}
-              style={{ width: '70px', padding: '8px' }}
+              style={{ width: '70px', fontSize: '0.85rem' }}
             >
               {ACCOUNT_EMOJIS.map((e) => (
                 <IonSelectOption key={e} value={e}>
@@ -701,14 +682,6 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
                 {
                   flex: 1,
                   fontSize: '1rem',
-                  '--padding-start': '8px',
-                  '--padding-end': '8px',
-                  '--padding-top': '8px',
-                  '--padding-bottom': '8px',
-                  background: 'rgba(255,255,255,0.05)',
-                  borderRadius: 'var(--border-radius-sm)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  color: '#fff',
                 } as React.CSSProperties
               }
               required
@@ -728,14 +701,6 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
               style={
                 {
                   fontSize: '1rem',
-                  '--padding-start': '8px',
-                  '--padding-end': '8px',
-                  '--padding-top': '8px',
-                  '--padding-bottom': '8px',
-                  background: 'rgba(255,255,255,0.05)',
-                  borderRadius: 'var(--border-radius-sm)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  color: '#fff',
                 } as React.CSSProperties
               }
             />

@@ -99,8 +99,8 @@ export const StatsTab: React.FC<StatsTabProps> = ({
           className="glass-card"
           style={{
             padding: '8px 12px',
-            border: '1px solid rgba(255,255,255,0.08)',
-            background: 'rgba(20, 20, 25, 0.95)',
+            border: '1px solid var(--card-border)',
+            background: 'var(--card-bg)',
             fontSize: '0.8rem',
           }}
         >
@@ -127,8 +127,8 @@ export const StatsTab: React.FC<StatsTabProps> = ({
           className="glass-card"
           style={{
             padding: '8px 12px',
-            border: '1px solid rgba(255,255,255,0.08)',
-            background: 'rgba(20, 20, 25, 0.95)',
+            border: '1px solid var(--card-border)',
+            background: 'var(--card-bg)',
             fontSize: '0.8rem',
           }}
         >
@@ -161,9 +161,7 @@ export const StatsTab: React.FC<StatsTabProps> = ({
           interface="action-sheet"
           onIonChange={(e) => setStatsGroup(e.detail.value!)}
           style={{
-            padding: '8px 12px',
             fontSize: '0.85rem',
-            borderRadius: 'var(--border-radius-sm)',
           }}
         >
           <IonSelectOption value="all">顯示全部帳戶</IonSelectOption>
@@ -189,7 +187,7 @@ export const StatsTab: React.FC<StatsTabProps> = ({
           <div style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>總記帳筆數</div>
           <div style={{ fontSize: '1.2rem', fontWeight: 700 }}>{statsTxs.length} 筆</div>
         </div>
-        <div style={{ borderLeft: '1px solid rgba(255,255,255,0.06)' }}></div>
+        <div style={{ borderLeft: '1px solid var(--card-border)' }}></div>
         <div>
           <div style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>平均支出 / 筆</div>
           <div
@@ -210,27 +208,17 @@ export const StatsTab: React.FC<StatsTabProps> = ({
       {statsTotalExpense > 0 && (
         <>
           {/* View Switcher Segmented Control */}
-          <div
-            style={{
-              display: 'flex',
-              gap: '8px',
-              background: 'rgba(255,255,255,0.03)',
-              padding: '4px',
-              borderRadius: 'var(--border-radius-sm)',
-              border: '1px solid rgba(255,255,255,0.05)',
-            }}
-          >
+          <div className="segment-btn-group">
             <button
               type="button"
               onClick={() => setStatsSubTab('category')}
+              className={`segment-btn ${statsSubTab === 'category' ? 'active' : ''}`}
               style={{
                 flex: 1,
                 padding: '8px',
                 borderRadius: '4px',
                 fontSize: '0.8rem',
                 fontWeight: 600,
-                background: statsSubTab === 'category' ? 'rgba(255,255,255,0.08)' : 'transparent',
-                color: statsSubTab === 'category' ? '#fff' : 'var(--text-secondary)',
               }}
             >
               類別佔比
@@ -238,14 +226,13 @@ export const StatsTab: React.FC<StatsTabProps> = ({
             <button
               type="button"
               onClick={() => setStatsSubTab('trend')}
+              className={`segment-btn ${statsSubTab === 'trend' ? 'active' : ''}`}
               style={{
                 flex: 1,
                 padding: '8px',
                 borderRadius: '4px',
                 fontSize: '0.8rem',
                 fontWeight: 600,
-                background: statsSubTab === 'trend' ? 'rgba(255,255,255,0.08)' : 'transparent',
-                color: statsSubTab === 'trend' ? '#fff' : 'var(--text-secondary)',
               }}
             >
               趨勢分析
@@ -317,13 +304,13 @@ export const StatsTab: React.FC<StatsTabProps> = ({
                   >
                     <XAxis
                       dataKey="date"
-                      tick={{ fill: '#8f93a7', fontSize: 10 }}
-                      axisLine={{ stroke: 'rgba(255,255,255,0.08)' }}
+                      tick={{ fill: 'var(--text-secondary)', fontSize: 10 }}
+                      axisLine={{ stroke: 'var(--card-border)' }}
                       tickLine={false}
                     />
                     <YAxis
-                      tick={{ fill: '#8f93a7', fontSize: 10 }}
-                      axisLine={{ stroke: 'rgba(255,255,255,0.08)' }}
+                      tick={{ fill: 'var(--text-secondary)', fontSize: 10 }}
+                      axisLine={{ stroke: 'var(--card-border)' }}
                       tickLine={false}
                     />
                     <Tooltip content={<CustomBarTooltip />} />
@@ -379,7 +366,7 @@ export const StatsTab: React.FC<StatsTabProps> = ({
                   style={{
                     width: '100%',
                     height: '8px',
-                    background: 'rgba(255,255,255,0.04)',
+                    background: 'var(--progress-track-bg)',
                     borderRadius: '4px',
                     overflow: 'hidden',
                   }}

@@ -138,9 +138,8 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
       <div
         className="glass-card"
         style={{
-          background:
-            'linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(168, 85, 247, 0.1) 100%)',
-          border: '1px solid rgba(255, 255, 255, 0.12)',
+          background: 'var(--balance-card-bg)',
+          border: '1px solid var(--card-border)',
           position: 'relative',
           overflow: 'hidden',
         }}
@@ -156,26 +155,16 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           >
             目前總餘額
           </div>
-          <div
-            style={{
-              display: 'flex',
-              gap: '4px',
-              background: 'rgba(255,255,255,0.03)',
-              padding: '2px',
-              borderRadius: 'var(--border-radius-sm)',
-              border: '1px solid rgba(255,255,255,0.05)',
-            }}
-          >
+          <div className="segment-btn-group">
             <button
               type="button"
               onClick={() => setPeriod('today')}
+              className={`segment-btn ${period === 'today' ? 'active' : ''}`}
               style={{
                 padding: '4px 8px',
                 borderRadius: '4px',
                 fontSize: '0.75rem',
                 fontWeight: 600,
-                background: period === 'today' ? 'rgba(255,255,255,0.08)' : 'transparent',
-                color: period === 'today' ? '#fff' : 'var(--text-secondary)',
               }}
             >
               今日
@@ -183,13 +172,12 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             <button
               type="button"
               onClick={() => setPeriod('month')}
+              className={`segment-btn ${period === 'month' ? 'active' : ''}`}
               style={{
                 padding: '4px 8px',
                 borderRadius: '4px',
                 fontSize: '0.75rem',
                 fontWeight: 600,
-                background: period === 'month' ? 'rgba(255,255,255,0.08)' : 'transparent',
-                color: period === 'month' ? '#fff' : 'var(--text-secondary)',
               }}
             >
               本月
@@ -201,7 +189,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             fontSize: '2.5rem',
             fontWeight: 700,
             margin: '8px 0',
-            color: totalBalance >= 0 ? '#fff' : 'var(--expense-color)',
+            color: totalBalance >= 0 ? 'var(--text-primary)' : 'var(--expense-color)',
           }}
         >
           ${totalBalance.toLocaleString('zh-TW')}
@@ -212,7 +200,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             display: 'flex',
             justifyContent: 'space-between',
             marginTop: '20px',
-            borderTop: '1px solid rgba(255,255,255,0.06)',
+            borderTop: '1px solid var(--card-border)',
             paddingTop: '16px',
           }}
         >
@@ -239,7 +227,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             style={{
               marginTop: '16px',
               paddingTop: '16px',
-              borderTop: '1px dashed rgba(255,255,255,0.1)',
+              borderTop: '1px dashed var(--card-border)',
               fontSize: '0.85rem',
               display: 'flex',
               flexDirection: 'column',
@@ -248,14 +236,14 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ color: 'var(--text-secondary)' }}>當日可消費 (累計昨天)</span>
-              <span style={{ fontWeight: 600, color: '#fff' }}>
+              <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
                 ${allowedToday.toLocaleString('zh-TW')}
               </span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <span style={{ color: 'var(--text-secondary)' }}>當日消費: </span>
-                <span style={{ fontWeight: 600, color: '#fff' }}>
+                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
                   ${todayExpenseForDailyGroup.toLocaleString('zh-TW')}
                 </span>
               </div>
@@ -277,7 +265,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               style={{
                 width: '100%',
                 height: '4px',
-                background: 'rgba(255,255,255,0.06)',
+                background: 'var(--progress-track-bg)',
                 borderRadius: '2px',
                 overflow: 'hidden',
                 marginTop: '2px',
@@ -336,7 +324,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             style={{
               width: '100%',
               height: '12px',
-              background: 'rgba(255,255,255,0.04)',
+              background: 'var(--progress-track-bg)',
               borderRadius: '6px',
               display: 'flex',
               overflow: 'hidden',
@@ -390,7 +378,8 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     width: '150px',
                     padding: '16px',
                     borderRadius: 'var(--border-radius-md)',
-                    background: 'rgba(255, 255, 255, 0.03)',
+                    background: 'var(--sub-card-bg)',
+                    border: '1px solid var(--sub-card-border)',
                     position: 'relative',
                   }}
                 >
@@ -423,7 +412,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                         fontSize: '0.7rem',
                         padding: '2px 5px',
                         borderRadius: '8px',
-                        background: 'rgba(255,255,255,0.06)',
+                        background: 'var(--input-bg)',
                         color: 'var(--text-secondary)',
                         fontWeight: 600,
                         flexShrink: 0,
@@ -437,7 +426,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                       fontSize: '1.2rem',
                       fontWeight: 700,
                       marginTop: '12px',
-                      color: bal >= 0 ? '#fff' : 'var(--expense-color)',
+                      color: bal >= 0 ? 'var(--text-primary)' : 'var(--expense-color)',
                     }}
                   >
                     ${bal.toLocaleString('zh-TW')}
@@ -447,7 +436,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                   <div
                     style={{
                       marginTop: '12px',
-                      borderTop: '1px solid rgba(255,255,255,0.06)',
+                      borderTop: '1px solid var(--card-border)',
                       paddingTop: '8px',
                     }}
                   >
@@ -467,7 +456,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                       style={{
                         width: '100%',
                         height: '5px',
-                        background: 'rgba(255,255,255,0.06)',
+                        background: 'var(--progress-track-bg)',
                         borderRadius: '2.5px',
                         overflow: 'hidden',
                       }}
@@ -502,7 +491,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                         <div
                           style={{
                             marginTop: '12px',
-                            borderTop: '1px solid rgba(255,255,255,0.06)',
+                            borderTop: '1px solid var(--card-border)',
                             paddingTop: '8px',
                           }}
                         >
@@ -534,7 +523,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                             style={{
                               width: '100%',
                               height: '5px',
-                              background: 'rgba(255,255,255,0.06)',
+                              background: 'var(--progress-track-bg)',
                               borderRadius: '2.5px',
                               overflow: 'hidden',
                             }}

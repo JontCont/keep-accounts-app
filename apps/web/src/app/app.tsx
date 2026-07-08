@@ -40,6 +40,61 @@ export function App() {
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
   const [showTxModal, setShowTxModal] = useState(false);
 
+  // FAB scroll behavior state
+  const [showFab, setShowFab] = useState(true);
+  const lastScrollY = useRef(0);
+
+  const handleScroll = (e: CustomEvent<any>) => {
+    const currentScrollY = e.detail.scrollTop;
+    if (currentScrollY > lastScrollY.current && currentScrollY > 50) {
+      setShowFab(false);
+    } else if (currentScrollY < lastScrollY.current) {
+      setShowFab(true);
+    }
+    lastScrollY.current = currentScrollY;
+  };
+
+  useEffect(() => {
+    setShowFab(true);
+    lastScrollY.current = 0;
+  }, [activeTab]);
+
+  // Theme state and runtime application
+  const [theme, setTheme] = useState<'system' | 'light' | 'dark'>(() => {
+    return (localStorage.getItem('keep_accounts_theme') as any) || 'system';
+  });
+
+  useEffect(() => {
+    const root = document.documentElement;
+    
+    const applyTheme = (t: 'system' | 'light' | 'dark') => {
+      root.removeAttribute('data-theme');
+      if (t === 'light') {
+        root.setAttribute('data-theme', 'light');
+      } else if (t === 'dark') {
+        root.setAttribute('data-theme', 'dark');
+      } else {
+        // system
+        const systemPrefersDark = window.matchMedia 
+          ? window.matchMedia('(prefers-color-scheme: dark)').matches 
+          : false;
+        root.setAttribute('data-theme', systemPrefersDark ? 'dark' : 'light');
+      }
+    };
+
+    applyTheme(theme);
+    localStorage.setItem('keep_accounts_theme', theme);
+
+    if (theme === 'system' && window.matchMedia) {
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      const listener = (e: MediaQueryListEvent) => {
+        root.setAttribute('data-theme', e.matches ? 'dark' : 'light');
+      };
+      mediaQuery.addEventListener('change', listener);
+      return () => mediaQuery.removeEventListener('change', listener);
+    }
+  }, [theme]);
+
   // Settings & Backup States
   const [autoBackupEnabled, setAutoBackupEnabled] = useState(() => {
     return localStorage.getItem('keep_accounts_auto_backup') === 'true';
@@ -268,7 +323,7 @@ export function App() {
   return (
     <IonApp>
       <IonPage>
-        <IonContent fullscreen>
+        <IonContent fullscreen scrollEvents={true} onIonScroll={handleScroll}>
           <div className="app-container">
             {/* Header */}
             <header
@@ -310,10 +365,31 @@ export function App() {
                   </div>
                 </div>
               )}
+              {activeTab === 'history' && (
+                <button
+                  onClick={() => setShowTxModal(true)}
+                  style={{
+                    background: 'var(--input-bg)',
+                    border: '1px solid var(--input-border)',
+                    borderRadius: '50%',
+                    width: '36px',
+                    height: '36px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'var(--primary-color)',
+                    cursor: 'pointer',
+                    boxShadow: 'var(--nav-shadow)',
+                  }}
+                  title="新增記帳"
+                >
+                  <AppIcon name="plus" size={18} />
+                </button>
+              )}
             </header>
 
             {/* Main Content Area */}
-            <main style={{ flex: 1, paddingBottom: '80px' }}>
+            <main style={{ flex: 1, paddingBottom: '120px' }}>
               {activeTab === 'dashboard' && (
                 <DashboardTab
                   accountGroups={accountGroups}
@@ -365,6 +441,7 @@ export function App() {
                     setEditingTx(null);
                     setShowTxModal(true);
                   }}
+                  showFab={showFab}
                 />
               )}
 
@@ -381,9 +458,35 @@ export function App() {
                 <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                   <div className="glass-card" style={{ padding: '20px' }}>
                     
+                    {/* Theme selector option */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '16px', borderBottom: '1px solid var(--card-border)', marginBottom: '16px' }}>
+                      <div>
+                        <div style={{ fontSize: '0.95rem', fontWeight: 500 }}>介面主題設定</div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>設定應用程式主題顏色</div>
+                      </div>
+                      <select
+                        value={theme}
+                        onChange={(e) => setTheme(e.target.value as any)}
+                        style={{
+                          width: 'auto',
+                          minWidth: '120px',
+                          padding: '6px 12px',
+                          borderRadius: '8px',
+                          backgroundColor: 'var(--input-bg)',
+                          border: '1px solid var(--input-border)',
+                          color: 'var(--text-primary)',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <option value="system" style={{ background: 'var(--bg-color)', color: 'var(--text-primary)' }}>跟隨系統</option>
+                        <option value="light" style={{ background: 'var(--bg-color)', color: 'var(--text-primary)' }}>淺色模式</option>
+                        <option value="dark" style={{ background: 'var(--bg-color)', color: 'var(--text-primary)' }}>深色模式</option>
+                      </select>
+                    </div>
+
                     {/* Native automatic backup toggle */}
                     {isNative && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '16px', borderBottom: '1px solid rgba(255,255,255,0.06)', marginBottom: '16px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '16px', borderBottom: '1px solid var(--card-border)', marginBottom: '16px' }}>
                         <div>
                           <div style={{ fontSize: '0.95rem', fontWeight: 500 }}>自動背景備份</div>
                           <div style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>每次記帳時自動備份至系統 Documents 目錄</div>
@@ -427,11 +530,11 @@ export function App() {
                             width: '100%',
                             padding: '12px',
                             borderRadius: '8px',
-                            backgroundColor: 'rgba(255, 255, 255, 0.06)',
-                            color: '#fff',
+                            backgroundColor: 'var(--input-bg)',
+                            color: 'var(--text-primary)',
                             fontWeight: 600,
                             fontSize: '0.9rem',
-                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            border: '1px solid var(--input-border)',
                             cursor: 'pointer',
                             display: 'flex',
                             justifyContent: 'center',
@@ -457,7 +560,7 @@ export function App() {
                             width: '100%',
                             padding: '12px',
                             borderRadius: '8px',
-                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            backgroundColor: 'var(--income-bg)',
                             color: 'var(--income-color)',
                             fontWeight: 600,
                             fontSize: '0.9rem',
@@ -492,8 +595,8 @@ export function App() {
                             style={{
                               padding: '10px',
                               borderRadius: '6px',
-                              background: 'rgba(255,255,255,0.02)',
-                              border: '1px solid rgba(255,255,255,0.04)',
+                              background: 'var(--sub-card-bg)',
+                              border: '1px solid var(--sub-card-border)',
                               fontSize: '0.8rem',
                               display: 'flex',
                               flexDirection: 'column',
@@ -508,7 +611,7 @@ export function App() {
                                   borderRadius: '4px',
                                   fontSize: '0.7rem',
                                   fontWeight: 600,
-                                  backgroundColor: record.status === 'success' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                                  backgroundColor: record.status === 'success' ? 'var(--income-bg)' : 'var(--expense-bg)',
                                   color: record.status === 'success' ? 'var(--income-color)' : 'var(--expense-color)'
                                 }}
                               >
@@ -545,15 +648,15 @@ export function App() {
           style={{
             width: 'calc(100% - 32px)',
             maxWidth: '448px',
-            background: 'rgba(15, 15, 20, 0.75)',
+            background: 'var(--nav-bg)',
             backdropFilter: 'blur(20px)',
             WebkitBackdropFilter: 'blur(20px)',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
+            border: '1px solid var(--nav-border)',
             borderRadius: '24px',
             display: 'flex',
             justifyContent: 'space-around',
             padding: '8px 6px',
-            boxShadow: '0 8px 30px rgba(0, 0, 0, 0.5)',
+            boxShadow: 'var(--nav-shadow)',
             zIndex: 1000,
             position: 'fixed',
             bottom: '16px',
