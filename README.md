@@ -1,58 +1,71 @@
 # Keep Accounts App
 
-A modern personal finance and bookkeeping application built as an **Nx monorepo**. It includes a beautiful React-based web dashboard, a Swift command-line interface helper, and end-to-end integration tests using Playwright.
+[English](#keep-accounts-app) | [繁體中文](#記帳應用程式-keep-accounts-app)
 
-This project employs **Spectra Spec-Driven Development (SDD)**, where feature specs and change proposals are modeled before implementation.
+A modern personal finance, budgeting, and bookkeeping application built as a modular **Nx monorepo**. It includes a feature-rich React-based web dashboard (adaptable to mobile devices via Capacitor), a Swift command-line helper, and a robust end-to-end integration test suite using Playwright.
+
+This project employs **Spectra Spec-Driven Development (SDD)**, a methodology where features and architecture changes are fully spec'd and reviewed before coding begins.
 
 ---
 
 ## Table of Contents
 
-- [Features](#features)
+- [Core Features](#core-features)
 - [Workspace Architecture](#workspace-architecture)
 - [Getting Started](#getting-started)
   - [Prerequisites](#prerequisites)
   - [Installation](#installation)
-  - [Development Commands](#development-commands)
+  - [Development & Build Commands](#development--build-commands)
 - [Spectra SDD Workflow](#spectra-sdd-workflow)
 - [License](#license)
 
 ---
 
-## Features
+## Core Features
 
-### 1. Web Application (`apps/web`)
-A responsive, React-based bookkeeping web client featuring:
-- **Account Groups (資金組)**: Categorize your money into distinct groups (e.g., Daily Expenses, Investments, Long-term Savings). Customize emojis, group colors, and group descriptions.
-- **Transactions Management**: Log income and expenses with descriptions, amounts, custom sub-categories, dates, and account group bindings.
-- **Dynamic Dashboard**: View financial summaries, active balances, and recent ledger entries.
-- **Advanced History & Stats**: Filter transactions by day, month, or year, with interactive breakdowns.
-- **LocalStorage Persistence**: Auto-saves your records locally on the browser.
+### 1. Web Application & Hybrid Mobile App (`apps/web`)
+A highly responsive React 19 web application built on Vite, TypeScript, and Ionic. It can be compiled into native mobile apps (iOS & Android) via Capacitor.
+- **Account Groups (資金帳戶分組)**: Define different financial buckets (e.g., Daily Expenses, Investments, Long-term Savings) with custom emojis, description texts, and theme colors.
+- **Allocation Rule Support (333 分配法則)**: Allocate income across your account groups with target ratios (such as the default 333 rule or custom percentages) that must sum to exactly 100%.
+- **Budget Limit & Real-time Alerts**: Set custom monthly budgets per account group. The system flags over-budget states dynamically in the UI and displays alerts when log entries exceed the threshold.
+- **Detailed Transactions & Time Tracking**: Log transactions with descriptions, amounts, sub-categories, dates, and times. Supports editing and deletion.
+- **Lucide Icons**: Integrates modern, clean Lucide iconography (`lucide-react`) for a streamlined visual design.
+- **Dynamic Stats & Pie Charts**: Interactive expense/income breakdowns using **Recharts**. Categories are automatically assigned unique, visually distinct colors that match both the chart slices and category progress bars.
+- **Comprehensive Backup & Recovery System**:
+  - Compresses bookkeeping data to a zip file using `fflate`.
+  - Supports exporting, downloading, and native sharing (via `@capacitor/share`).
+  - Implements **Auto-Backup** to native Documents storage (`keep_accounts_backup.zip`) and allows restoring from auto-backups.
+  - Maintains a detailed import history log with file details, record counts, and status checks.
 
 ### 2. Swift CLI Helper (`apps/swift-cli`)
-A native Swift-based Command Line Interface tool structure integrated into the monorepo to support command-line integrations or desktop utilities.
+A native Swift CLI utility structure inside the monorepo, supporting native scripting, desktop integrations, or terminal bookkeeping helpers.
 
 ### 3. E2E Testing Suite (`apps/web-e2e`)
-End-to-end test suite powered by **Playwright** to ensure application flows remain robust and bug-free.
+End-to-end integration testing suite using **Playwright** to simulate user behavior, check state integrity, and ensure zero-regression on UI layouts.
 
 ---
 
 ## Workspace Architecture
 
-The project is managed as an Nx monorepo workspace:
+The workspace is structured as an Nx monorepo, cleanly dividing applications and shared business/state logic libraries:
 
 ```text
 keep-accounts-app/
 ├── apps/
-│   ├── web/          # React 19 / Vite / TypeScript web application
-│   ├── web-e2e/      # Playwright end-to-end testing suite
-│   └── swift-cli/    # Swift CLI application and Package setup
-├── openspec/         # Spectra Spec-Driven Development (SDD) specifications
-│   ├── specs/        # Baseline specifications
-│   └── changes/      # Feature change proposals (e.g. budget-limits, stats-charts)
-├── nx.json           # Nx workspace configuration
-├── package.json      # Node.js dependencies and scripts
-└── tsconfig.base.json# TypeScript base configurations
+│   ├── web/                     # React 19 / Vite / TypeScript web app (Capacitor enabled)
+│   ├── web-e2e/                 # Playwright end-to-end integration tests
+│   └── swift-cli/               # Swift command-line tool & Package config
+├── libs/
+│   └── shared/
+│       ├── domain/              # Shared models, entities, defaults, and helper functions
+│       └── state/               # Shared business logic and custom React state hooks
+├── openspec/                    # Spectra Spec-Driven Development (SDD) spec directory
+│   ├── specs/                   # Baseline feature specifications (e.g. dynamic-header, distinct-chart-colors)
+│   └── changes/                 # Active / archived feature changes and proposal tasks
+├── nx.json                      # Nx workspace config
+├── package.json                 # Node dependencies and workspace configurations
+├── tsconfig.base.json           # TypeScript base path configurations
+└── vitest.workspace.ts          # Vitest workspace definition for tests
 ```
 
 ---
@@ -61,51 +74,51 @@ keep-accounts-app/
 
 ### Prerequisites
 
-Ensure you have the following installed on your machine:
+Ensure you have the following installed:
 - **Node.js** (v18 or higher recommended)
-- **npm** or another Node package manager
-- **Swift toolchain** (optional, if you plan to build or run the Swift CLI helper)
+- **npm** (bundled with Node.js)
+- **Swift CLI** (optional, if you plan to compile or run the Swift CLI helper)
 
 ### Installation
 
-Clone the repository and install all Node dependencies:
+Clone the repository and install all Node.js and workspace dependencies:
 
 ```bash
 npm install
 ```
 
-### Development Commands
+### Development & Build Commands
 
-Nx is used to execute tasks across projects. Below are the primary commands:
+Task execution in this workspace is powered by Nx:
 
 #### Running the Web Application
 Start the local Vite development server:
 ```bash
 npx nx serve web
 ```
-The application will be accessible at `http://localhost:4200` (or the port specified by Vite/Nx).
+The server usually opens at `http://localhost:4200` (or another port designated by Vite).
 
-#### Building for Production
-Create an optimized production bundle for the web app:
-```bash
-npx nx build web
-```
-The built assets will be generated in `dist/apps/web`.
-
-#### Running Tests
-Run unit tests for the web application:
+#### Running Unit & Integration Tests
+Run Vitest tests on the web app or libraries:
 ```bash
 npx nx test web
 ```
 
-#### Running E2E Tests
-Execute Playwright end-to-end integration tests:
+#### Running End-to-End Tests
+Execute the Playwright E2E suite:
 ```bash
 npx nx e2e web-e2e
 ```
 
-#### Visualizing the Workspace Graph
-See the relationship between your monorepo apps and libraries:
+#### Building the Web App for Production
+Compile and bundle the production assets:
+```bash
+npx nx build web
+```
+Built assets will be available at `dist/apps/web`.
+
+#### Graph Visualization
+Generate an interactive dependency graph of your workspace components:
 ```bash
 npx nx graph
 ```
@@ -114,15 +127,12 @@ npx nx graph
 
 ## Spectra SDD Workflow
 
-This project adheres to **Spec-Driven Development (SDD)**. Specs and proposal changes are located in the `openspec/` directory.
+Spec-Driven Development (SDD) governs how we design and implement features. Baseline specifications are version-controlled in `openspec/specs/`, and active changes are tracked in `openspec/changes/`.
 
-- **Specs** (`openspec/specs/`): Document the baseline functionality.
-- **Changes** (`openspec/changes/`): Drafted proposals for upcoming features (such as `add-budget-limits` or `add-stats-charts`).
-
-### How to develop features:
-1. **Discuss / Propose**: Use `/spectra-discuss` or `/spectra-propose` to design the spec first.
-2. **Apply**: Implement the changes using `/spectra-apply` or `/spectra-ingest`.
-3. **Archive**: Once the feature is complete and verified, run `/spectra-archive` to merge the spec modifications into the baseline specs directory.
+### Development Pipeline:
+1. **Discuss / Propose**: Create a design proposal using the `/spectra-discuss` or `/spectra-propose` assistant workflow.
+2. **Apply / Ingest**: Implement specifications with `/spectra-apply` or `/spectra-ingest`.
+3. **Archive**: Once verified, execute `/spectra-archive` to merge changes back into baseline specs and clean up the active changes directory.
 
 ---
 
@@ -134,7 +144,9 @@ This project is licensed under the [MIT License](LICENSE).
 
 # 記帳應用程式 (Keep Accounts App)
 
-這是一個以 **Nx monorepo** 建置的現代化個人理財與記帳應用程式。本專案包含一個基於 React 的美觀網頁控制面板、一個 Swift 命令行界面 (CLI) 工具，以及使用 Playwright 的端到端 (E2E) 整合測試。
+[English](#keep-accounts-app) | [繁體中文](#記帳應用程式-keep-accounts-app)
+
+這是一個以 **Nx monorepo** 建置的現代化個人理財、預算規劃與記帳應用程式。本專案包含一個基於 React 的美觀網頁控制面板（亦可透過 Capacitor 包裝為行動端 App）、一個 Swift 命令行界面 (CLI) 工具，以及使用 Playwright 的端到端 (E2E) 整合測試。
 
 本專案採用 **Spectra 規格驅動開發 (SDD)** 流程，在進行實作前，會先針對功能規格與變更提案進行建模與設計。
 
@@ -142,48 +154,62 @@ This project is licensed under the [MIT License](LICENSE).
 
 ## 目錄
 
-- [功能特色](#功能特色-1)
-- [專案架構](#專案架構-1)
-- [開始使用](#開始使用-1)
-- [Spectra SDD 開發流程](#spectra-sdd-開發流程-1)
-- [授權條款](#授權條款-1)
+- [核心功能特色](#核心功能特色)
+- [專案架構](#專案架構)
+- [開始使用](#開始使用)
+  - [先決條件](#先決條件)
+  - [安裝步驟](#安裝步驟)
+  - [開發與建置指令](#開發與建置指令)
+- [Spectra SDD 開發流程](#spectra-sdd-開發流程)
+- [授權條款](#授權條款)
 
 ---
 
-## 功能特色
+## 核心功能特色
 
-### 1. 網頁應用程式 (`apps/web`)
-基於 React 的響應式記帳網頁客戶端，提供以下功能：
-- **資金組 / 帳戶群組 (Account Groups)**：將資金歸類於不同的群組（例如：日常開銷、投資理財、長期儲蓄）。可自訂 Emoji 表情符號、群組代表色與描述。
-- **交易明細管理 (Transactions)**：記錄收入與支出，支援自訂描述、金額、子分類、交易日期及關聯的資金組。
-- **動態儀表板 (Dashboard)**：即時顯示財務加總摘要、可用餘額及最新的交易紀錄。
-- **進階歷史紀錄與統計**：支援依「日」、「月」、「年」篩選與分組，並包含互動式的分類明細統計。
-- **LocalStorage 持久化**：自動將所有記帳資料儲存在瀏覽器本地，無須註冊登入即可使用。
+### 1. 網頁與混合行動應用程式 (`apps/web`)
+基於 React 19、Vite、TypeScript 與 Ionic 開發的響應式網頁，可透過 Capacitor 輕鬆編譯為 Android 與 iOS 的原生 App。
+- **資金帳戶分組 (Account Groups)**：將資金歸類於不同的帳戶群組（例如：日常開銷、投資理財、長期儲蓄）。可自訂 Emoji 表情符號、代表色與描述。
+- **支援比例分配法則 (333 分配法則)**：支援在各資金帳戶間設定目標分配比例（如預設的 333 法則或自訂比例），所有帳戶比例相加必須剛好等於 100%。
+- **預算上限與即時提醒**：可為各資金群組設定每月預算上限。當超支或當次記帳將導致超支時，系統會在介面中動態顯示超支警告，並彈出提醒訊息。
+- **詳細交易管理與時間追蹤**：記錄收支的描述、金額、子類別、日期與具體時間，支援編輯與刪除。
+- **Lucide 圖標整合**：使用 `lucide-react` 替代舊式圖樣，提供更加乾淨、現代化的 UI 圖標。
+- **動態統計與圓餅圖**：使用 **Recharts** 提供互動式的收支分類統計。所有分類均自動分配唯一且色彩鮮明的顏色，且圓餅圖區塊與下方進度條的代表色保持一致。
+- **完善的本地備份與還原系統**：
+  - 使用 `fflate` 壓縮技術將記帳資料打包為 ZIP 格式備份檔。
+  - 支援備份檔匯出、下載與原生分享（利用 `@capacitor/share`）。
+  - 提供**自動備份**機制，可將資料備份至原生 Documents 目錄（`keep_accounts_backup.zip`），並支援從自動備份中一鍵還原。
+  - 提供備份匯入歷史紀錄日誌，詳細記錄匯入時間、檔案大小、群組與交易數量，並進行成功與否的狀態校驗。
 
 ### 2. Swift CLI 輔助工具 (`apps/swift-cli`)
-整合在 monorepo 中的 Swift 原生命令列工具結構，用於後續擴充命令列指令整合或桌面輔助小工具。
+整合在 monorepo 中的 Swift 原生命令列工具結構，用於後續擴充命令列自動化腳本、系統整合或桌面輔助小工具。
 
 ### 3. E2E 測試套件 (`apps/web-e2e`)
-使用 **Playwright** 驅動的端到端整合測試，確保應用程式的關鍵操作流程穩定無虞。
+使用 **Playwright** 驅動的端到端整合測試套件，用以模擬使用者操作流程、驗證狀態一致性，確保 UI 與核心邏輯無迴歸 (zero-regression)。
 
 ---
 
 ## 專案架構
 
-本專案採用 Nx Monorepo 進行專案管理：
+本專案採用 Nx Monorepo 進行模組化管理，將應用程式與共用的業務/狀態邏輯函式庫乾淨分離：
 
 ```text
 keep-accounts-app/
 ├── apps/
-│   ├── web/          # React 19 / Vite / TypeScript 網頁應用程式
-│   ├── web-e2e/      # Playwright 端到端 (E2E) 測試套件
-│   └── swift-cli/    # Swift CLI 應用程式與 Package 設定
-├── openspec/         # Spectra 規格驅動開發 (SDD) 規格書目錄
-│   ├── specs/        # 基線規格書 (Baseline)
-│   └── changes/      # 功能變更提案 (例如：預算限制 add-budget-limits、統計圖表 add-stats-charts)
-├── nx.json           # Nx 工作區設定檔
-├── package.json      # Node.js 依賴套件及腳本指令
-└── tsconfig.base.json# TypeScript 基礎編譯設定檔
+│   ├── web/                     # React 19 / Vite / TypeScript 網頁與混合 App
+│   ├── web-e2e/                 # Playwright 端到端 (E2E) 測試套件
+│   └── swift-cli/               # Swift CLI 應用程式與 Package 設定
+├── libs/
+│   └── shared/
+│       ├── domain/              # 共用實體模型、預設常數及工具函式
+│       └── state/               # 共用業務邏輯及自訂 React State Hook (useKeepAccounts)
+├── openspec/                    # Spectra 規格驅動開發 (SDD) 規格書目錄
+│   ├── specs/                   # 基線規格書 (如：動態標頭 dynamic-header、圖表配色 distinct-chart-colors)
+│   └── changes/                 # 當前開發中 / 已封存的變更提案與任務清單
+├── nx.json                      # Nx 工作區設定檔
+├── package.json                 # Node.js 依賴套件與指令配置
+├── tsconfig.base.json           # TypeScript 基礎路徑對照設定檔
+└── vitest.workspace.ts          # Vitest 測試工作區定義檔
 ```
 
 ---
@@ -194,8 +220,8 @@ keep-accounts-app/
 
 請確保您的開發環境中已安裝以下工具：
 - **Node.js** (建議 v18 或以上版本)
-- **npm** (或其他 Node 套件管理工具)
-- **Swift 工具鏈** (可選，若您要建置或執行 Swift CLI 工具)
+- **npm** (隨 Node.js 一併安裝)
+- **Swift 開發工具** (可選，若您需要編譯或執行 Swift CLI 工具)
 
 ### 安裝步驟
 
@@ -205,26 +231,19 @@ keep-accounts-app/
 npm install
 ```
 
-### 開發指令
+### 開發與建置指令
 
-我們使用 Nx 來執行專案中的任務。以下是主要的開發指令：
+我們使用 Nx 來管理與執行工作區任務：
 
-#### 啟動網頁開發伺客器
+#### 啟動網頁開發伺服器
 啟動本地 Vite 開發伺服器：
 ```bash
 npx nx serve web
 ```
-啟動後可在瀏覽器開啟 `http://localhost:4200`（或 Vite/Nx 指定的連接埠）。
+啟動後可於瀏覽器開啟 `http://localhost:4200`（或 Vite/Nx 指定的連接埠）。
 
-#### 建立生產版本
-為網頁應用程式建立最佳化的生產版本：
-```bash
-npx nx build web
-```
-產出的靜態檔案會放置於 `dist/apps/web` 目錄中。
-
-#### 執行單元測試
-執行網頁應用程式的單元測試：
+#### 執行單元與整合測試
+執行網頁應用或共用庫的 Vitest 測試：
 ```bash
 npx nx test web
 ```
@@ -235,8 +254,15 @@ npx nx test web
 npx nx e2e web-e2e
 ```
 
+#### 建立生產版本
+建立網頁應用程式的最佳化生產版本：
+```bash
+npx nx build web
+```
+產出的靜態檔案會放置於 `dist/apps/web` 目錄中。
+
 #### 視覺化工作區圖表
-檢視 Monorepo 中各個應用程式與函式庫之間的依賴關係：
+檢視整個 Monorepo 中各個應用程式與函式庫之間的依賴關係圖：
 ```bash
 npx nx graph
 ```
@@ -245,15 +271,12 @@ npx nx graph
 
 ## Spectra SDD 開發流程
 
-本專案遵循 **規格驅動開發 (Spec-Driven Development, SDD)**。所有規格與提案皆存放於 `openspec/` 目錄中：
+本專案遵循**規格驅動開發 (Spec-Driven Development, SDD)** 模式。基線功能規格書存放於 `openspec/specs/` 目錄，而變更中的提案與開發任務則存放在 `openspec/changes/` 中。
 
-- **Specs** (`openspec/specs/`)：記錄系統當前的基線功能與規格。
-- **Changes** (`openspec/changes/`)：記錄即將開發的新功能提案（例如：`add-budget-limits` 或 `add-stats-charts`）。
-
-### 開發功能步驟：
+### 開發流程階段：
 1. **討論 / 提案 (Discuss / Propose)**：使用 `/spectra-discuss` 或 `/spectra-propose` 設計規格與變更提案。
-2. **套用 (Apply)**：使用 `/spectra-apply` 或 `/spectra-ingest` 實作功能。
-3. **歸檔 (Archive)**：功能實作並測試完成後，執行 `/spectra-archive` 將變更合併至基線規格目錄中。
+2. **套用 / 調整 (Apply / Ingest)**：使用 `/spectra-apply` 或 `/spectra-ingest` 實作變更並同步程式碼。
+3. **封存歸檔 (Archive)**：功能實作並測試完成後，執行 `/spectra-archive` 將變更合併至基線規格目錄，並清理進行中的變更暫存。
 
 ---
 

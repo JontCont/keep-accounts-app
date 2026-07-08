@@ -599,7 +599,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {sortedDashboardKeys.map((groupKey) => {
             const groupTxs = dashboardGrouped[groupKey];
-            const { income, expense } = getGroupTotals(groupTxs);
             return (
               <div key={groupKey} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {/* Group Header */}
@@ -622,14 +621,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     }}
                   >
                     📅 {formatGroupHeader(groupKey, 'day')}
-                  </span>
-                  <span style={{ color: 'var(--text-tertiary)', fontSize: '0.8rem' }}>
-                    {income > 0 && (
-                      <span style={{ color: 'var(--income-color)', marginRight: '8px' }}>
-                        +{income}
-                      </span>
-                    )}
-                    {expense > 0 && <span style={{ color: 'var(--expense-color)' }}>-{expense}</span>}
                   </span>
                 </div>
 
