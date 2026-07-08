@@ -38,7 +38,7 @@ A highly responsive React 19 web application built on Vite, TypeScript, and Ioni
   - Maintains a detailed import history log with file details, record counts, and status checks.
 
 ### 2. Swift CLI Helper (`apps/swift-cli`)
-A native Swift CLI utility structure inside the monorepo, supporting native scripting, desktop integrations, or terminal bookkeeping helpers.
+A Swift command-line helper structure used to package the iOS application (creating the IPA artifact) and automatically generate testing files/build artifacts in the CI/CD pipeline.
 
 ### 3. E2E Testing Suite (`apps/web-e2e`)
 End-to-end integration testing suite using **Playwright** to simulate user behavior, check state integrity, and ensure zero-regression on UI layouts.
@@ -54,7 +54,7 @@ keep-accounts-app/
 ├── apps/
 │   ├── web/                     # React 19 / Vite / TypeScript web app (Capacitor enabled)
 │   ├── web-e2e/                 # Playwright end-to-end integration tests
-│   └── swift-cli/               # Swift command-line tool & Package config
+│   └── swift-cli/               # Swift CLI tool to package iOS app & generate CI artifacts
 ├── libs/
 │   └── shared/
 │       ├── domain/              # Shared models, entities, defaults, and helper functions
@@ -182,7 +182,7 @@ This project is licensed under the [MIT License](LICENSE).
   - 提供備份匯入歷史紀錄日誌，詳細記錄匯入時間、檔案大小、群組與交易數量，並進行成功與否的狀態校驗。
 
 ### 2. Swift CLI 輔助工具 (`apps/swift-cli`)
-整合在 monorepo 中的 Swift 原生命令列工具結構，用於後續擴充命令列自動化腳本、系統整合或桌面輔助小工具。
+基於 Swift 的命令列工具，主要用於打包 iOS 應用程式（產生 IPA 安裝包），並透過 CI/CD 流程自動產出相關測試檔案與建置成品。
 
 ### 3. E2E 測試套件 (`apps/web-e2e`)
 使用 **Playwright** 驅動的端到端整合測試套件，用以模擬使用者操作流程、驗證狀態一致性，確保 UI 與核心邏輯無迴歸 (zero-regression)。
@@ -198,7 +198,7 @@ keep-accounts-app/
 ├── apps/
 │   ├── web/                     # React 19 / Vite / TypeScript 網頁與混合 App
 │   ├── web-e2e/                 # Playwright 端到端 (E2E) 測試套件
-│   └── swift-cli/               # Swift CLI 應用程式與 Package 設定
+│   └── swift-cli/               # Swift CLI 用於打包 iOS 應用程式與產生 CI/CD 測試檔案
 ├── libs/
 │   └── shared/
 │       ├── domain/              # 共用實體模型、預設常數及工具函式
