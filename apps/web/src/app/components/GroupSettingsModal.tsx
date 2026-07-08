@@ -11,6 +11,24 @@ import {
 } from '@keep-accounts-app/domain';
 import { AppIcon } from './AppIcon';
 
+const ICON_NAMES_ZH: Record<string, string> = {
+  'coffee': '餐飲食品',
+  'car': '交通出行',
+  'film': '休閒娛樂',
+  'shopping-cart': '購物消費',
+  'home': '居住物業',
+  'zap': '水電燃料',
+  'tag': '其他標籤',
+  'briefcase': '薪資工作',
+  'gift': '人情禮物',
+  'landmark': '銀行金融',
+  'credit-card': '信用金融',
+  'shield': '保險防護',
+  'trending-up': '投資理財',
+  'piggy-bank': '儲蓄保險',
+  'wallet': '現金錢包',
+};
+
 interface GroupSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -559,7 +577,7 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
                       <IonSelectOption key={em} value={em}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <AppIcon name={em} size={16} />
-                          {em}
+                          {ICON_NAMES_ZH[em] || em}
                         </div>
                       </IonSelectOption>
                     ))}
@@ -669,7 +687,10 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
             >
               {ACCOUNT_EMOJIS.map((e) => (
                 <IonSelectOption key={e} value={e}>
-                  {e}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <AppIcon name={e} size={16} />
+                    {ICON_NAMES_ZH[e] || e}
+                  </div>
                 </IonSelectOption>
               ))}
             </IonSelect>
