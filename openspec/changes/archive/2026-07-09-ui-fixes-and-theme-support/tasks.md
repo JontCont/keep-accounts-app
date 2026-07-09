@@ -1,0 +1,16 @@
+## 1. UI Layout Fixes & Styling
+
+- [x] 1.1 Support `Scrollable Transaction Modal` in [TransactionModal.tsx](file:///c:/company/keep-accounts-app/apps/web/src/app/components/TransactionModal.tsx) by applying the `Modal Scroll Support` decisions (setting card max-height and overflow-y) to allow vertical scrolling when contents overflow. Verify by launching the modal on a low-height window and manually asserting that all elements (including date and submit buttons) are scrollable and clickable.
+- [x] 1.2 Implement `Styled Input Components` inside the transaction modal by executing `Input Styling Clean Up` in [styles.css](file:///c:/company/keep-accounts-app/apps/web/src/styles.css) and [TransactionModal.tsx](file:///c:/company/keep-accounts-app/apps/web/src/app/components/TransactionModal.tsx). Use Ionic CSS variables to configure inputs, remove default browser blue focus outlines, and hide numeric spin buttons. Verify by focusing the number inputs in the browser and asserting no blue ring or spinner arrows are shown.
+- [x] 1.3 Add `FAB Scroll Hiding` support in [HistoryTab.tsx](file:///c:/company/keep-accounts-app/apps/web/src/app/components/HistoryTab.tsx) based on the `FAB Scroll Behavior` design. Set `scrollEvents={true}` on [app.tsx](file:///c:/company/keep-accounts-app/apps/web/src/app/app.tsx) and implement scroll tracking so the FAB transitions out on scroll-down and reappears on scroll-up. Verify manually by scrolling the list and asserting the scale transform of the FAB updates smoothly.
+
+## 2. History Transaction Grouping
+
+- [x] 2.1 Add `History List Grouping Switcher` controls (Year, Month, Day) in [HistoryTab.tsx](file:///c:/company/keep-accounts-app/apps/web/src/app/components/HistoryTab.tsx) defaulting to Month. Integrate with the `Grouping Mechanism` state variables. Verify by clicking the selector buttons and asserting that the active grouping state is updated correctly.
+- [x] 2.2 Implement `Group Header with Subtotals` formatting inside [HistoryTab.tsx](file:///c:/company/keep-accounts-app/apps/web/src/app/components/HistoryTab.tsx) by grouping the filtered transaction array by the selected unit, displaying formatted headers (e.g., "YYYY年M月"), and calculating group-level income/expense subtotals. Verify by cross-checking listed totals with simple transaction arithmetic on the page.
+
+## 3. Dark & Light Theme Management
+
+- [x] 3.1 Create `Theme Selector Settings` options under the settings page in [app.tsx](file:///c:/company/keep-accounts-app/apps/web/src/app/app.tsx), persisting selection in `localStorage.theme`. Verify by changing setting and checking that the stored value matches option selected.
+- [x] 3.2 Add `Light Theme Variable Overrides` in [styles.css](file:///c:/company/keep-accounts-app/apps/web/src/styles.css) using `Theme CSS Structure` guidelines, mapping variables (bg, text, card backgrounds) to their light mode counterparts under `[data-theme="light"]`. Verify by applying `light-theme` class to document root and asserting styles adapt correctly.
+- [x] 3.3 Add `System Theme Mode Support` in [app.tsx](file:///c:/company/keep-accounts-app/apps/web/src/app/app.tsx) by monitoring the window matchMedia prefers-color-scheme query when "system" is active. Verify by selecting "system" and changing OS theme to assert runtime styling updates correctly.

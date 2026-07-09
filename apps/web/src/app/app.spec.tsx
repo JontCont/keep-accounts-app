@@ -1,8 +1,22 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { render, fireEvent } from '@testing-library/react';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { render, fireEvent, renderHook, act } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
+import { useKeepAccounts } from '@keep-accounts-app/state';
 
-import App, { getCurrentMonthExpenseForGroup, Transaction } from './app';
+import App from './app';
+import { getCurrentMonthExpenseForGroup, Transaction } from '@keep-accounts-app/domain';
+
+vi.mock('@ionic/react', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@ionic/react')>();
+  const React = await import('react');
+  return {
+    ...original,
+    IonModal: ({ children, isOpen }: any) => {
+      if (!isOpen) return null;
+      return React.createElement('div', { 'data-testid': 'ion-modal' }, children);
+    },
+  };
+});
 
 describe('App', () => {
   beforeEach(() => {
@@ -32,7 +46,7 @@ describe('App', () => {
     const inputs = getAllByPlaceholderText('0');
     expect(inputs.length).toBeGreaterThanOrEqual(3);
     
-    // By default, they sum to 100% (30 + 30 + 40). Let's change the first input to 50
+    // Non-source groups sum to 100% (40 + 30 + 30). Change the first (儲蓄資金) input to 50
     fireEvent.change(inputs[0], { target: { value: '50' } });
     
     // Warning message should be present
@@ -42,8 +56,8 @@ describe('App', () => {
     const saveBtn = getByText('完成編輯').closest('button');
     expect(saveBtn?.hasAttribute('disabled')).toBe(true);
     
-    // Restore valid sum (30 + 30 + 40 = 100)
-    fireEvent.change(inputs[0], { target: { value: '30' } });
+    // Restore valid sum (40 + 30 + 30 = 100)
+    fireEvent.change(inputs[0], { target: { value: '40' } });
     
     // Warning should disappear
     expect(queryByText(/目標比例加總必須為 100%/)).toBeNull();
@@ -67,9 +81,9 @@ describe('App', () => {
     expect(inputs.length).toBeGreaterThanOrEqual(3);
     
     // Verifying default target migration rules were applied: (Group 1 -> 30, Group 2 -> 30, Group 3 -> 40)
-    expect(inputs[0].value).toBe('30');
-    expect(inputs[1].value).toBe('30');
-    expect(inputs[2].value).toBe('40');
+    expect(Number(inputs[0].value)).toBe(30);
+    expect(Number(inputs[1].value)).toBe(30);
+    expect(Number(inputs[2].value)).toBe(40);
   });
 
   it('should display period-specific sums (today vs this month)', () => {
@@ -182,9 +196,151 @@ describe('App', () => {
     const editBtn = getByText(/編輯帳戶/);
     fireEvent.click(editBtn);
     
-    // There are 3 default groups, but "日常開銷" (id '1') is not deletable, so only 2 delete buttons should render
+    // There are 4 default groups; 當月薪資 (source) is not deletable, so 3 delete buttons should render
     const deleteBtns = queryAllByTitle('刪除帳戶');
-    expect(deleteBtns.length).toBe(2);
+    expect(deleteBtns.length).toBe(3);
+  });
+
+  it('should open empty TransactionModal in creation mode when clicking FAB in HistoryTab', () => {
+    const { getByText, getByTitle } = render(<BrowserRouter><App /></BrowserRouter>);
+    
+    // Switch to History tab
+    const historyTabBtn = getByText('明細');
+    fireEvent.click(historyTabBtn);
+    
+    // Clicking the FAB (+ button)
+    const fabBtn = getByTitle('新增記帳');
+    fireEvent.click(fabBtn);
+    
+    // Modal header "新增收支記帳" should be visible
+    expect(getByText('新增收支記帳')).toBeTruthy();
+  });
+
+  it('should open TransactionModal populated with transaction data when clicking edit on a row in HistoryTab', () => {
+    const mockTxs: Transaction[] = [
+      { id: 'tx-test-id', description: 'test-history-item', amount: 500, type: 'expense', category: '餐飲食品', date: '2026-07-08T12:00:00.000Z', accountGroupId: '1' }
+    ];
+    localStorage.setItem('keep_accounts_transactions', JSON.stringify(mockTxs));
+    
+    const { getByText, getByTitle, container } = render(<BrowserRouter><App /></BrowserRouter>);
+    
+    // Switch to History tab
+    const historyTabBtn = getByText('明細');
+    fireEvent.click(historyTabBtn);
+    
+    // We should see the mock transaction description in the list
+    expect(getByText('test-history-item')).toBeTruthy();
+    
+    // Click the edit button
+    const editBtn = getByTitle('編輯');
+    fireEvent.click(editBtn);
+    
+    // Modal header "修改收支記帳" should be visible
+    expect(getByText('修改收支記帳')).toBeTruthy();
+    // Modal inputs should be populated with the transaction data
+    const descInput = container.querySelector('ion-input[placeholder*="例如"]') as any;
+    expect(descInput).toBeTruthy();
+    expect(descInput.value).toBe('test-history-item');
+    
+    const amountInput = container.querySelector('ion-input[placeholder*="金額"]') as any;
+    expect(amountInput).toBeTruthy();
+    expect(amountInput.value.toString()).toBe('500');
+  });
+});
+
+describe('Salary source group', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  const currentMonthDate = (day: string) => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  const setupGroups = () => {
+    const groups = [
+      { id: '0', name: '當月薪資', emoji: 'briefcase', color: '#22c55e', isSource: true, categories: [] },
+      { id: '3', name: '儲蓄資金', emoji: 'piggy-bank', color: '#10b981', targetRatio: 40, categories: [] },
+      { id: '1', name: '日常開銷', emoji: 'credit-card', color: '#6366f1', targetRatio: 30, categories: [] },
+      { id: '2', name: '投資理財', emoji: 'trending-up', color: '#3b82f6', targetRatio: 30, categories: [] }
+    ];
+    localStorage.setItem('keep_accounts_groups', JSON.stringify(groups));
+  };
+
+  it('should show the source-group income pool on the highlighted source card and exclude non-source income', () => {
+    setupGroups();
+    const mockTxs: Transaction[] = [
+      { id: 's1', description: '發放月薪', amount: 45000, type: 'income', category: '薪資收入', date: currentMonthDate('05'), accountGroupId: '0' },
+      { id: 'n1', description: '投資收益', amount: 3000, type: 'income', category: '投資收益', date: currentMonthDate('05'), accountGroupId: '2' },
+    ];
+    localStorage.setItem('keep_accounts_transactions', JSON.stringify(mockTxs));
+
+    const { getAllByText } = render(<BrowserRouter><App /></BrowserRouter>);
+
+    // Source pool is only the source-group income ($45,000); the $3,000 投資收益 is excluded
+    expect(getAllByText('+$45,000').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('should distribute the pool by target ratio without creating transactions', () => {
+    setupGroups();
+    const mockTxs: Transaction[] = [
+      { id: 's1', description: '發放月薪', amount: 45000, type: 'income', category: '薪資收入', date: currentMonthDate('05'), accountGroupId: '0' },
+    ];
+    localStorage.setItem('keep_accounts_transactions', JSON.stringify(mockTxs));
+
+    const { getAllByText } = render(<BrowserRouter><App /></BrowserRouter>);
+
+    // 40% of $45,000 = $18,000 (儲蓄資金); 30% = $13,500 (日常開銷, 投資理財)
+    expect(getAllByText('分配額 40% ($18,000)').length).toBe(1);
+    expect(getAllByText('分配額 30% ($13,500)').length).toBe(2);
+
+    // Pure virtual overlay: no transaction created
+    const stored = JSON.parse(localStorage.getItem('keep_accounts_transactions') || '[]');
+    expect(stored.length).toBe(1);
+  });
+
+  it('should show allocated versus spent on a non-source card', () => {
+    setupGroups();
+    const mockTxs: Transaction[] = [
+      { id: 's1', description: '發放月薪', amount: 45000, type: 'income', category: '薪資收入', date: currentMonthDate('05'), accountGroupId: '0' },
+      { id: 'e1', description: '午餐', amount: 5000, type: 'expense', category: '餐飲食品', date: currentMonthDate('06'), accountGroupId: '1' },
+    ];
+    localStorage.setItem('keep_accounts_transactions', JSON.stringify(mockTxs));
+
+    const { getByText, getAllByText } = render(<BrowserRouter><App /></BrowserRouter>);
+
+    // 日常開銷: allocated 30% of $45,000 = $13,500, spent $5,000, remaining $8,500
+    // (投資理財 also shows 分配額 30% ($13,500), so match both)
+    expect(getAllByText('分配額 30% ($13,500)').length).toBe(2);
+    expect(getByText('已用 $5,000／餘 $8,500')).toBeTruthy();
+  });
+
+  it('should migrate legacy data: inject source group, rename 長期儲蓄, drop allocation key, preserve transactions', () => {
+    const legacy = [
+      { id: '1', name: '日常開銷', emoji: 'credit-card', color: '#6366f1', targetRatio: 30, categories: [{ name: '薪資收入', emoji: 'briefcase', color: '#22c55e', type: 'income' }] },
+      { id: '2', name: '投資理財', emoji: 'trending-up', color: '#3b82f6', targetRatio: 30, categories: [] },
+      { id: '3', name: '長期儲蓄', emoji: 'piggy-bank', color: '#10b981', targetRatio: 40, categories: [] }
+    ];
+    localStorage.setItem('keep_accounts_groups', JSON.stringify(legacy));
+    localStorage.setItem('keep_accounts_allocation_categories', JSON.stringify(['薪資收入']));
+    const mockTxs: Transaction[] = [
+      { id: 't1', description: '午餐', amount: 100, type: 'expense', category: '餐飲食品', date: currentMonthDate('05'), accountGroupId: '1' },
+    ];
+    localStorage.setItem('keep_accounts_transactions', JSON.stringify(mockTxs));
+
+    render(<BrowserRouter><App /></BrowserRouter>);
+
+    // Deprecated bound-category key is removed
+    expect(localStorage.getItem('keep_accounts_allocation_categories')).toBeNull();
+    const groups = JSON.parse(localStorage.getItem('keep_accounts_groups') || '[]');
+    expect(groups.some((g: any) => g.isSource)).toBe(true);
+    expect(groups.some((g: any) => g.name === '儲蓄資金')).toBe(true);
+    // User transactions are preserved
+    const storedTxs = JSON.parse(localStorage.getItem('keep_accounts_transactions') || '[]');
+    expect(storedTxs.length).toBe(1);
   });
 });
 
@@ -205,5 +361,49 @@ describe('getCurrentMonthExpenseForGroup', () => {
   it('should return 0 when there are no matching transactions', () => {
     const total = getCurrentMonthExpenseForGroup('1', [], new Date('2026-07-15'));
     expect(total).toBe(0);
+  });
+});
+
+describe('useKeepAccounts defensive checks', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('should throw an error when saving a transaction with a negative amount', () => {
+    const { result } = renderHook(() => useKeepAccounts());
+    expect(() => {
+      act(() => {
+        result.current.saveTransaction(
+          'Test negative',
+          '-100',
+          'expense',
+          '日常雜項',
+          '2026-07-07T20:00:00+08:00',
+          '1',
+          null
+        );
+      });
+    }).toThrow('Transaction amount cannot be negative');
+  });
+
+  it('should throw an error when saving account groups with ratios not summing to 100%', () => {
+    const { result } = renderHook(() => useKeepAccounts());
+    const invalidGroups = [
+      { id: '1', name: '日常開銷', emoji: '💳', color: '#6366f1', targetRatio: 50, categories: [] },
+      { id: '2', name: '投資理財', emoji: '📈', color: '#3b82f6', targetRatio: 40, categories: [] }
+    ];
+    expect(() => {
+      act(() => {
+        result.current.saveAccountGroups(invalidGroups);
+      });
+    }).toThrow('Allocation target ratios must sum to exactly 100%');
+  });
+
+  it('should fall back to defaults silently when localStorage has corrupted JSON', () => {
+    localStorage.setItem('keep_accounts_groups', '{invalid json');
+    localStorage.setItem('keep_accounts_transactions', '{invalid json');
+    const { result } = renderHook(() => useKeepAccounts());
+    expect(result.current.accountGroups.length).toBeGreaterThan(0);
+    expect(result.current.transactions.length).toBeGreaterThan(0);
   });
 });

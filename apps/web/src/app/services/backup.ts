@@ -115,9 +115,9 @@ export const exportBackupNative = async (data: BackupData): Promise<string> => {
 
   // Share the written file
   await Share.share({
-    title: 'Keep Accounts Backup',
+    title: '記帳本資料備份',
     url: writeResult.uri,
-    dialogTitle: 'Save or share your backup file',
+    dialogTitle: '儲存或分享您的備份檔案',
   });
 
   return writeResult.uri;
