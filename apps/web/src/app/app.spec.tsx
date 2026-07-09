@@ -46,7 +46,7 @@ describe('App', () => {
     const inputs = getAllByPlaceholderText('0');
     expect(inputs.length).toBeGreaterThanOrEqual(3);
     
-    // By default, they sum to 100% (30 + 30 + 40). Let's change the first input to 50
+    // Non-source groups sum to 100% (40 + 30 + 30). Change the first (儲蓄資金) input to 50
     fireEvent.change(inputs[0], { target: { value: '50' } });
     
     // Warning message should be present
@@ -56,8 +56,8 @@ describe('App', () => {
     const saveBtn = getByText('完成編輯').closest('button');
     expect(saveBtn?.hasAttribute('disabled')).toBe(true);
     
-    // Restore valid sum (30 + 30 + 40 = 100)
-    fireEvent.change(inputs[0], { target: { value: '30' } });
+    // Restore valid sum (40 + 30 + 30 = 100)
+    fireEvent.change(inputs[0], { target: { value: '40' } });
     
     // Warning should disappear
     expect(queryByText(/目標比例加總必須為 100%/)).toBeNull();
@@ -108,7 +108,7 @@ describe('App', () => {
     // By default, period is 'month'.
     expect(getByText('本月支出')).toBeTruthy();
     expect(getAllByText('-$300').length).toBe(1);
-    expect(getAllByText('+$500').length).toBe(3);
+    expect(getAllByText('+$500').length).toBe(2);
     
     // Click '今日' toggle
     const todayToggle = getByText('今日');
@@ -117,7 +117,7 @@ describe('App', () => {
     // Today's expense sum should be 100. Monthly income should be 500.
     expect(getByText('今日支出')).toBeTruthy();
     expect(getAllByText('-$100').length).toBe(2);
-    expect(getAllByText('+$500').length).toBe(3);
+    expect(getAllByText('+$500').length).toBe(2);
   });
 
   it('should calculate and display daily allowed consumption and remaining budget when period is today', () => {
@@ -196,9 +196,9 @@ describe('App', () => {
     const editBtn = getByText(/編輯帳戶/);
     fireEvent.click(editBtn);
     
-    // There are 3 default groups, but "日常開銷" (id '1') is not deletable, so only 2 delete buttons should render
+    // There are 4 default groups; 當月薪資 (source) is not deletable, so 3 delete buttons should render
     const deleteBtns = queryAllByTitle('刪除帳戶');
-    expect(deleteBtns.length).toBe(2);
+    expect(deleteBtns.length).toBe(3);
   });
 
   it('should open empty TransactionModal in creation mode when clicking FAB in HistoryTab', () => {
@@ -245,6 +245,102 @@ describe('App', () => {
     const amountInput = container.querySelector('ion-input[placeholder*="金額"]') as any;
     expect(amountInput).toBeTruthy();
     expect(amountInput.value.toString()).toBe('500');
+  });
+});
+
+describe('Salary source group', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  const currentMonthDate = (day: string) => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  const setupGroups = () => {
+    const groups = [
+      { id: '0', name: '當月薪資', emoji: 'briefcase', color: '#22c55e', isSource: true, categories: [] },
+      { id: '3', name: '儲蓄資金', emoji: 'piggy-bank', color: '#10b981', targetRatio: 40, categories: [] },
+      { id: '1', name: '日常開銷', emoji: 'credit-card', color: '#6366f1', targetRatio: 30, categories: [] },
+      { id: '2', name: '投資理財', emoji: 'trending-up', color: '#3b82f6', targetRatio: 30, categories: [] }
+    ];
+    localStorage.setItem('keep_accounts_groups', JSON.stringify(groups));
+  };
+
+  it('should show the source-group income pool on the highlighted source card and exclude non-source income', () => {
+    setupGroups();
+    const mockTxs: Transaction[] = [
+      { id: 's1', description: '發放月薪', amount: 45000, type: 'income', category: '薪資收入', date: currentMonthDate('05'), accountGroupId: '0' },
+      { id: 'n1', description: '投資收益', amount: 3000, type: 'income', category: '投資收益', date: currentMonthDate('05'), accountGroupId: '2' },
+    ];
+    localStorage.setItem('keep_accounts_transactions', JSON.stringify(mockTxs));
+
+    const { getAllByText } = render(<BrowserRouter><App /></BrowserRouter>);
+
+    // Source pool is only the source-group income ($45,000); the $3,000 投資收益 is excluded
+    expect(getAllByText('+$45,000').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('should distribute the pool by target ratio without creating transactions', () => {
+    setupGroups();
+    const mockTxs: Transaction[] = [
+      { id: 's1', description: '發放月薪', amount: 45000, type: 'income', category: '薪資收入', date: currentMonthDate('05'), accountGroupId: '0' },
+    ];
+    localStorage.setItem('keep_accounts_transactions', JSON.stringify(mockTxs));
+
+    const { getAllByText } = render(<BrowserRouter><App /></BrowserRouter>);
+
+    // 40% of $45,000 = $18,000 (儲蓄資金); 30% = $13,500 (日常開銷, 投資理財)
+    expect(getAllByText('分配額 40% ($18,000)').length).toBe(1);
+    expect(getAllByText('分配額 30% ($13,500)').length).toBe(2);
+
+    // Pure virtual overlay: no transaction created
+    const stored = JSON.parse(localStorage.getItem('keep_accounts_transactions') || '[]');
+    expect(stored.length).toBe(1);
+  });
+
+  it('should show allocated versus spent on a non-source card', () => {
+    setupGroups();
+    const mockTxs: Transaction[] = [
+      { id: 's1', description: '發放月薪', amount: 45000, type: 'income', category: '薪資收入', date: currentMonthDate('05'), accountGroupId: '0' },
+      { id: 'e1', description: '午餐', amount: 5000, type: 'expense', category: '餐飲食品', date: currentMonthDate('06'), accountGroupId: '1' },
+    ];
+    localStorage.setItem('keep_accounts_transactions', JSON.stringify(mockTxs));
+
+    const { getByText, getAllByText } = render(<BrowserRouter><App /></BrowserRouter>);
+
+    // 日常開銷: allocated 30% of $45,000 = $13,500, spent $5,000, remaining $8,500
+    // (投資理財 also shows 分配額 30% ($13,500), so match both)
+    expect(getAllByText('分配額 30% ($13,500)').length).toBe(2);
+    expect(getByText('已用 $5,000／餘 $8,500')).toBeTruthy();
+  });
+
+  it('should migrate legacy data: inject source group, rename 長期儲蓄, drop allocation key, preserve transactions', () => {
+    const legacy = [
+      { id: '1', name: '日常開銷', emoji: 'credit-card', color: '#6366f1', targetRatio: 30, categories: [{ name: '薪資收入', emoji: 'briefcase', color: '#22c55e', type: 'income' }] },
+      { id: '2', name: '投資理財', emoji: 'trending-up', color: '#3b82f6', targetRatio: 30, categories: [] },
+      { id: '3', name: '長期儲蓄', emoji: 'piggy-bank', color: '#10b981', targetRatio: 40, categories: [] }
+    ];
+    localStorage.setItem('keep_accounts_groups', JSON.stringify(legacy));
+    localStorage.setItem('keep_accounts_allocation_categories', JSON.stringify(['薪資收入']));
+    const mockTxs: Transaction[] = [
+      { id: 't1', description: '午餐', amount: 100, type: 'expense', category: '餐飲食品', date: currentMonthDate('05'), accountGroupId: '1' },
+    ];
+    localStorage.setItem('keep_accounts_transactions', JSON.stringify(mockTxs));
+
+    render(<BrowserRouter><App /></BrowserRouter>);
+
+    // Deprecated bound-category key is removed
+    expect(localStorage.getItem('keep_accounts_allocation_categories')).toBeNull();
+    const groups = JSON.parse(localStorage.getItem('keep_accounts_groups') || '[]');
+    expect(groups.some((g: any) => g.isSource)).toBe(true);
+    expect(groups.some((g: any) => g.name === '儲蓄資金')).toBe(true);
+    // User transactions are preserved
+    const storedTxs = JSON.parse(localStorage.getItem('keep_accounts_transactions') || '[]');
+    expect(storedTxs.length).toBe(1);
   });
 });
 

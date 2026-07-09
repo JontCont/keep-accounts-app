@@ -184,8 +184,6 @@ interface GroupSettingsModalProps {
     type: 'income' | 'expense'
   ) => void;
   onUpdateGroupBudget: (groupId: string, budget: number | undefined) => void;
-  allocationCategories: string[];
-  onUpdateAllocationCategories: (cats: string[]) => void;
 }
 
 export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
@@ -198,8 +196,6 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
   onAddCategory,
   onDeleteCategory,
   onUpdateGroupBudget,
-  allocationCategories,
-  onUpdateAllocationCategories,
 }) => {
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [editingGroups, setEditingGroups] = useState<AccountGroup[] | null>(null);
@@ -244,7 +240,7 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
   };
 
   const targetSum = editingGroups.reduce(
-    (s, g) => s + (g.targetRatio || 0),
+    (s, g) => s + (g.isSource ? 0 : g.targetRatio || 0),
     0
   );
   const isInvalidRatio = targetSum !== 100;
@@ -339,7 +335,7 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
               </div>
 
               {/* Delete Button (absolute) */}
-              {group.id !== '1' && (
+              {!group.isSource && (
                 <div
                   style={{
                     position: 'absolute',
@@ -413,7 +409,7 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
         </h4>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px' }}>
-          {editingGroups.map((group) => (
+          {editingGroups.filter((group) => !group.isSource).map((group) => (
             <div
               key={group.id}
               style={{
@@ -803,68 +799,6 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
           </div>
         );
       })()}
-
-      {/* Allocation Source Categories Settings Checkbox Card */}
-      <div
-        className="glass-card fade-in"
-        style={{
-          padding: '16px',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-        }}
-      >
-        <h4 style={{ fontSize: '0.95rem', fontWeight: 600, marginBottom: '12px', margin: 0 }}>
-          📊 配比基準分類設定
-        </h4>
-        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '4px 0 12px 0', lineHeight: 1.4 }}>
-          請勾選要納入首頁大項目標配比分流計算的收入小項。未勾選的收入分類（例如紅包、退款等）將不會計入分流分母。
-        </p>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
-          {editingGroups
-            .flatMap((g) => g.categories)
-            .filter((c) => c.type === 'income')
-            .filter((value, index, self) => self.findIndex((t) => t.name === value.name) === index)
-            .map((cat) => {
-              const isChecked = allocationCategories.includes(cat.name);
-              return (
-                <label
-                  key={cat.name}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    fontSize: '0.9rem',
-                    color: 'var(--text-primary)',
-                    cursor: 'pointer',
-                    padding: '8px 10px',
-                    borderRadius: '6px',
-                    background: 'var(--input-bg)',
-                    border: '1px solid var(--input-border)',
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={isChecked}
-                    onChange={() => {
-                      if (isChecked) {
-                        onUpdateAllocationCategories(allocationCategories.filter((name) => name !== cat.name));
-                      } else {
-                        onUpdateAllocationCategories([...allocationCategories, cat.name]);
-                      }
-                    }}
-                    style={{
-                      width: '16px',
-                      height: '16px',
-                      accentColor: 'var(--primary-color)',
-                      cursor: 'pointer',
-                    }}
-                  />
-                  <AppIcon name={cat.emoji} size={16} />
-                  <span>{cat.name}</span>
-                </label>
-              );
-            })}
-        </div>
-      </div>
 
       {/* Inline Account group editor panel */}
       <div

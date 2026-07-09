@@ -33,8 +33,6 @@ export function App() {
     deleteCategory,
     setAccountGroups,
     setTransactions,
-    allocationCategories,
-    setAllocationCategories,
   } = useKeepAccounts();
 
   const [activeTab, setActiveTab] = useState<'dashboard' | 'history' | 'stats' | 'settings'>('dashboard');
@@ -412,7 +410,6 @@ export function App() {
                   getGroupKey={getGroupKey}
                   formatGroupHeader={formatGroupHeader}
                   getGroupTotals={getGroupTotals}
-                  allocationCategories={allocationCategories}
                   groupSettingsPanel={
                     <GroupSettingsModal
                       isOpen={isEditingGroups}
@@ -424,8 +421,6 @@ export function App() {
                       onAddCategory={addCategory}
                       onDeleteCategory={deleteCategory}
                       onUpdateGroupBudget={handleUpdateGroupBudget}
-                      allocationCategories={allocationCategories}
-                      onUpdateAllocationCategories={setAllocationCategories}
                     />
                   }
                 />

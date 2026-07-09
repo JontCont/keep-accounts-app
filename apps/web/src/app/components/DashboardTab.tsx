@@ -20,7 +20,6 @@ interface DashboardTabProps {
   formatGroupHeader: (key: string, mode: 'day' | 'month' | 'year') => string;
   getGroupTotals: (groupTxs: Transaction[]) => { income: number; expense: number };
   groupSettingsPanel: React.ReactNode;
-  allocationCategories: string[];
 }
 
 export const DashboardTab: React.FC<DashboardTabProps> = ({
@@ -37,7 +36,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   formatGroupHeader,
   getGroupTotals,
   groupSettingsPanel,
-  allocationCategories,
 }) => {
   const [period, setPeriod] = useState<'today' | 'month'>('month');
 
@@ -112,20 +110,22 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     return income - expense;
   };
 
-  const getGroupMonthlyBoundIncome = (groupId: string) => {
-    return transactions
-      .filter((tx) => tx.accountGroupId === groupId && tx.type === 'income' && allocationCategories.includes(tx.category) && tx.date.startsWith(currentMonthStr))
+  const sourceGroup = accountGroups.find((g) => g.isSource);
+
+  const getGroupMonthlyIncome = (groupId: string) =>
+    transactions
+      .filter(
+        (tx) =>
+          tx.accountGroupId === groupId &&
+          tx.type === 'income' &&
+          tx.date.startsWith(currentMonthStr)
+      )
       .reduce((sum, tx) => sum + tx.amount, 0);
-  };
 
-  const totalMonthlyBoundIncome = accountGroups
-    .map((g) => getGroupMonthlyBoundIncome(g.id))
-    .reduce((sum, amt) => sum + amt, 0);
+  const sourcePool = sourceGroup ? getGroupMonthlyIncome(sourceGroup.id) : 0;
 
-  const getGroupDisplayPct = (groupId: string) => {
-    const val = getGroupMonthlyBoundIncome(groupId);
-    return totalMonthlyBoundIncome > 0 ? Math.round((val / totalMonthlyBoundIncome) * 100) : 0;
-  };
+  const getGroupAllocated = (targetRatio: number) =>
+    Math.round(sourcePool * (targetRatio / 100));
 
   const dashboardTxs = transactions
     .filter((tx) => tx.date.substring(0, 10) === todayStr)
@@ -331,89 +331,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         </div>
 
         {/* Total Bound Income to Allocate Block */}
-        {!isEditingGroups && totalMonthlyBoundIncome > 0 && (
-          <div
-            className="glass-card"
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: '12px 16px',
-              borderRadius: 'var(--border-radius-md)',
-              background: 'rgba(34, 197, 94, 0.08)',
-              border: '1px solid rgba(34, 197, 94, 0.15)',
-              marginBottom: '16px',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div
-                style={{
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: '50%',
-                  background: 'rgba(34, 197, 94, 0.15)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'var(--income-color)',
-                }}
-              >
-                <AppIcon name="briefcase" size={18} />
-              </div>
-              <div>
-                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                  本月待分配總額
-                </div>
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                  已勾選之基準分類（如薪資）收入加總
-                </div>
-              </div>
-            </div>
-            <div
-              style={{
-                fontSize: '1.25rem',
-                fontWeight: 700,
-                color: 'var(--income-color)',
-              }}
-            >
-              +${totalMonthlyBoundIncome.toLocaleString('zh-TW')}
-            </div>
-          </div>
-        )}
-
-        {/* Stacked Progress Bar for Asset Allocation at the top */}
-        {!isEditingGroups && totalMonthlyBoundIncome > 0 && (
-          <div
-            style={{
-              width: '100%',
-              height: '12px',
-              background: 'var(--progress-track-bg)',
-              borderRadius: '6px',
-              display: 'flex',
-              overflow: 'hidden',
-              marginBottom: '16px',
-            }}
-          >
-            {accountGroups.map((group) => {
-              const displayVal = getGroupMonthlyBoundIncome(group.id);
-              if (displayVal <= 0) return null;
-              const pct = (displayVal / totalMonthlyBoundIncome) * 100;
-              return (
-                <div
-                  key={group.id}
-                  style={{
-                    width: `${pct}%`,
-                    height: '100%',
-                    backgroundColor: group.color || '#6366f1',
-                    transition: 'width 0.5s ease-in-out',
-                  }}
-                  title={`${group.name}: ${Math.round(pct)}%`}
-                />
-              );
-            })}
-          </div>
-        )}
-
         {/* Accounts scroll container */}
         {!isEditingGroups && (
           <div
@@ -427,11 +344,18 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           >
             {accountGroups.map((group) => {
               const bal = getGroupBalance(group.id);
-              const actualPct = getGroupDisplayPct(group.id);
+              const isSrc = !!group.isSource;
               const targetRatio = group.targetRatio || 0;
-              const comparisonRatio = targetRatio > 0 ? Math.round((actualPct / targetRatio) * 100) : 0;
-              const targetAmt = Math.round(totalMonthlyBoundIncome * (targetRatio / 100));
-              const actualAmt = getGroupMonthlyBoundIncome(group.id);
+              const allocated = getGroupAllocated(targetRatio);
+              const monthlyExpense = getCurrentMonthExpenseForGroup(
+                group.id,
+                transactions
+              );
+              const remaining = allocated - monthlyExpense;
+              const usedPct =
+                allocated > 0
+                  ? Math.round((monthlyExpense / allocated) * 100)
+                  : 0;
 
               return (
                 <div
@@ -439,11 +363,15 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                   className="glass-card"
                   style={{
                     flexShrink: 0,
-                    width: '150px',
+                    width: '164px',
                     padding: '16px',
                     borderRadius: 'var(--border-radius-md)',
-                    background: 'var(--sub-card-bg)',
-                    border: '1px solid var(--sub-card-border)',
+                    background: isSrc
+                      ? 'rgba(34, 197, 94, 0.08)'
+                      : 'var(--sub-card-bg)',
+                    border: isSrc
+                      ? '1.5px solid rgba(34, 197, 94, 0.35)'
+                      : '1px solid var(--sub-card-border)',
                     position: 'relative',
                   }}
                 >
@@ -463,26 +391,37 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                         gap: '4px',
                         alignItems: 'center',
                         overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        maxWidth: '70%',
+                        flex: 1,
+                        minWidth: 0,
                       }}
                     >
                       <AppIcon name={group.emoji} size={18} />
-                      <span>{group.name}</span>
+                      <span
+                        style={{
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {group.name}
+                      </span>
                     </span>
                     <span
                       style={{
                         fontSize: '0.7rem',
                         padding: '2px 5px',
                         borderRadius: '8px',
-                        background: 'var(--input-bg)',
-                        color: 'var(--text-secondary)',
+                        background: isSrc
+                          ? 'rgba(34, 197, 94, 0.18)'
+                          : 'var(--input-bg)',
+                        color: isSrc
+                          ? 'var(--income-color)'
+                          : 'var(--text-secondary)',
                         fontWeight: 600,
                         flexShrink: 0,
                       }}
                     >
-                      {actualPct}%
+                      {isSrc ? '來源' : `${targetRatio}%`}
                     </span>
                   </div>
                   <div
@@ -490,52 +429,78 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                       fontSize: '1.2rem',
                       fontWeight: 700,
                       marginTop: '12px',
-                      color: bal >= 0 ? 'var(--text-primary)' : 'var(--expense-color)',
+                      color: isSrc
+                        ? 'var(--income-color)'
+                        : bal >= 0
+                        ? 'var(--text-primary)'
+                        : 'var(--expense-color)',
                     }}
                   >
-                    ${bal.toLocaleString('zh-TW')}
+                    {isSrc
+                      ? `+$${sourcePool.toLocaleString('zh-TW')}`
+                      : `$${bal.toLocaleString('zh-TW')}`}
                   </div>
 
-                  {/* Target Progress Bar */}
-                  <div
-                    style={{
-                      marginTop: '12px',
-                      borderTop: '1px solid var(--card-border)',
-                      paddingTop: '8px',
-                    }}
-                  >
+                  {isSrc ? (
                     <div
                       style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        fontSize: '0.7rem',
-                        color: 'var(--text-tertiary)',
-                        marginBottom: '4px',
+                        marginTop: '8px',
+                        fontSize: '0.72rem',
+                        color: 'var(--text-secondary)',
                       }}
                     >
-                      <span>目標 {targetRatio}% (${targetAmt.toLocaleString('zh-TW')})</span>
-                      <span>已分 {actualPct}% (${actualAmt.toLocaleString('zh-TW')})</span>
+                      本月待分配總額
                     </div>
+                  ) : (
                     <div
                       style={{
-                        width: '100%',
-                        height: '5px',
-                        background: 'var(--progress-track-bg)',
-                        borderRadius: '2.5px',
-                        overflow: 'hidden',
+                        marginTop: '12px',
+                        borderTop: '1px solid var(--card-border)',
+                        paddingTop: '8px',
                       }}
                     >
                       <div
                         style={{
-                          width: `${Math.min(100, comparisonRatio)}%`,
-                          height: '100%',
-                          backgroundColor: group.color,
-                          borderRadius: '2.5px',
-                          transition: 'width 0.3s ease-in-out',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '2px',
+                          fontSize: '0.7rem',
+                          color: 'var(--text-tertiary)',
+                          marginBottom: '6px',
                         }}
-                      />
+                      >
+                        <span style={{ whiteSpace: 'nowrap' }}>
+                          分配額 {targetRatio}% (${allocated.toLocaleString('zh-TW')})
+                        </span>
+                        <span style={{ whiteSpace: 'nowrap' }}>
+                          已用 ${monthlyExpense.toLocaleString('zh-TW')}／餘 $
+                          {remaining.toLocaleString('zh-TW')}
+                        </span>
+                      </div>
+                      <div
+                        style={{
+                          width: '100%',
+                          height: '5px',
+                          background: 'var(--progress-track-bg)',
+                          borderRadius: '2.5px',
+                          overflow: 'hidden',
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: `${Math.min(100, usedPct)}%`,
+                            height: '100%',
+                            backgroundColor:
+                              usedPct >= 100
+                                ? 'var(--expense-color)'
+                                : group.color,
+                            borderRadius: '2.5px',
+                            transition: 'width 0.3s ease-in-out',
+                          }}
+                        />
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {group.budget && group.budget > 0 ? (
                     (() => {

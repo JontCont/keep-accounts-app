@@ -14,6 +14,7 @@ export interface AccountGroup {
   description?: string;
   budget?: number;
   targetRatio?: number;
+  isSource?: boolean;
 }
 
 export interface Transaction {

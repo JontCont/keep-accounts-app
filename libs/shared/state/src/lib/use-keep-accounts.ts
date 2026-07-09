@@ -68,19 +68,57 @@ export function useKeepAccounts() {
               getDefaultCategoriesForNewGroup(),
             targetRatio: ratio,
             budget: g.budget,
+            isSource: g.isSource ?? defaultGroup?.isSource,
           };
         });
 
-        // Validate sum equals 100%
-        const sum = migrated.reduce((s: number, g: any) => s + g.targetRatio, 0);
+        // One-time source-group migration: inject 當月薪資 source group when absent
+        const hasSource = migrated.some((g: any) => g.isSource);
+        if (!hasSource) {
+          const sourceDefault = DEFAULT_ACCOUNT_GROUPS.find((g) => g.isSource);
+          // Rename legacy 長期儲蓄 -> 儲蓄資金
+          migrated = migrated.map((g: any) =>
+            g.id === '3' && g.name === '長期儲蓄'
+              ? {
+                  ...g,
+                  name: '儲蓄資金',
+                  description: '儲蓄資金：存入銀行或作為緊急預備金，確保財務安全。',
+                }
+              : g
+          );
+          // Salary/income categories move off 日常開銷 into the source group
+          migrated = migrated.map((g: any) =>
+            g.id === '1'
+              ? {
+                  ...g,
+                  categories: (g.categories || []).filter(
+                    (c: any) => c.type !== 'income'
+                  ),
+                }
+              : g
+          );
+          if (sourceDefault) {
+            migrated = [{ ...sourceDefault }, ...migrated];
+          }
+          // Deprecated bound-category list is removed
+          localStorage.removeItem('keep_accounts_allocation_categories');
+        }
+
+        // Validate non-source target ratios sum to 100%
+        const nonSource = migrated.filter((g: any) => !g.isSource);
+        const sum = nonSource.reduce(
+          (s: number, g: any) => s + (g.targetRatio || 0),
+          0
+        );
         if (sum !== 100) {
-          if (
-            migrated.length === 3 &&
+          const isCanonical =
+            nonSource.length === 3 &&
             migrated.some((g: any) => g.id === '1') &&
             migrated.some((g: any) => g.id === '2') &&
-            migrated.some((g: any) => g.id === '3')
-          ) {
+            migrated.some((g: any) => g.id === '3');
+          if (isCanonical) {
             migrated = migrated.map((g: any) => {
+              if (g.isSource) return g;
               let r = 0;
               if (g.id === '1') r = 30;
               else if (g.id === '2') r = 30;
@@ -88,10 +126,14 @@ export function useKeepAccounts() {
               return { ...g, targetRatio: r };
             });
           } else {
-            const avg = Math.floor(100 / migrated.length);
-            const remainder = 100 % migrated.length;
-            migrated = migrated.map((g: any, i: number) => {
+            const count = nonSource.length || 1;
+            const avg = Math.floor(100 / count);
+            const remainder = 100 % count;
+            let i = 0;
+            migrated = migrated.map((g: any) => {
+              if (g.isSource) return g;
               const r = avg + (i < remainder ? 1 : 0);
+              i++;
               return { ...g, targetRatio: r };
             });
           }
@@ -271,7 +313,9 @@ export function useKeepAccounts() {
   };
 
   const saveAccountGroups = (groups: AccountGroup[]): boolean => {
-    const sum = groups.reduce((s, g) => s + (g.targetRatio || 0), 0);
+    const sum = groups
+      .filter((g) => !g.isSource)
+      .reduce((s, g) => s + (g.targetRatio || 0), 0);
     if (sum !== 100) {
       alert('目標比例加總必須為 100%！');
       throw new Error('Allocation target ratios must sum to exactly 100%');
@@ -307,8 +351,9 @@ export function useKeepAccounts() {
   };
 
   const deleteAccountGroup = (groupId: string): boolean => {
-    if (groupId === '1') {
-      alert('「日常開銷」為系統核心帳戶，不能刪除！');
+    const target = accountGroups.find((g) => g.id === groupId);
+    if (target?.isSource) {
+      alert('「當月薪資」為薪資來源帳戶，不能刪除！');
       return false;
     }
     if (accountGroups.length <= 1) {
@@ -394,22 +439,6 @@ export function useKeepAccounts() {
     return true;
   };
 
-  const [allocationCategories, setAllocationCategories] = useState<string[]>(() => {
-    const saved = localStorage.getItem('keep_accounts_allocation_categories');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    return ['薪資工作', '薪資收入', '薪水', '薪水收入'];
-  });
-
-  useEffect(() => {
-    localStorage.setItem('keep_accounts_allocation_categories', JSON.stringify(allocationCategories));
-  }, [allocationCategories]);
-
   return {
     accountGroups,
     setAccountGroups,
@@ -422,7 +451,5 @@ export function useKeepAccounts() {
     deleteAccountGroup,
     addCategory,
     deleteCategory,
-    allocationCategories,
-    setAllocationCategories,
   };
 }
