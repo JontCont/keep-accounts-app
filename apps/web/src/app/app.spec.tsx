@@ -108,7 +108,7 @@ describe('App', () => {
     // By default, period is 'month'.
     expect(getByText('本月支出')).toBeTruthy();
     expect(getAllByText('-$300').length).toBe(1);
-    expect(getAllByText('+$500').length).toBe(2);
+    expect(getAllByText('+$500').length).toBe(3);
     
     // Click '今日' toggle
     const todayToggle = getByText('今日');
@@ -117,7 +117,7 @@ describe('App', () => {
     // Today's expense sum should be 100. Monthly income should be 500.
     expect(getByText('今日支出')).toBeTruthy();
     expect(getAllByText('-$100').length).toBe(2);
-    expect(getAllByText('+$500').length).toBe(2);
+    expect(getAllByText('+$500').length).toBe(3);
   });
 
   it('should calculate and display daily allowed consumption and remaining budget when period is today', () => {

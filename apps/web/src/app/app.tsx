@@ -32,7 +32,9 @@ export function App() {
     addCategory,
     deleteCategory,
     setAccountGroups,
-    setTransactions
+    setTransactions,
+    allocationCategories,
+    setAllocationCategories,
   } = useKeepAccounts();
 
   const [activeTab, setActiveTab] = useState<'dashboard' | 'history' | 'stats' | 'settings'>('dashboard');
@@ -410,6 +412,7 @@ export function App() {
                   getGroupKey={getGroupKey}
                   formatGroupHeader={formatGroupHeader}
                   getGroupTotals={getGroupTotals}
+                  allocationCategories={allocationCategories}
                   groupSettingsPanel={
                     <GroupSettingsModal
                       isOpen={isEditingGroups}
@@ -421,6 +424,8 @@ export function App() {
                       onAddCategory={addCategory}
                       onDeleteCategory={deleteCategory}
                       onUpdateGroupBudget={handleUpdateGroupBudget}
+                      allocationCategories={allocationCategories}
+                      onUpdateAllocationCategories={setAllocationCategories}
                     />
                   }
                 />
@@ -501,7 +506,7 @@ export function App() {
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '16px', borderBottom: '1px solid var(--card-border)' }}>
                         <div>
                           <div style={{ fontSize: '0.9rem', fontWeight: 500 }}>自動背景備份</div>
-                          <div style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)' }}>每次變更記帳資料時，自動備份至系統 Documents 目錄</div>
+                          <div style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)' }}>每次變更記帳資料時，自動備份至系統文件目錄</div>
                         </div>
                         <input
                           type="checkbox"

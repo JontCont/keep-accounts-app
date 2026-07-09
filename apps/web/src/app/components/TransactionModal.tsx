@@ -12,6 +12,129 @@ import {
   AccountGroup,
   getLocalISOString,
 } from '@keep-accounts-app/domain';
+import { AppIcon } from './AppIcon';
+
+interface CustomSelectProps {
+  value: string;
+  options: { value: string; label: string; icon: string }[];
+  onChange: (value: string) => void;
+  placeholder?: string;
+}
+
+const CustomSelect: React.FC<CustomSelectProps> = ({ value, options, onChange, placeholder }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const selectedOption = options.find(o => o.value === value);
+
+  return (
+    <div style={{ position: 'relative', width: '100%' }}>
+      <div
+        onClick={() => setIsOpen(!isOpen)}
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '10px 0',
+          borderBottom: '1px solid var(--input-border)',
+          color: 'var(--text-primary)',
+          cursor: 'pointer',
+          minHeight: '40px',
+          fontSize: '1rem',
+          fontFamily: 'var(--font-family)',
+          transition: 'var(--transition-smooth)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {selectedOption ? (
+            <>
+              <AppIcon name={selectedOption.icon} size={18} style={{ color: 'var(--primary-color)' }} />
+              <span>{selectedOption.label}</span>
+            </>
+          ) : (
+            <span style={{ color: 'var(--text-tertiary)' }}>{placeholder}</span>
+          )}
+        </div>
+        <AppIcon name="chevron-down" size={16} style={{ color: 'var(--text-tertiary)' }} />
+      </div>
+
+      {isOpen && (
+        <>
+          <div
+            onClick={() => setIsOpen(false)}
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 9999,
+              background: 'transparent',
+            }}
+          />
+          <div
+            style={{
+              position: 'absolute',
+              top: 'calc(100% + 4px)',
+              left: 0,
+              right: 0,
+              background: 'var(--modal-card-bg)',
+              border: '1px solid var(--card-border)',
+              borderRadius: 'var(--border-radius-sm)',
+              boxShadow: 'var(--card-shadow)',
+              zIndex: 10000,
+              maxHeight: '220px',
+              overflowY: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              padding: '4px',
+            }}
+          >
+            {options.map((option) => (
+              <div
+                key={option.value}
+                onClick={() => {
+                  onChange(option.value);
+                  setIsOpen(false);
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '10px 12px',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  color: option.value === value ? 'var(--primary-color)' : 'var(--text-primary)',
+                  background: option.value === value ? 'rgba(99, 102, 241, 0.08)' : 'transparent',
+                  transition: 'background 0.2s ease',
+                }}
+                onMouseOver={(e) => {
+                  if (option.value !== value) {
+                    e.currentTarget.style.background = 'var(--input-bg)';
+                  }
+                }}
+                onMouseOut={(e) => {
+                  if (option.value !== value) {
+                    e.currentTarget.style.background = 'transparent';
+                  }
+                }}
+              >
+                <AppIcon
+                  name={option.icon}
+                  size={18}
+                  style={{
+                    color: option.value === value ? 'var(--primary-color)' : 'var(--text-secondary)',
+                  }}
+                />
+                <span style={{ fontSize: '0.95rem', fontWeight: option.value === value ? 600 : 400 }}>
+                  {option.label}
+                </span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
 
 interface TransactionModalProps {
   isOpen: boolean;
@@ -140,20 +263,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             overflow: 'hidden',
           }}
         >
-          {/* Scrollable form fields wrapper */}
-          <div
-            style={{
-              flex: 1,
-              overflowY: 'auto',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '16px',
-              paddingRight: '4px',
-              paddingBottom: '16px',
-            }}
-          >
-          {/* Type Switcher */}
-          <div>
+          {/* Type Switcher (Fixed at top) */}
+          <div style={{ paddingBottom: '12px', borderBottom: '1px solid var(--card-border)', marginBottom: '12px' }}>
             <label
               style={{
                 display: 'block',
@@ -206,6 +317,18 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             </div>
           </div>
 
+          {/* Scrollable form fields wrapper */}
+          <div
+            style={{
+              flex: 1,
+              overflowY: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '16px',
+              paddingRight: '4px',
+              paddingBottom: '16px',
+            }}
+          >
           {/* Account Group selection */}
           <div>
             <label
@@ -218,20 +341,16 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             >
               選擇資金帳戶大項
             </label>
-            <IonSelect
+            <CustomSelect
               value={accountGroupId}
-              interface="action-sheet"
-              onIonChange={(e) => setAccountGroupId(e.detail.value!)}
-              style={{
-                width: '100%',
-              }}
-            >
-              {accountGroups.map((group) => (
-                <IonSelectOption key={group.id} value={group.id}>
-                  {group.emoji} {group.name}
-                </IonSelectOption>
-              ))}
-            </IonSelect>
+              onChange={(val) => setAccountGroupId(val)}
+              options={accountGroups.map((group) => ({
+                value: group.id,
+                label: group.name,
+                icon: group.emoji,
+              }))}
+              placeholder="選擇資金帳戶"
+            />
           </div>
 
           {/* Amount */}
@@ -289,24 +408,20 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             >
               選擇分類
             </label>
-            <IonSelect
+            <CustomSelect
               value={category}
-              interface="action-sheet"
-              onIonChange={(e) => setCategory(e.detail.value!)}
-              style={{
-                width: '100%',
-              }}
-            >
-              {(
+              onChange={(val) => setCategory(val)}
+              options={(
                 accountGroups.find((g) => g.id === accountGroupId)?.categories.filter(
                   (c) => c.type === type
                 ) || []
-              ).map((cat) => (
-                <IonSelectOption key={cat.name} value={cat.name}>
-                  {cat.emoji} {cat.name}
-                </IonSelectOption>
-              ))}
-            </IonSelect>
+              ).map((cat) => ({
+                value: cat.name,
+                label: cat.name,
+                icon: cat.emoji,
+              }))}
+              placeholder="選擇分類"
+            />
           </div>
 
           {/* Date & Time */}

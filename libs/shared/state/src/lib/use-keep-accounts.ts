@@ -394,6 +394,22 @@ export function useKeepAccounts() {
     return true;
   };
 
+  const [allocationCategories, setAllocationCategories] = useState<string[]>(() => {
+    const saved = localStorage.getItem('keep_accounts_allocation_categories');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return ['薪資工作', '薪資收入', '薪水', '薪水收入'];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('keep_accounts_allocation_categories', JSON.stringify(allocationCategories));
+  }, [allocationCategories]);
+
   return {
     accountGroups,
     setAccountGroups,
@@ -406,5 +422,7 @@ export function useKeepAccounts() {
     deleteAccountGroup,
     addCategory,
     deleteCategory,
+    allocationCategories,
+    setAllocationCategories,
   };
 }

@@ -29,6 +29,136 @@ const ICON_NAMES_ZH: Record<string, string> = {
   'wallet': '現金錢包',
 };
 
+interface CustomSelectProps {
+  value: string;
+  options: { value: string; label: string; icon: string }[];
+  onChange: (value: string) => void;
+  placeholder?: string;
+  showLabel?: boolean;
+}
+
+const CustomSelect: React.FC<CustomSelectProps> = ({ value, options, onChange, placeholder, showLabel = true }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const selectedOption = options.find(o => o.value === value);
+
+  return (
+    <div style={{ position: 'relative', width: '100%' }}>
+      <div
+        onClick={() => setIsOpen(!isOpen)}
+        style={{
+          display: 'flex',
+          justifyContent: showLabel ? 'space-between' : 'center',
+          alignItems: 'center',
+          padding: '10px 0',
+          borderBottom: '1px solid var(--input-border)',
+          color: 'var(--text-primary)',
+          cursor: 'pointer',
+          minHeight: '40px',
+          fontSize: '1rem',
+          fontFamily: 'var(--font-family)',
+          transition: 'var(--transition-smooth)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: showLabel ? '8px' : '4px' }}>
+          {selectedOption ? (
+            <AppIcon name={selectedOption.icon} size={18} style={{ color: 'var(--primary-color)' }} />
+          ) : (
+            <span style={{ color: 'var(--text-tertiary)' }}>{placeholder}</span>
+          )}
+          {selectedOption && showLabel && <span>{selectedOption.label}</span>}
+          {!showLabel && <AppIcon name="chevron-down" size={12} style={{ color: 'var(--text-tertiary)', marginLeft: '2px' }} />}
+        </div>
+        {showLabel && <AppIcon name="chevron-down" size={16} style={{ color: 'var(--text-tertiary)' }} />}
+      </div>
+
+      {isOpen && (
+        <>
+          <div
+            onClick={() => setIsOpen(false)}
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 9999,
+              background: 'transparent',
+            }}
+          />
+          <div
+            style={{
+              position: 'absolute',
+              top: 'calc(100% + 4px)',
+              left: 0,
+              background: 'var(--modal-card-bg)',
+              border: '1px solid var(--card-border)',
+              borderRadius: 'var(--border-radius-sm)',
+              boxShadow: 'var(--card-shadow)',
+              zIndex: 10000,
+              maxHeight: '220px',
+              overflowY: 'auto',
+              display: showLabel ? 'flex' : 'grid',
+              gridTemplateColumns: showLabel ? undefined : 'repeat(5, 1fr)',
+              flexDirection: showLabel ? 'column' : undefined,
+              gap: showLabel ? '4px' : '8px',
+              padding: '8px',
+              width: showLabel ? '100%' : '240px',
+            }}
+          >
+            {options.map((option) => (
+              <div
+                key={option.value}
+                onClick={() => {
+                  onChange(option.value);
+                  setIsOpen(false);
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: showLabel ? 'flex-start' : 'center',
+                  gap: showLabel ? '8px' : '0',
+                  padding: showLabel ? '10px 12px' : '0',
+                  width: showLabel ? 'auto' : '38px',
+                  height: showLabel ? 'auto' : '38px',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  color: option.value === value ? 'var(--primary-color)' : 'var(--text-primary)',
+                  background: option.value === value ? 'rgba(99, 102, 241, 0.08)' : 'transparent',
+                  transition: 'background 0.2s ease',
+                }}
+                onMouseOver={(e) => {
+                  if (option.value !== value) {
+                    e.currentTarget.style.background = 'var(--input-bg)';
+                  }
+                }}
+                onMouseOut={(e) => {
+                  if (option.value !== value) {
+                    e.currentTarget.style.background = 'transparent';
+                  }
+                }}
+                title={option.label}
+              >
+                <AppIcon
+                  name={option.icon}
+                  size={18}
+                  style={{
+                    color: option.value === value ? 'var(--primary-color)' : 'var(--text-secondary)',
+                  }}
+                />
+                {showLabel && (
+                  <span style={{ fontSize: '0.95rem', fontWeight: option.value === value ? 600 : 400 }}>
+                    {option.label}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
 interface GroupSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -54,6 +184,8 @@ interface GroupSettingsModalProps {
     type: 'income' | 'expense'
   ) => void;
   onUpdateGroupBudget: (groupId: string, budget: number | undefined) => void;
+  allocationCategories: string[];
+  onUpdateAllocationCategories: (cats: string[]) => void;
 }
 
 export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
@@ -66,20 +198,22 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
   onAddCategory,
   onDeleteCategory,
   onUpdateGroupBudget,
+  allocationCategories,
+  onUpdateAllocationCategories,
 }) => {
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [editingGroups, setEditingGroups] = useState<AccountGroup[] | null>(null);
 
   // Form State for Adding Account Group
   const [newGroupName, setNewGroupName] = useState('');
-  const [newGroupEmoji, setNewGroupEmoji] = useState('💳');
+  const [newGroupEmoji, setNewGroupEmoji] = useState('credit-card');
   const [newGroupColor, setNewGroupColor] = useState('#6366f1');
   const [newGroupBudget, setNewGroupBudget] = useState('');
 
   // State for Managing Categories (小項)
   const [catEditType, setCatEditType] = useState<'expense' | 'income'>('expense');
   const [newCatName, setNewCatName] = useState('');
-  const [newCatEmoji, setNewCatEmoji] = useState('🏷️');
+  const [newCatEmoji, setNewCatEmoji] = useState('tag');
   const [newCatColor, setNewCatColor] = useState('#f59e0b');
 
   useEffect(() => {
@@ -162,13 +296,17 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
             <div
               key={group.id}
               className="glass-card"
+              onClick={() => setEditingGroupId(editingGroupId === group.id ? null : group.id)}
               style={{
                 flexShrink: 0,
                 width: '150px',
                 padding: '16px',
                 borderRadius: 'var(--border-radius-md)',
-                background: 'rgba(255, 255, 255, 0.03)',
+                background: editingGroupId === group.id ? 'rgba(99, 102, 241, 0.08)' : 'rgba(255, 255, 255, 0.03)',
+                border: editingGroupId === group.id ? '1.5px solid var(--primary-color)' : '1.5px solid rgba(255, 255, 255, 0.08)',
                 position: 'relative',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
               }}
             >
               <div
@@ -200,20 +338,22 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
                 目標: {targetRatio}%
               </div>
 
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '4px',
-                  position: 'absolute',
-                  top: '4px',
-                  right: '4px',
-                }}
-              >
-                {group.id !== '1' && (
+              {/* Delete Button (absolute) */}
+              {group.id !== '1' && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '4px',
+                    right: '4px',
+                    zIndex: 10,
+                  }}
+                >
                   <button
                     type="button"
-                    onClick={() => onDeleteGroup(group.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteGroup(group.id);
+                    }}
                     style={{
                       background: '#f43f5e',
                       color: '#fff',
@@ -230,30 +370,30 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
                   >
                     ✕
                   </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() =>
-                    setEditingGroupId(editingGroupId === group.id ? null : group.id)
-                  }
-                  style={{
-                    background:
-                      editingGroupId === group.id
-                        ? 'var(--primary-color)'
-                        : 'rgba(255,255,255,0.1)',
-                    color: '#fff',
-                    width: '18px',
-                    height: '18px',
-                    borderRadius: '50%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '0.65rem',
-                  }}
-                  title="管理分類小項"
-                >
-                  ⚙️
-                </button>
+                </div>
+              )}
+
+              {/* Static Settings Gear Badge */}
+              <div
+                style={{
+                  position: 'absolute',
+                  bottom: '10px',
+                  right: '10px',
+                  background: editingGroupId === group.id ? 'var(--primary-color)' : 'rgba(255, 255, 255, 0.06)',
+                  color: editingGroupId === group.id ? '#fff' : 'var(--text-secondary)',
+                  width: '20px',
+                  height: '20px',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '0.7rem',
+                  boxShadow: editingGroupId === group.id ? '0 0 8px var(--primary-color)' : 'none',
+                  transition: 'all 0.2s ease',
+                }}
+                title="管理分類小項"
+              >
+                ⚙️
               </div>
             </div>
           );
@@ -554,34 +694,32 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
               </h5>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px' }}>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <IonSelect
-                    value={newCatEmoji}
-                    interface="action-sheet"
-                    onIonChange={(e) => setNewCatEmoji(e.detail.value!)}
-                    style={{ width: '70px', padding: '8px', fontSize: '0.85rem' }}
-                  >
-                    {[
-                      'coffee',
-                      'car',
-                      'film',
-                      'shopping-cart',
-                      'home',
-                      'zap',
-                      'tag',
-                      'briefcase',
-                      'gift',
-                      'landmark',
-                      'credit-card',
-                      'shield',
-                    ].map((em) => (
-                      <IonSelectOption key={em} value={em}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <AppIcon name={em} size={16} />
-                          {ICON_NAMES_ZH[em] || em}
-                        </div>
-                      </IonSelectOption>
-                    ))}
-                  </IonSelect>
+                  <div style={{ width: '60px' }}>
+                    <CustomSelect
+                      value={newCatEmoji}
+                      onChange={(val) => setNewCatEmoji(val)}
+                      options={[
+                        'coffee',
+                        'car',
+                        'film',
+                        'shopping-cart',
+                        'home',
+                        'zap',
+                        'tag',
+                        'briefcase',
+                        'gift',
+                        'landmark',
+                        'credit-card',
+                        'shield',
+                      ].map((em) => ({
+                        value: em,
+                        label: ICON_NAMES_ZH[em] || em,
+                        icon: em,
+                      }))}
+                      placeholder="圖示"
+                      showLabel={false}
+                    />
+                  </div>
                   <IonInput
                     type="text"
                     placeholder="分類名稱"
@@ -666,6 +804,68 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
         );
       })()}
 
+      {/* Allocation Source Categories Settings Checkbox Card */}
+      <div
+        className="glass-card fade-in"
+        style={{
+          padding: '16px',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+        }}
+      >
+        <h4 style={{ fontSize: '0.95rem', fontWeight: 600, marginBottom: '12px', margin: 0 }}>
+          📊 配比基準分類設定
+        </h4>
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '4px 0 12px 0', lineHeight: 1.4 }}>
+          請勾選要納入首頁大項目標配比分流計算的收入小項。未勾選的收入分類（例如紅包、退款等）將不會計入分流分母。
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+          {editingGroups
+            .flatMap((g) => g.categories)
+            .filter((c) => c.type === 'income')
+            .filter((value, index, self) => self.findIndex((t) => t.name === value.name) === index)
+            .map((cat) => {
+              const isChecked = allocationCategories.includes(cat.name);
+              return (
+                <label
+                  key={cat.name}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    fontSize: '0.9rem',
+                    color: 'var(--text-primary)',
+                    cursor: 'pointer',
+                    padding: '8px 10px',
+                    borderRadius: '6px',
+                    background: 'var(--input-bg)',
+                    border: '1px solid var(--input-border)',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={() => {
+                      if (isChecked) {
+                        onUpdateAllocationCategories(allocationCategories.filter((name) => name !== cat.name));
+                      } else {
+                        onUpdateAllocationCategories([...allocationCategories, cat.name]);
+                      }
+                    }}
+                    style={{
+                      width: '16px',
+                      height: '16px',
+                      accentColor: 'var(--primary-color)',
+                      cursor: 'pointer',
+                    }}
+                  />
+                  <AppIcon name={cat.emoji} size={16} />
+                  <span>{cat.name}</span>
+                </label>
+              );
+            })}
+        </div>
+      </div>
+
       {/* Inline Account group editor panel */}
       <div
         className="glass-card fade-in"
@@ -679,21 +879,19 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
           style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '12px' }}
         >
           <div style={{ display: 'flex', gap: '8px' }}>
-            <IonSelect
-              value={newGroupEmoji}
-              interface="action-sheet"
-              onIonChange={(e) => setNewGroupEmoji(e.detail.value!)}
-              style={{ width: '70px', fontSize: '0.85rem' }}
-            >
-              {ACCOUNT_EMOJIS.map((e) => (
-                <IonSelectOption key={e} value={e}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <AppIcon name={e} size={16} />
-                    {ICON_NAMES_ZH[e] || e}
-                  </div>
-                </IonSelectOption>
-              ))}
-            </IonSelect>
+            <div style={{ width: '60px' }}>
+              <CustomSelect
+                value={newGroupEmoji}
+                onChange={(val) => setNewGroupEmoji(val)}
+                options={ACCOUNT_EMOJIS.map((e) => ({
+                  value: e,
+                  label: ICON_NAMES_ZH[e] || e,
+                  icon: e,
+                }))}
+                placeholder="圖示"
+                showLabel={false}
+              />
+            </div>
             <IonInput
               type="text"
               placeholder="帳戶大項名稱"

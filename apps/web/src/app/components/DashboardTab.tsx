@@ -20,6 +20,7 @@ interface DashboardTabProps {
   formatGroupHeader: (key: string, mode: 'day' | 'month' | 'year') => string;
   getGroupTotals: (groupTxs: Transaction[]) => { income: number; expense: number };
   groupSettingsPanel: React.ReactNode;
+  allocationCategories: string[];
 }
 
 export const DashboardTab: React.FC<DashboardTabProps> = ({
@@ -36,6 +37,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   formatGroupHeader,
   getGroupTotals,
   groupSettingsPanel,
+  allocationCategories,
 }) => {
   const [period, setPeriod] = useState<'today' | 'month'>('month');
 
@@ -110,10 +112,20 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     return income - expense;
   };
 
-  const totalPositive = accountGroups
-    .map((g) => getGroupBalance(g.id))
-    .filter((b) => b > 0)
-    .reduce((sum, b) => sum + b, 0);
+  const getGroupMonthlyBoundIncome = (groupId: string) => {
+    return transactions
+      .filter((tx) => tx.accountGroupId === groupId && tx.type === 'income' && allocationCategories.includes(tx.category) && tx.date.startsWith(currentMonthStr))
+      .reduce((sum, tx) => sum + tx.amount, 0);
+  };
+
+  const totalMonthlyBoundIncome = accountGroups
+    .map((g) => getGroupMonthlyBoundIncome(g.id))
+    .reduce((sum, amt) => sum + amt, 0);
+
+  const getGroupDisplayPct = (groupId: string) => {
+    const val = getGroupMonthlyBoundIncome(groupId);
+    return totalMonthlyBoundIncome > 0 ? Math.round((val / totalMonthlyBoundIncome) * 100) : 0;
+  };
 
   const dashboardTxs = transactions
     .filter((tx) => tx.date.substring(0, 10) === todayStr)
@@ -318,8 +330,59 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           </button>
         </div>
 
+        {/* Total Bound Income to Allocate Block */}
+        {!isEditingGroups && totalMonthlyBoundIncome > 0 && (
+          <div
+            className="glass-card"
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '12px 16px',
+              borderRadius: 'var(--border-radius-md)',
+              background: 'rgba(34, 197, 94, 0.08)',
+              border: '1px solid rgba(34, 197, 94, 0.15)',
+              marginBottom: '16px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div
+                style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '50%',
+                  background: 'rgba(34, 197, 94, 0.15)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--income-color)',
+                }}
+              >
+                <AppIcon name="briefcase" size={18} />
+              </div>
+              <div>
+                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                  本月待分配總額
+                </div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                  已勾選之基準分類（如薪資）收入加總
+                </div>
+              </div>
+            </div>
+            <div
+              style={{
+                fontSize: '1.25rem',
+                fontWeight: 700,
+                color: 'var(--income-color)',
+              }}
+            >
+              +${totalMonthlyBoundIncome.toLocaleString('zh-TW')}
+            </div>
+          </div>
+        )}
+
         {/* Stacked Progress Bar for Asset Allocation at the top */}
-        {!isEditingGroups && totalPositive > 0 && (
+        {!isEditingGroups && totalMonthlyBoundIncome > 0 && (
           <div
             style={{
               width: '100%',
@@ -332,9 +395,9 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             }}
           >
             {accountGroups.map((group) => {
-              const bal = getGroupBalance(group.id);
-              if (bal <= 0) return null;
-              const pct = (bal / totalPositive) * 100;
+              const displayVal = getGroupMonthlyBoundIncome(group.id);
+              if (displayVal <= 0) return null;
+              const pct = (displayVal / totalMonthlyBoundIncome) * 100;
               return (
                 <div
                   key={group.id}
@@ -364,10 +427,11 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           >
             {accountGroups.map((group) => {
               const bal = getGroupBalance(group.id);
-              const actualPct =
-                totalPositive > 0 ? Math.round((Math.max(0, bal) / totalPositive) * 100) : 0;
+              const actualPct = getGroupDisplayPct(group.id);
               const targetRatio = group.targetRatio || 0;
               const comparisonRatio = targetRatio > 0 ? Math.round((actualPct / targetRatio) * 100) : 0;
+              const targetAmt = Math.round(totalMonthlyBoundIncome * (targetRatio / 100));
+              const actualAmt = getGroupMonthlyBoundIncome(group.id);
 
               return (
                 <div
@@ -449,8 +513,8 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                         marginBottom: '4px',
                       }}
                     >
-                      <span>目標 {targetRatio}%</span>
-                      <span>達標 {comparisonRatio}%</span>
+                      <span>目標 {targetRatio}% (${targetAmt.toLocaleString('zh-TW')})</span>
+                      <span>已分 {actualPct}% (${actualAmt.toLocaleString('zh-TW')})</span>
                     </div>
                     <div
                       style={{
