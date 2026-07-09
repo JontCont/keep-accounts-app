@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { IonApp, IonContent, IonPage } from '@ionic/react';
-import { Transaction, AccountGroup } from '@keep-accounts-app/domain';
+import {
+  Transaction,
+  DEFAULT_ACCOUNT_GROUPS,
+  INITIAL_TRANSACTIONS,
+} from '@keep-accounts-app/domain';
 import { useKeepAccounts } from '@keep-accounts-app/state';
 import { DashboardTab } from './components/DashboardTab';
 import { HistoryTab } from './components/HistoryTab';
@@ -222,6 +226,32 @@ export function App() {
       logImport('keep_accounts_backup.zip', 0, 0, 0, 'failed', errorMsg);
       setImportHistory(getImportHistory());
     }
+  };
+
+  const handleImportTemplate = () => {
+    if (!window.confirm('確定要導入範例模板資料嗎？這將覆蓋您目前的所有帳戶與明細資料！')) {
+      return;
+    }
+    setAccountGroups(DEFAULT_ACCOUNT_GROUPS);
+    setTransactions(INITIAL_TRANSACTIONS);
+    alert('已導入範例模板資料！頁面即將重新整理。');
+    setTimeout(() => {
+      window.location.reload();
+    }, 500);
+  };
+
+  const handleClearData = () => {
+    if (!window.confirm('確定要清除當前所有資料嗎？此操作將刪除所有帳戶群組與交易明細，且無法撤銷！')) {
+      return;
+    }
+    localStorage.removeItem('keep_accounts_groups');
+    localStorage.removeItem('keep_accounts_transactions');
+    setAccountGroups([]);
+    setTransactions([]);
+    alert('已清除所有資料！頁面即將重新整理。');
+    setTimeout(() => {
+      window.location.reload();
+    }, 500);
   };
 
   // Automatic backup trigger on change
@@ -489,7 +519,89 @@ export function App() {
                     </div>
                   </div>
 
-                  {/* Card 2: Data Backup & Management */}
+                  {/* Card 2: Data Template & Reset */}
+                  <div className="glass-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid var(--card-border)', paddingBottom: '12px' }}>
+                      <AppIcon name="layout-template" size={18} style={{ color: 'var(--primary-color)' }} />
+                      <span style={{ fontSize: '1rem', fontWeight: 600 }}>範例資料與重置</span>
+                    </div>
+
+                    {/* Import template data */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <AppIcon name="layout-template" size={16} style={{ color: 'var(--primary-color)' }} />
+                        <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>導入範例模板資料</span>
+                      </div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)', marginBottom: '4px' }}>
+                        載入預設的資金大項帳戶與範例交易明細，方便快速體驗。將會覆蓋目前資料。
+                      </div>
+                      <button
+                        onClick={handleImportTemplate}
+                        style={{
+                          width: '100%',
+                          padding: '12px',
+                          borderRadius: '8px',
+                          backgroundColor: 'transparent',
+                          color: 'var(--primary-color)',
+                          fontWeight: 600,
+                          fontSize: '0.9rem',
+                          border: '1px solid var(--primary-color)',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          gap: '8px',
+                        }}
+                      >
+                        <AppIcon name="layout-template" size={18} /> 導入範例模板資料
+                      </button>
+                    </div>
+
+                    {/* Clear current data (Danger Zone) */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '12px',
+                        padding: '16px',
+                        borderRadius: '12px',
+                        background: 'rgba(244, 63, 94, 0.04)',
+                        border: '1px dashed rgba(244, 63, 94, 0.25)',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <AppIcon name="alert-triangle" size={16} style={{ color: 'var(--expense-color)' }} />
+                        <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--expense-color)' }}>
+                          清除當前資料 (危險操作)
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+                        ⚠️ 此操作將<strong>刪除所有帳戶群組與交易明細</strong>，且完成後無法撤銷。建議清除前先執行「安全資料備份」。
+                      </div>
+                      <button
+                        onClick={handleClearData}
+                        style={{
+                          width: '100%',
+                          padding: '12px',
+                          borderRadius: '8px',
+                          backgroundColor: 'transparent',
+                          color: 'var(--expense-color)',
+                          fontWeight: 600,
+                          fontSize: '0.9rem',
+                          border: '1px solid rgba(244, 63, 94, 0.4)',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          gap: '8px',
+                        }}
+                      >
+                        <AppIcon name="trash-2" size={18} /> 清除當前所有資料
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Card 3: Data Backup & Management */}
                   <div className="glass-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid var(--card-border)', paddingBottom: '12px' }}>
                       <AppIcon name="database" size={18} style={{ color: 'var(--primary-color)' }} />

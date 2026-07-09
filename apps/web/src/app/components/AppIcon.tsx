@@ -32,6 +32,8 @@ const iconMap: Record<string, React.ComponentType<any>> = {
   'refresh': Lucide.RefreshCw,
   'check-circle': Lucide.CheckCircle2,
   'alert-triangle': Lucide.AlertTriangle,
+  'layout-template': Lucide.LayoutTemplate,
+  'trash-2': Lucide.Trash2,
 
   // Default Categories
   'shopping-cart': Lucide.ShoppingCart,
