@@ -456,40 +456,52 @@ export function App() {
               {/* TAB 4: SETTINGS (BACKUP & RESTORE) */}
               {activeTab === 'settings' && (
                 <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                  <div className="glass-card" style={{ padding: '20px' }}>
-                    
-                    {/* Theme selector option */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '16px', borderBottom: '1px solid var(--card-border)', marginBottom: '16px' }}>
+                  
+                  {/* Card 1: Theme Settings */}
+                  <div className="glass-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <AppIcon name="palette" size={18} style={{ color: 'var(--primary-color)' }} />
+                      <span style={{ fontSize: '1rem', fontWeight: 600 }}>個性化外觀設定</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
                       <div>
-                        <div style={{ fontSize: '0.95rem', fontWeight: 500 }}>介面主題設定</div>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>設定應用程式主題顏色</div>
+                        <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>介面主題</div>
+                        <div style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)' }}>選擇系統的深淺色色彩主題</div>
                       </div>
-                      <select
-                        value={theme}
-                        onChange={(e) => setTheme(e.target.value as any)}
-                        style={{
-                          width: 'auto',
-                          minWidth: '120px',
-                          padding: '6px 12px',
-                          borderRadius: '8px',
-                          backgroundColor: 'var(--input-bg)',
-                          border: '1px solid var(--input-border)',
-                          color: 'var(--text-primary)',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <option value="system" style={{ background: 'var(--bg-color)', color: 'var(--text-primary)' }}>跟隨系統</option>
-                        <option value="light" style={{ background: 'var(--bg-color)', color: 'var(--text-primary)' }}>淺色模式</option>
-                        <option value="dark" style={{ background: 'var(--bg-color)', color: 'var(--text-primary)' }}>深色模式</option>
-                      </select>
+                      <div className="segment-btn-group" style={{ padding: '4px', width: 'auto', minWidth: '240px' }}>
+                        {(['system', 'light', 'dark'] as const).map((t) => (
+                          <button
+                            key={t}
+                            onClick={() => setTheme(t)}
+                            className={`segment-btn ${theme === t ? 'active' : ''}`}
+                            style={{
+                              flex: 1,
+                              padding: '6px 12px',
+                              borderRadius: '6px',
+                              fontSize: '0.8rem',
+                              fontWeight: 500,
+                            }}
+                          >
+                            {t === 'system' ? '跟隨系統' : t === 'light' ? '淺色模式' : '深色模式'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card 2: Data Backup & Management */}
+                  <div className="glass-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid var(--card-border)', paddingBottom: '12px' }}>
+                      <AppIcon name="database" size={18} style={{ color: 'var(--primary-color)' }} />
+                      <span style={{ fontSize: '1rem', fontWeight: 600 }}>資料備份與安全</span>
                     </div>
 
                     {/* Native automatic backup toggle */}
                     {isNative && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '16px', borderBottom: '1px solid var(--card-border)', marginBottom: '16px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '16px', borderBottom: '1px solid var(--card-border)' }}>
                         <div>
-                          <div style={{ fontSize: '0.95rem', fontWeight: 500 }}>自動背景備份</div>
-                          <div style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>每次記帳時自動備份至系統 Documents 目錄</div>
+                          <div style={{ fontSize: '0.9rem', fontWeight: 500 }}>自動背景備份</div>
+                          <div style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)' }}>每次變更記帳資料時，自動備份至系統 Documents 目錄</div>
                         </div>
                         <input
                           type="checkbox"
@@ -499,9 +511,16 @@ export function App() {
                         />
                       </div>
                     )}
-                    
-                    {/* Manual Backup and Restore buttons */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+
+                    {/* Safe Action Area: Backup Export */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <AppIcon name="check-circle" size={16} style={{ color: 'var(--income-color)' }} />
+                        <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>安全資料備份 (匯出)</span>
+                      </div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)', marginBottom: '4px' }}>
+                        將您所有的帳戶群組、預算設定及交易明細打包下載為一個加密的 `.zip` 壓縮檔保存。
+                      </div>
                       <button
                         onClick={handleExportBackup}
                         style={{
@@ -517,64 +536,91 @@ export function App() {
                           display: 'flex',
                           justifyContent: 'center',
                           alignItems: 'center',
-                          gap: '8px'
+                          gap: '8px',
+                          boxShadow: '0 4px 12px var(--primary-glow)',
                         }}
                       >
                         <AppIcon name="upload" size={18} /> 匯出資料備份 (.zip)
                       </button>
-                      
-                      <div style={{ position: 'relative' }}>
-                        <button
-                          onClick={() => fileInputRef.current?.click()}
-                          style={{
-                            width: '100%',
-                            padding: '12px',
-                            borderRadius: '8px',
-                            backgroundColor: 'var(--input-bg)',
-                            color: 'var(--text-primary)',
-                            fontWeight: 600,
-                            fontSize: '0.9rem',
-                            border: '1px solid var(--input-border)',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                            gap: '8px'
-                          }}
-                        >
-                          <AppIcon name="download" size={18} /> 匯入資料還原 (.zip)
-                        </button>
-                        <input
-                          type="file"
-                          ref={fileInputRef}
-                          onChange={handleImportBackup}
-                          accept=".zip"
-                          style={{ display: 'none' }}
-                        />
-                      </div>
+                    </div>
 
-                      {isNative && hasNativeAutoBackup && (
-                        <button
-                          onClick={handleRestoreFromAutoBackup}
-                          style={{
-                            width: '100%',
-                            padding: '12px',
-                            borderRadius: '8px',
-                            backgroundColor: 'var(--income-bg)',
-                            color: 'var(--income-color)',
-                            fontWeight: 600,
-                            fontSize: '0.9rem',
-                            border: '1px solid rgba(16, 185, 129, 0.2)',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                            gap: '8px'
-                          }}
-                        >
-                          <AppIcon name="refresh" size={18} /> 從本機自動備份檔還原
-                        </button>
-                      )}
+                    {/* Warning Action Area: Restore Import (Danger Zone) */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '12px',
+                        padding: '16px',
+                        borderRadius: '12px',
+                        background: 'rgba(244, 63, 94, 0.04)',
+                        border: '1px dashed rgba(244, 63, 94, 0.25)',
+                        marginTop: '4px',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <AppIcon name="alert-triangle" size={16} style={{ color: 'var(--expense-color)' }} />
+                        <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--expense-color)' }}>
+                          資料還原與覆蓋 (危險操作)
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+                        ⚠️ 匯入還原操作將會<strong>覆蓋您目前的帳戶與明細資料</strong>，且完成後無法撤銷。建議在還原前先執行「安全資料備份」以防萬一。
+                      </div>
+                      
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <div style={{ position: 'relative' }}>
+                          <button
+                            onClick={() => fileInputRef.current?.click()}
+                            style={{
+                              width: '100%',
+                              padding: '12px',
+                              borderRadius: '8px',
+                              backgroundColor: 'transparent',
+                              color: 'var(--expense-color)',
+                              fontWeight: 600,
+                              fontSize: '0.9rem',
+                              border: '1px solid rgba(244, 63, 94, 0.4)',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                              gap: '8px',
+                            }}
+                          >
+                            <AppIcon name="download" size={18} /> 匯入資料還原 (.zip)
+                          </button>
+                          <input
+                            type="file"
+                            ref={fileInputRef}
+                            onChange={handleImportBackup}
+                            accept=".zip"
+                            style={{ display: 'none' }}
+                          />
+                        </div>
+
+                        {isNative && hasNativeAutoBackup && (
+                          <button
+                            onClick={handleRestoreFromAutoBackup}
+                            style={{
+                              width: '100%',
+                              padding: '12px',
+                              borderRadius: '8px',
+                              backgroundColor: 'transparent',
+                              color: 'var(--income-color)',
+                              fontWeight: 600,
+                              fontSize: '0.9rem',
+                              border: '1px solid rgba(16, 185, 129, 0.4)',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                              gap: '8px',
+                            }}
+                          >
+                            <AppIcon name="refresh" size={18} /> 從本機自動備份檔還原
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
 
