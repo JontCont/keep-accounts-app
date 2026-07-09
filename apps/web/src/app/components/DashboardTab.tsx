@@ -335,11 +335,10 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         {!isEditingGroups && (
           <div
             style={{
-              display: 'flex',
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
               gap: '12px',
-              overflowX: 'auto',
               paddingBottom: '8px',
-              scrollbarWidth: 'none',
             }}
           >
             {accountGroups.map((group) => {
@@ -362,8 +361,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                   key={group.id}
                   className="glass-card"
                   style={{
-                    flexShrink: 0,
-                    width: '164px',
+                    width: '100%',
                     padding: '16px',
                     borderRadius: 'var(--border-radius-md)',
                     background: isSrc
