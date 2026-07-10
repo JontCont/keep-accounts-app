@@ -265,7 +265,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
                         </button>
                         <button
                           onClick={() => {
-                            if (confirm('確定要刪除此筆記帳嗎？')) {
+                            if (window.confirm('確定要刪除此筆記帳嗎？')) {
                               onDeleteTransaction(tx.id);
                             }
                           }}
