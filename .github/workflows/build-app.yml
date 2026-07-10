@@ -5,7 +5,47 @@ on:
     branches: [ master ]
 
 jobs:
-  build-android:
+  # Stage 1: Build & verify once. This job gates all packaging jobs below.
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Compute version
+        id: version
+        run: echo "version=$(date +'%Y%m%d')-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npx nx run @keep-accounts-app/web:lint
+
+      - name: Test
+        run: npx nx run @keep-accounts-app/web:test
+
+      - name: Build Web Application
+        run: npx nx run @keep-accounts-app/web:build
+
+      - name: Upload Web Build
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: apps/web/dist
+          retention-days: 1
+
+  # Stage 2a: Package Android from the shared web build.
+  package-android:
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -26,19 +66,32 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build Web Application
-        run: npx nx run @keep-accounts-app/web:build
+      - name: Download Web Build
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: apps/web/dist
 
-      - name: Build Android App
-        run: npx nx run @keep-accounts-app/web:build-android
+      - name: Sync Capacitor Android
+        run: npx cap sync android
+        working-directory: apps/web
+
+      - name: Assemble Debug APK
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleDebug
+        working-directory: apps/web/android
 
       - name: Upload Android Debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug.apk
+          name: app-${{ needs.build.outputs.version }}.apk
           path: apps/web/android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 10
 
-  build-ios:
+  # Stage 2b: Package iOS from the shared web build.
+  package-ios:
+    needs: build
     runs-on: macos-latest
     steps:
       - name: Checkout Code
@@ -50,22 +103,37 @@ jobs:
           node-version: 20
           cache: 'npm'
 
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download Web Build
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: apps/web/dist
+
       - name: Cache CocoaPods
         uses: actions/cache@v4
         with:
           path: apps/web/ios/App/Pods
-          key: ${{ runner.os }}-pods-${{ hashFiles('apps/web/ios/App/Podfile.lock') }}
+          key: ${{ runner.os }}-pods-${{ hashFiles('apps/web/ios/App/Podfile') }}
           restore-keys: |
             ${{ runner.os }}-pods-
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Sync Capacitor iOS
+        run: npx cap sync ios
+        working-directory: apps/web
 
-      - name: Build Web Application
-        run: npx nx run @keep-accounts-app/web:build
+      - name: Install CocoaPods dependencies
+        run: pod install --repo-update
+        working-directory: apps/web/ios/App
 
       - name: Build iOS App
-        run: npx nx run @keep-accounts-app/web:build-ios
+        run: |
+          xcodebuild -workspace App.xcworkspace -scheme App \
+            -configuration Debug -destination generic/platform=iOS \
+            CODE_SIGNING_ALLOWED=NO -derivedDataPath build
+        working-directory: apps/web/ios/App
 
       - name: Package iOS IPA
         run: |
@@ -76,5 +144,6 @@ jobs:
       - name: Upload iOS IPA Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: App.ipa
+          name: App-${{ needs.build.outputs.version }}.ipa
           path: App.ipa
+          retention-days: 10
