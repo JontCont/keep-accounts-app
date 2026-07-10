@@ -442,7 +442,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               {editingTx?.installmentPeriod && editingTx?.installmentCount
                 ? `· 第 ${editingTx.installmentPeriod} / ${editingTx.installmentCount} 期`
                 : ''}
-              ·分期金額不可修改
+              ·可修改金額與日期
             </span>
           </div>
         )}
@@ -479,7 +479,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             >
               <button
                 type="button"
-                onClick={() => setType('expense')}
+                onClick={() => {
+                  if (!isEditingInstallment) {
+                    setType('expense');
+                  }
+                }}
                 style={{
                   flex: 1,
                   padding: '10px',
@@ -494,7 +498,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => setType('income')}
+                onClick={() => {
+                  if (!isEditingInstallment) {
+                    setType('income');
+                  }
+                }}
                 style={{
                   flex: 1,
                   padding: '10px',
@@ -573,16 +581,30 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             >
               選擇資金帳戶大項
             </label>
-            <CustomSelect
-              value={accountGroupId}
-              onChange={(val) => setAccountGroupId(val)}
-              options={accountGroups.map((group) => ({
-                value: group.id,
-                label: group.name,
-                icon: group.emoji,
-              }))}
-              placeholder="選擇資金帳戶"
-            />
+            {isEditingInstallment ? (
+              <div
+                style={{
+                  padding: '10px 0',
+                  borderBottom: '1px solid var(--input-border)',
+                  color: 'var(--text-primary)',
+                  minHeight: '40px',
+                  fontSize: '1rem',
+                }}
+              >
+                {accountGroups.find((group) => group.id === accountGroupId)?.name || '未指定帳戶'}
+              </div>
+            ) : (
+              <CustomSelect
+                value={accountGroupId}
+                onChange={(val) => setAccountGroupId(val)}
+                options={accountGroups.map((group) => ({
+                  value: group.id,
+                  label: group.name,
+                  icon: group.emoji,
+                }))}
+                placeholder="選擇資金帳戶"
+              />
+            )}
           </div>
 
           {/* Category */}
@@ -597,20 +619,34 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             >
               選擇分類
             </label>
-            <CustomSelect
-              value={category}
-              onChange={(val) => setCategory(val)}
-              options={(
-                accountGroups.find((g) => g.id === accountGroupId)?.categories.filter(
-                  (c) => c.type === type
-                ) || []
-              ).map((cat) => ({
-                value: cat.name,
-                label: cat.name,
-                icon: cat.emoji,
-              }))}
-              placeholder="選擇分類"
-            />
+            {isEditingInstallment ? (
+              <div
+                style={{
+                  padding: '10px 0',
+                  borderBottom: '1px solid var(--input-border)',
+                  color: 'var(--text-primary)',
+                  minHeight: '40px',
+                  fontSize: '1rem',
+                }}
+              >
+                {category || '未指定分類'}
+              </div>
+            ) : (
+              <CustomSelect
+                value={category}
+                onChange={(val) => setCategory(val)}
+                options={(
+                  accountGroups.find((g) => g.id === accountGroupId)?.categories.filter(
+                    (c) => c.type === type
+                  ) || []
+                ).map((cat) => ({
+                  value: cat.name,
+                  label: cat.name,
+                  icon: cat.emoji,
+                }))}
+                placeholder="選擇分類"
+              />
+            )}
           </div>
 
           {/* Description */}
@@ -631,6 +667,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               type="text"
               placeholder="例如: 買咖啡、午餐、薪水"
               value={description}
+              readonly={isEditingInstallment}
+              disabled={isEditingInstallment}
               onIonInput={(e) => setDescription(e.detail.value ?? '')}
               required
             />
@@ -653,8 +691,6 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               inputmode="decimal"
               placeholder="輸入金額"
               value={amount}
-              readonly={isEditingInstallment}
-              disabled={isEditingInstallment}
               onIonInput={(e) => setAmount(e.detail.value ?? '')}
               required
             />

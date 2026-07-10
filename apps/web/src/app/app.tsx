@@ -378,7 +378,6 @@ export function App() {
       }
       setShowTxModal(false);
       setEditingTx(null);
-      setActiveTab('dashboard');
     }
   };
 

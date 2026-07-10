@@ -491,6 +491,23 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
                           </span>
                           <button
                             type="button"
+                            onClick={() => onEditTransaction(tx)}
+                            style={{
+                              border: 'none',
+                              background: 'transparent',
+                              color: 'var(--text-tertiary)',
+                              cursor: 'pointer',
+                              padding: '4px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                            title="編輯單期"
+                          >
+                            <AppIcon name="edit" size={16} />
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => {
                               if (window.confirm('確定要刪除此期分期嗎？')) {
                                 onDeleteTransaction(tx.id);

@@ -76,4 +76,54 @@ describe('TransactionModal', () => {
     expect(getByText('前一個月')).toBeTruthy();
     expect(getByText('前三個月')).toBeTruthy();
   });
+
+  it('constrains installment period edit mode to amount and date updates', () => {
+    const accountGroups = [
+      {
+        id: '1',
+        name: '日常開銷',
+        emoji: 'credit-card',
+        color: '#6366f1',
+        targetRatio: 100,
+        categories: [
+          { name: '分期', emoji: 'credit-card', color: '#6366f1', type: 'expense' },
+        ],
+      },
+    ];
+
+    const editingTx = {
+      id: 'inst-2',
+      description: '家電分期',
+      amount: 2003,
+      type: 'expense',
+      category: '分期',
+      date: '2026-09-10T12:47:00+08:00',
+      accountGroupId: '1',
+      installmentId: 'inst',
+      installmentPeriod: 2,
+      installmentCount: 5,
+    } as any;
+
+    const { getByText, container } = render(
+      <BrowserRouter>
+        <TransactionModal
+          isOpen={true}
+          onClose={vi.fn()}
+          editingTx={editingTx}
+          accountGroups={accountGroups as any}
+          onSave={vi.fn()}
+        />
+      </BrowserRouter>
+    );
+
+    expect(getByText(/可修改金額與日期/)).toBeTruthy();
+
+    const descInput = container.querySelector('ion-input[placeholder*="例如"]') as any;
+    expect(descInput).toBeTruthy();
+    expect(descInput.readonly).toBe(true);
+
+    const amountInput = container.querySelector('ion-input[placeholder*="輸入金額"]') as any;
+    expect(amountInput).toBeTruthy();
+    expect(amountInput.readonly).toBe(false);
+  });
 });
