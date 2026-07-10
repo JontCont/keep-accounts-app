@@ -34,6 +34,14 @@ describe('App', () => {
   });
 
   it('should block saving and show validation message when target ratios sum is not 100%', () => {
+    const groups = [
+      { id: '0', name: '當月薪資', emoji: 'briefcase', color: '#22c55e', isSource: true, categories: [] },
+      { id: '3', name: '儲蓄資金', emoji: 'piggy-bank', color: '#10b981', targetRatio: 40, categories: [] },
+      { id: '1', name: '日常開銷', emoji: 'credit-card', color: '#6366f1', targetRatio: 30, categories: [] },
+      { id: '2', name: '投資理財', emoji: 'trending-up', color: '#3b82f6', targetRatio: 30, categories: [] }
+    ];
+    localStorage.setItem('keep_accounts_groups', JSON.stringify(groups));
+
     const { getByText, getAllByPlaceholderText, queryByText } = render(<BrowserRouter><App /></BrowserRouter>);
     
     // Enter edit mode
@@ -148,7 +156,7 @@ describe('App', () => {
     
     localStorage.setItem('keep_accounts_transactions', JSON.stringify(mockTxs));
     
-    const { getByText, queryByText, getAllByText } = render(<BrowserRouter><App /></BrowserRouter>);
+    const { getByText, queryByText } = render(<BrowserRouter><App /></BrowserRouter>);
     
     expect(queryByText(/當日可消費/)).toBeNull();
     
@@ -174,7 +182,6 @@ describe('App', () => {
     localStorage.setItem('keep_accounts_groups', JSON.stringify(groups));
 
     const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
     const todayDay = now.getDate();
     
     localStorage.setItem('keep_accounts_transactions', JSON.stringify([]));
@@ -191,6 +198,14 @@ describe('App', () => {
   });
 
   it('should not render delete button for core Daily Expense account in edit mode', () => {
+    const groups = [
+      { id: '0', name: '當月薪資', emoji: 'briefcase', color: '#22c55e', isSource: true, categories: [] },
+      { id: '3', name: '儲蓄資金', emoji: 'piggy-bank', color: '#10b981', targetRatio: 40, categories: [] },
+      { id: '1', name: '日常開銷', emoji: 'credit-card', color: '#6366f1', targetRatio: 30, categories: [] },
+      { id: '2', name: '投資理財', emoji: 'trending-up', color: '#3b82f6', targetRatio: 30, categories: [] }
+    ];
+    localStorage.setItem('keep_accounts_groups', JSON.stringify(groups));
+
     const { getByText, queryAllByTitle } = render(<BrowserRouter><App /></BrowserRouter>);
     
     const editBtn = getByText(/編輯帳戶/);
@@ -399,11 +414,11 @@ describe('useKeepAccounts defensive checks', () => {
     }).toThrow('Allocation target ratios must sum to exactly 100%');
   });
 
-  it('should fall back to defaults silently when localStorage has corrupted JSON', () => {
+  it('should fall back to empty state silently when localStorage has corrupted JSON', () => {
     localStorage.setItem('keep_accounts_groups', '{invalid json');
     localStorage.setItem('keep_accounts_transactions', '{invalid json');
     const { result } = renderHook(() => useKeepAccounts());
-    expect(result.current.accountGroups.length).toBeGreaterThan(0);
-    expect(result.current.transactions.length).toBeGreaterThan(0);
+    expect(result.current.accountGroups).toEqual([]);
+    expect(result.current.transactions).toEqual([]);
   });
 });
