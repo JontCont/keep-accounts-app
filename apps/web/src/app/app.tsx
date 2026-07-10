@@ -396,22 +396,36 @@ export function App() {
               }}
             >
               <div>
-                <h1
-                  style={{
-                    fontSize: activeTab === 'dashboard' ? '1.6rem' : '1.3rem',
-                    fontWeight: 700,
-                    background: 'linear-gradient(90deg, #6366f1, #a855f7)',
-                    WebkitBackgroundClip: 'text',
-                    WebkitTextFillColor: 'transparent',
-                    margin: 0,
-                    transition: 'font-size 0.2s ease',
-                  }}
-                >
-                  {activeTab === 'dashboard' && 'Keep Accounts'}
-                  {activeTab === 'history' && '歷史交易明細'}
-                  {activeTab === 'stats' && '支出統計分析'}
-                  {activeTab === 'settings' && '系統設定'}
-                </h1>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  {activeTab === 'dashboard' && (
+                    <img
+                      src="/keep-accounts-logo.svg"
+                      alt="Keep Accounts logo"
+                      style={{
+                        width: '34px',
+                        height: '34px',
+                        borderRadius: '9px',
+                        boxShadow: '0 8px 20px rgba(99, 102, 241, 0.25)',
+                      }}
+                    />
+                  )}
+                  <h1
+                    style={{
+                      fontSize: activeTab === 'dashboard' ? '1.6rem' : '1.3rem',
+                      fontWeight: 700,
+                      background: 'linear-gradient(90deg, #6366f1, #a855f7)',
+                      WebkitBackgroundClip: 'text',
+                      WebkitTextFillColor: 'transparent',
+                      margin: 0,
+                      transition: 'font-size 0.2s ease',
+                    }}
+                  >
+                    {activeTab === 'dashboard' && 'Keep Accounts'}
+                    {activeTab === 'history' && '歷史交易明細'}
+                    {activeTab === 'stats' && '支出統計分析'}
+                    {activeTab === 'settings' && '系統設定'}
+                  </h1>
+                </div>
                 {activeTab === 'dashboard' && (
                   <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0 }}>
                     精緻微型記帳系統
