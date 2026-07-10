@@ -8,6 +8,7 @@ import {
   AccountGroup,
   ACCOUNT_EMOJIS,
   ACCOUNT_COLORS,
+  DEFAULT_ACCOUNT_GROUPS,
 } from '@keep-accounts-app/domain';
 import { AppIcon } from './AppIcon';
 
@@ -244,6 +245,13 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
     0
   );
   const isInvalidRatio = targetSum !== 100;
+  const defaultCategoryItems = Array.from(
+    new Map(
+      DEFAULT_ACCOUNT_GROUPS.flatMap((group) => group.categories)
+        .filter((item) => item.type === catEditType)
+        .map((item) => [item.name, item] as const)
+    ).values()
+  );
 
   return (
     <div
@@ -677,6 +685,69 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
 
             {/* Add Category Form */}
             <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '16px' }}>
+              <div style={{ marginBottom: '12px' }}>
+                <h5
+                  style={{
+                    fontSize: '0.85rem',
+                    fontWeight: 600,
+                    marginBottom: '10px',
+                    color: 'var(--text-secondary)',
+                    margin: 0,
+                  }}
+                >
+                  系統預設分類
+                </h5>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '10px' }}>
+                  {defaultCategoryItems.map((preset) => {
+                    const alreadyExists = group.categories.some(
+                      (category) => category.type === catEditType && category.name === preset.name
+                    );
+
+                    return (
+                      <button
+                        key={preset.name}
+                        type="button"
+                        disabled={alreadyExists}
+                        onClick={() => {
+                          if (alreadyExists) return;
+                          onAddCategory(group.id, preset.name, preset.emoji, preset.color, catEditType);
+                          const updated = editingGroups.map((eg) => {
+                            if (eg.id === group.id) {
+                              return {
+                                ...eg,
+                                categories: [
+                                  ...eg.categories,
+                                  { name: preset.name, emoji: preset.emoji, color: preset.color, type: catEditType },
+                                ],
+                              };
+                            }
+                            return eg;
+                          });
+                          setEditingGroups(updated);
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '6px 10px',
+                          borderRadius: '16px',
+                          background: alreadyExists ? 'rgba(255,255,255,0.02)' : 'rgba(99, 102, 241, 0.08)',
+                          border: `1px solid ${preset.color}33`,
+                          fontSize: '0.8rem',
+                          color: alreadyExists ? 'var(--text-tertiary)' : 'var(--text-primary)',
+                          cursor: alreadyExists ? 'not-allowed' : 'pointer',
+                          opacity: alreadyExists ? 0.55 : 1,
+                        }}
+                        title={alreadyExists ? '已存在' : '點擊加入預設分類'}
+                      >
+                        <AppIcon name={preset.emoji} size={16} />
+                        <span>{preset.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <h5
                 style={{
                   fontSize: '0.85rem',

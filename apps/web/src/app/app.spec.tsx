@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, fireEvent, renderHook, act, within } from '@testing-library/react';
+import { render, fireEvent, renderHook, act, within, waitFor } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { useKeepAccounts } from '@keep-accounts-app/state';
 
@@ -242,19 +242,34 @@ describe('App', () => {
     expect(deleteBtns.length).toBe(3);
   });
 
-  it('should open empty TransactionModal in creation mode when clicking FAB in HistoryTab', () => {
-    const { getByText, getByTitle } = render(<BrowserRouter><App /></BrowserRouter>);
-    
-    // Switch to History tab
-    const historyTabBtn = getByText('明細');
-    fireEvent.click(historyTabBtn);
-    
-    // Clicking the FAB (+ button)
-    const fabBtn = getByTitle('新增記帳');
-    fireEvent.click(fabBtn);
-    
-    // Modal header "新增收支記帳" should be visible
+  it('should open TransactionModal in creation mode when clicking the dashboard add button', () => {
+    const { getByText } = render(<BrowserRouter><App /></BrowserRouter>);
+
+    fireEvent.click(getByText('新增記帳明細'));
+
     expect(getByText('新增收支記帳')).toBeTruthy();
+  });
+
+  it('opens the transaction modal when choosing the general option from the history create menu', () => {
+    const { getByText, getByTitle } = render(<BrowserRouter><App /></BrowserRouter>);
+
+    fireEvent.click(getByText('明細'));
+    fireEvent.click(getByTitle('新增記帳'));
+
+    fireEvent.click(getByText('一般記帳'));
+
+    expect(getByText('新增收支記帳')).toBeTruthy();
+  });
+
+  it('opens installment mode when choosing the installment option from the history create menu', () => {
+    const { getByText, getByTitle } = render(<BrowserRouter><App /></BrowserRouter>);
+
+    fireEvent.click(getByText('明細'));
+    fireEvent.click(getByTitle('新增記帳'));
+
+    fireEvent.click(getByText('分期記帳'));
+
+    expect(getByText('分期總額 ($)')).toBeTruthy();
   });
 
   it('should open TransactionModal populated with transaction data when clicking edit on a row in HistoryTab', () => {
@@ -390,6 +405,37 @@ describe('Credit-card installments', () => {
     localStorage.clear();
   });
 
+  it('repairs legacy installment system-category transactions saved under source group', async () => {
+    const groups = [
+      { id: '0', name: '當月薪資', emoji: 'briefcase', color: '#22c55e', isSource: true, categories: [] },
+      { id: '1', name: '日常開銷', emoji: 'credit-card', color: '#6366f1', targetRatio: 100, categories: [] },
+    ];
+    localStorage.setItem('keep_accounts_groups', JSON.stringify(groups));
+
+    const installmentId = 'legacy-inst';
+    const txs: Transaction[] = [
+      {
+        id: `${installmentId}-1`,
+        description: '手機分期',
+        amount: 1300,
+        type: 'expense',
+        category: '分期',
+        date: '2026-07-10T12:36:00+08:00',
+        accountGroupId: '0',
+        installmentId,
+        installmentPeriod: 1,
+        installmentCount: 3,
+      },
+    ];
+    localStorage.setItem('keep_accounts_transactions', JSON.stringify(txs));
+
+    const { result } = renderHook(() => useKeepAccounts());
+
+    await waitFor(() => {
+      expect(result.current.transactions[0].accountGroupId).toBe('1');
+    });
+  });
+
   it('creates N dated transactions sharing one installment id with the last period carrying the remainder', () => {
     const { result } = renderHook(() => useKeepAccounts());
 
@@ -479,13 +525,11 @@ describe('Credit-card installments', () => {
   it('shows the 啟用通知 switch on the 分期 tab with a web-only delivery note', () => {
     const { getByText, getByTitle, getByTestId, queryByText } = render(<BrowserRouter><App /></BrowserRouter>);
 
-    // Open the add-transaction modal
+    // Open the history create menu and enter installment mode directly
     fireEvent.click(getByText('明細'));
     fireEvent.click(getByTitle('新增記帳'));
-    expect(getByText('新增收支記帳')).toBeTruthy();
+    fireEvent.click(getByText('分期記帳'));
 
-    // Go to the 分期 tab
-    fireEvent.click(within(getByTestId('ion-modal') as HTMLElement).getByText('分期'));
     expect(getByText('分期總額 ($)')).toBeTruthy();
 
     // The notification switch is available on all platforms.

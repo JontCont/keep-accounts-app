@@ -143,6 +143,7 @@ interface TransactionModalProps {
   onClose: () => void;
   editingTx: Transaction | null;
   accountGroups: AccountGroup[];
+  initialTab?: 'basic' | 'installment';
   onSave: (
     description: string,
     amount: string,
@@ -159,12 +160,89 @@ interface TransactionModalProps {
 
 const DEFAULT_NOTIFICATION_TITLE = '信用卡分期繳費提醒';
 const DEFAULT_NOTIFICATION_BODY = '今天有一期分期款項需要繳納，別忘了！';
+const SYSTEM_INSTALLMENT_CATEGORY = '分期';
+
+export const resolveTransactionCategory = (category: string, useInstallment: boolean) => {
+  return useInstallment ? SYSTEM_INSTALLMENT_CATEGORY : category;
+};
+
+const shiftDateMonthsWithDayClamp = (base: Date, monthDelta: number) => {
+  const shifted = new Date(base);
+  const originalDay = shifted.getDate();
+  shifted.setDate(1);
+  shifted.setMonth(shifted.getMonth() + monthDelta);
+  const monthLastDay = new Date(
+    shifted.getFullYear(),
+    shifted.getMonth() + 1,
+    0
+  ).getDate();
+  shifted.setDate(Math.min(originalDay, monthLastDay));
+  return shifted;
+};
+
+export const shiftLocalIsoMonth = (isoDate: string, monthDelta: number) => {
+  const base = new Date(isoDate);
+  if (Number.isNaN(base.getTime())) {
+    return isoDate;
+  }
+  return getLocalISOString(shiftDateMonthsWithDayClamp(base, monthDelta));
+};
+
+export const applyYearMonthToLocalIso = (isoDate: string, yearMonth: string) => {
+  const base = new Date(isoDate);
+  if (Number.isNaN(base.getTime())) {
+    return isoDate;
+  }
+
+  const matched = yearMonth.match(/^(\d{4})-(\d{2})$/);
+  if (!matched) {
+    return isoDate;
+  }
+
+  const targetYear = parseInt(matched[1], 10);
+  const targetMonthIndex = parseInt(matched[2], 10) - 1;
+  if (targetMonthIndex < 0 || targetMonthIndex > 11) {
+    return isoDate;
+  }
+
+  const adjusted = new Date(base);
+  const originalDay = adjusted.getDate();
+  adjusted.setDate(1);
+  adjusted.setFullYear(targetYear, targetMonthIndex, 1);
+  const monthLastDay = new Date(targetYear, targetMonthIndex + 1, 0).getDate();
+  adjusted.setDate(Math.min(originalDay, monthLastDay));
+  return getLocalISOString(adjusted);
+};
+
+const formatLocalYearMonth = (isoDate: string) => {
+  const date = new Date(isoDate);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `${date.getFullYear()}-${month}`;
+};
+
+export const resolveDefaultTransactionGroupId = (groups: AccountGroup[]) => {
+  const preferredDailyGroup = groups.find((group) => group.id === '1' && !group.isSource);
+  if (preferredDailyGroup) {
+    return preferredDailyGroup.id;
+  }
+
+  const firstNonSourceGroup = groups.find((group) => !group.isSource);
+  if (firstNonSourceGroup) {
+    return firstNonSourceGroup.id;
+  }
+
+  return groups[0]?.id || '1';
+};
 
 export const TransactionModal: React.FC<TransactionModalProps> = ({
   isOpen,
   onClose,
   editingTx,
   accountGroups,
+  initialTab = 'basic',
   onSave,
 }) => {
   const [description, setDescription] = useState('');
@@ -172,11 +250,12 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const [type, setType] = useState<'income' | 'expense'>('expense');
   const [category, setCategory] = useState('');
   const [date, setDate] = useState(getLocalISOString());
-  const [accountGroupId, setAccountGroupId] = useState('1');
+  const [accountGroupId, setAccountGroupId] = useState(resolveDefaultTransactionGroupId(accountGroups));
 
   // Installment (分期) configuration state
   const [activeTab, setActiveTab] = useState<'basic' | 'installment'>('basic');
   const [installmentPeriods, setInstallmentPeriods] = useState('');
+  const [installmentStartDate, setInstallmentStartDate] = useState(getLocalISOString());
   const [remindOnDueDate, setRemindOnDueDate] = useState(false);
   const [notificationTitle, setNotificationTitle] = useState(DEFAULT_NOTIFICATION_TITLE);
   const [notificationBody, setNotificationBody] = useState(DEFAULT_NOTIFICATION_BODY);
@@ -200,19 +279,24 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       setDate(editingTx.date);
       setCategory(editingTx.category);
     } else {
+      const now = getLocalISOString();
       setDescription('');
       setAmount('');
       setType('expense');
-      setAccountGroupId(accountGroups[0]?.id || '1');
-      setDate(getLocalISOString());
+      setAccountGroupId(resolveDefaultTransactionGroupId(accountGroups));
+      setDate(now);
+      setInstallmentStartDate(now);
     }
-    // Reset installment config each time the modal opens
-    setActiveTab('basic');
+    if (editingTx) {
+      setInstallmentStartDate(editingTx.date);
+    }
+    // Reset installment config each time the modal opens.
+    setActiveTab(editingTx ? 'basic' : initialTab);
     setInstallmentPeriods('');
     setRemindOnDueDate(false);
     setNotificationTitle(DEFAULT_NOTIFICATION_TITLE);
     setNotificationBody(DEFAULT_NOTIFICATION_BODY);
-  }, [editingTx, isOpen, accountGroups]);
+  }, [editingTx, isOpen, accountGroups, initialTab]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -249,13 +333,17 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     const useInstallment =
       canConfigureInstallment && activeTab === 'installment' && hasValidInstallment;
     const periodsNum = parseInt(installmentPeriods, 10);
+    const submitDate = useInstallment ? installmentStartDate : date;
+    const submitAccountGroupId = useInstallment
+      ? resolveDefaultTransactionGroupId(accountGroups)
+      : accountGroupId;
     onSave(
       description,
       amount,
       type,
-      category,
-      date,
-      accountGroupId,
+      resolveTransactionCategory(category, useInstallment),
+      submitDate,
+      submitAccountGroupId,
       useInstallment
         ? {
             periods: periodsNum,
@@ -685,6 +773,111 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                     value={installmentPeriods}
                     onIonInput={(e) => setInstallmentPeriods(e.detail.value ?? '')}
                   />
+                </div>
+
+                {/* Installment start month */}
+                <div style={{ marginBottom: '16px' }}>
+                  <label
+                    style={{
+                      display: 'block',
+                      fontSize: '0.85rem',
+                      color: 'var(--text-secondary)',
+                      marginBottom: '8px',
+                    }}
+                  >
+                    開始扣款月份
+                  </label>
+
+                  <div
+                    style={{
+                      display: 'flex',
+                      gap: '8px',
+                      flexWrap: 'wrap',
+                      marginBottom: '10px',
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setInstallmentStartDate(date)}
+                      style={{
+                        padding: '6px 10px',
+                        borderRadius: '999px',
+                        fontSize: '0.8rem',
+                        border: '1px solid var(--card-border)',
+                        background: 'var(--input-bg)',
+                        color: 'var(--text-secondary)',
+                      }}
+                    >
+                      本期
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setInstallmentStartDate(shiftLocalIsoMonth(date, 1))}
+                      style={{
+                        padding: '6px 10px',
+                        borderRadius: '999px',
+                        fontSize: '0.8rem',
+                        border: '1px solid var(--card-border)',
+                        background: 'var(--input-bg)',
+                        color: 'var(--text-secondary)',
+                      }}
+                    >
+                      下一期
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setInstallmentStartDate(shiftLocalIsoMonth(date, -1))}
+                      style={{
+                        padding: '6px 10px',
+                        borderRadius: '999px',
+                        fontSize: '0.8rem',
+                        border: '1px solid var(--card-border)',
+                        background: 'var(--input-bg)',
+                        color: 'var(--text-secondary)',
+                      }}
+                    >
+                      前一個月
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setInstallmentStartDate(shiftLocalIsoMonth(date, -3))}
+                      style={{
+                        padding: '6px 10px',
+                        borderRadius: '999px',
+                        fontSize: '0.8rem',
+                        border: '1px solid var(--card-border)',
+                        background: 'var(--input-bg)',
+                        color: 'var(--text-secondary)',
+                      }}
+                    >
+                      前三個月
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <input
+                      type="month"
+                      value={formatLocalYearMonth(installmentStartDate)}
+                      onChange={(e) =>
+                        setInstallmentStartDate(
+                          applyYearMonthToLocalIso(installmentStartDate, e.target.value)
+                        )
+                      }
+                      style={{
+                        width: '100%',
+                        padding: '10px 0',
+                        border: 'none',
+                        borderBottom: '1px solid var(--input-border)',
+                        background: 'transparent',
+                        color: 'var(--text-primary)',
+                        fontFamily: 'var(--font-family)',
+                        fontSize: '1rem',
+                      }}
+                    />
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>
+                      首期扣款：{new Date(installmentStartDate).toLocaleDateString('zh-TW')}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Read-only per-period preview */}

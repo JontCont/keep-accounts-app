@@ -50,6 +50,46 @@ export function useKeepAccounts() {
     localStorage.setItem('keep_accounts_transactions', JSON.stringify(transactions));
   }, [transactions]);
 
+  // Legacy repair: before installment account-group selection existed, some
+  // installment transactions with system category "分期" were saved into source
+  // groups (e.g. 當月薪資). Move them to a non-source group so expense stats and
+  // budget cards reflect the user's expected spending bucket.
+  useEffect(() => {
+    if (accountGroups.length === 0 || transactions.length === 0) {
+      return;
+    }
+
+    const preferredDailyGroup = accountGroups.find(
+      (group) => group.id === '1' && !group.isSource
+    );
+    const fallbackExpenseGroup = accountGroups.find((group) => !group.isSource);
+    const targetGroupId = preferredDailyGroup?.id ?? fallbackExpenseGroup?.id;
+    if (!targetGroupId) {
+      return;
+    }
+
+    const sourceGroupIds = new Set(
+      accountGroups.filter((group) => group.isSource).map((group) => group.id)
+    );
+
+    let changed = false;
+    const repaired = transactions.map((tx) => {
+      if (
+        tx.installmentId &&
+        tx.category === '分期' &&
+        sourceGroupIds.has(tx.accountGroupId)
+      ) {
+        changed = true;
+        return { ...tx, accountGroupId: targetGroupId };
+      }
+      return tx;
+    });
+
+    if (changed) {
+      setTransactions(repaired);
+    }
+  }, [accountGroups, transactions]);
+
   const saveTransaction = (
     description: string,
     amountStr: string,

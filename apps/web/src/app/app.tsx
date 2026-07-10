@@ -47,6 +47,8 @@ export function App() {
   const [isEditingGroups, setIsEditingGroups] = useState(false);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
   const [showTxModal, setShowTxModal] = useState(false);
+  const [showHistoryCreateMenu, setShowHistoryCreateMenu] = useState(false);
+  const [txModalInitialTab, setTxModalInitialTab] = useState<'basic' | 'installment'>('basic');
 
   // FAB scroll behavior state
   const [showFab, setShowFab] = useState(true);
@@ -259,6 +261,12 @@ export function App() {
     }, 500);
   };
 
+  const openTransactionModal = (initialTab: 'basic' | 'installment' = 'basic') => {
+    setEditingTx(null);
+    setTxModalInitialTab(initialTab);
+    setShowTxModal(true);
+  };
+
   // Automatic backup trigger on change
   useEffect(() => {
     const isAutoBackupEnabled = localStorage.getItem('keep_accounts_auto_backup') === 'true';
@@ -420,25 +428,103 @@ export function App() {
                 </div>
               )}
               {activeTab === 'history' && (
-                <button
-                  onClick={() => setShowTxModal(true)}
-                  style={{
-                    background: 'var(--input-bg)',
-                    border: '1px solid var(--input-border)',
-                    borderRadius: '50%',
-                    width: '36px',
-                    height: '36px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: 'var(--primary-color)',
-                    cursor: 'pointer',
-                    boxShadow: 'var(--nav-shadow)',
-                  }}
-                  title="新增記帳"
-                >
-                  <AppIcon name="plus" size={18} />
-                </button>
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <button
+                    onClick={() => setShowHistoryCreateMenu((current) => !current)}
+                    style={{
+                      background: 'var(--input-bg)',
+                      border: '1px solid var(--input-border)',
+                      borderRadius: '50%',
+                      width: '36px',
+                      height: '36px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'var(--primary-color)',
+                      cursor: 'pointer',
+                      boxShadow: 'var(--nav-shadow)',
+                    }}
+                    title="新增記帳"
+                  >
+                    <AppIcon name="plus" size={18} />
+                  </button>
+
+                  {showHistoryCreateMenu && (
+                    <>
+                      <button
+                        type="button"
+                        aria-label="關閉新增選單"
+                        onClick={() => setShowHistoryCreateMenu(false)}
+                        style={{
+                          position: 'fixed',
+                          inset: 0,
+                          background: 'transparent',
+                          border: 'none',
+                          padding: 0,
+                          margin: 0,
+                        }}
+                      />
+                      <div
+                        role="menu"
+                        aria-label="新增記帳類型選單"
+                        style={{
+                          position: 'absolute',
+                          top: 'calc(100% + 8px)',
+                          right: 0,
+                          minWidth: '160px',
+                          background: 'var(--modal-card-bg)',
+                          border: '1px solid var(--card-border)',
+                          borderRadius: 'var(--border-radius-md)',
+                          boxShadow: 'var(--card-shadow)',
+                          padding: '6px',
+                          zIndex: 50,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '4px',
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowHistoryCreateMenu(false);
+                            openTransactionModal('basic');
+                          }}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            textAlign: 'left',
+                            padding: '10px 12px',
+                            borderRadius: 'var(--border-radius-sm)',
+                            color: 'var(--text-primary)',
+                            cursor: 'pointer',
+                            fontSize: '0.95rem',
+                          }}
+                        >
+                          一般記帳
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowHistoryCreateMenu(false);
+                            openTransactionModal('installment');
+                          }}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            textAlign: 'left',
+                            padding: '10px 12px',
+                            borderRadius: 'var(--border-radius-sm)',
+                            color: 'var(--text-primary)',
+                            cursor: 'pointer',
+                            fontSize: '0.95rem',
+                          }}
+                        >
+                          分期記帳
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
               )}
             </header>
 
@@ -449,11 +535,11 @@ export function App() {
                   accountGroups={accountGroups}
                   transactions={transactions}
                   onAddTransactionClick={() => {
-                    setEditingTx(null);
-                    setShowTxModal(true);
+                    openTransactionModal('basic');
                   }}
                   onEditTransactionClick={(tx) => {
                     setEditingTx(tx);
+                    setTxModalInitialTab('basic');
                     setShowTxModal(true);
                   }}
                   onDeleteTransaction={deleteTransaction}
@@ -491,11 +577,11 @@ export function App() {
                   getGroupName={getGroupName}
                   onEditTransaction={(tx) => {
                     setEditingTx(tx);
+                    setTxModalInitialTab('basic');
                     setShowTxModal(true);
                   }}
                   onAddTransaction={() => {
-                    setEditingTx(null);
-                    setShowTxModal(true);
+                    openTransactionModal('basic');
                   }}
                   showFab={showFab}
                 />
@@ -934,9 +1020,12 @@ export function App() {
           onClose={() => {
             setShowTxModal(false);
             setEditingTx(null);
+            setTxModalInitialTab('basic');
+            setShowHistoryCreateMenu(false);
           }}
           editingTx={editingTx}
           accountGroups={accountGroups}
+          initialTab={txModalInitialTab}
           onSave={handleSaveTransaction}
         />
       </IonPage>
