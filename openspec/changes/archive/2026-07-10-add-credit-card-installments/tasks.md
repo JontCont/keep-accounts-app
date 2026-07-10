@@ -1,0 +1,21 @@
+## 1. Domain model and installment math
+
+- [x] 1.1 Add optional installment fields (`installmentId`, `installmentPeriod`, `installmentCount`) to the `Transaction` type and a reminder message config shape (`remindOnDueDate`, `notificationTitle`, `notificationBody`) in the domain library, so a period transaction can carry its sequence and reminder settings. Verify: the domain package type-checks and the new fields are consumed by the expansion unit test in task 1.2.
+- [x] 1.2 Implement the `expandInstallment(total, periods, startDate)` domain helper realizing "C1 input with even division and last-period remainder" and satisfying the "Even installment division with last-period remainder" requirement: periods 1..N-1 equal `floor(total / periods)`, period N carries the remainder, dates advance one month per period. Verify: a domain unit test asserts `expandInstallment(10007, 10, startDate)` returns nine 1000 periods and a final 1007 period on month-advancing dates summing to 10007, plus the `10000 / 3 -> 3333,3333,3334` case.
+
+## 2. Transaction save and period expansion
+
+- [x] 2.1 Extend `saveTransaction` to "Expand an installment into N real monthly transactions", satisfying the "Expansion into N dated monthly transactions" requirement: when installment is enabled, create N expense transactions under the selected category and account group sharing one `installmentId`, each stamped with its period number and total count; when disabled, keep the single-transaction path unchanged. Verify: an app test asserts a saved 12-period installment creates 12 transactions under the chosen group/category dated one month apart with the last period carrying the remainder, and a test asserts installment-off save still creates exactly one transaction.
+- [x] 2.2 Implement "Materialize all periods upfront and exclude not-yet-due periods from realized balance", satisfying the "Not-yet-due periods excluded from realized balance" requirement by adding a `date <= today` guard to the lifetime realized balance sum while leaving future periods visible in history. Verify: an app test asserts lifetime realized balance counts only periods dated on or before today and that future-dated periods still appear in the history list.
+
+## 3. Tabbed transaction form
+
+- [x] 3.1 Rebuild the transaction detail form as the "Tabbed TransactionModal (基本 / 分期)", satisfying the "Installment configuration on the transaction form" requirement: 基本 keeps existing fields, 分期 holds the installment on/off control, total, period count, read-only per-period amount, and the payment-reminder switch (reminder message uses a fixed default, no separate notification tab). Verify: manual check that switching tabs preserves entered values and the read-only per-period amount updates from total and period count, plus the installment-off regression test from task 2.1.
+
+## 4. Payment reminders
+
+- [x] 4.1 Add the `@capacitor/local-notifications` dependency and a platform-guarded notification service delivering "Native-only local notifications via a thin notification service": expose schedule/cancel/permission methods that no-op on web and wrap the Capacitor plugin on native. Verify: the web app build and vitest suite pass without native plugin errors, and the service reports web as unsupported.
+- [x] 4.2 Wire the "Per-period payment-date reminder switch": scheduling one reminder per future period on save when the switch is on, and cancelling an installment's reminders when the switch is turned off or the installment is removed. Verify: manual check on a native build that toggling the switch schedules then cancels the expected per-period reminders.
+- [x] 4.3 Enforce "Native-only local notification delivery": hide or disable the reminder switch on web, and ensure a denied native permission still creates all period transactions while skipping scheduling silently. Verify: an app test asserts the reminder switch is absent/disabled on web and that a denied-permission save still creates the period transactions without error.
+- [x] 4.4 Apply the "Default reminder message": use the fixed default title and body as the content of each scheduled per-period reminder. Verify: manual check on a native build that a scheduled reminder shows the default title and body.
+

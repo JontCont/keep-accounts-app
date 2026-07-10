@@ -4,6 +4,7 @@ import {
   Transaction,
   DEFAULT_ACCOUNT_GROUPS,
   INITIAL_TRANSACTIONS,
+  InstallmentReminderConfig,
 } from '@keep-accounts-app/domain';
 import { useKeepAccounts } from '@keep-accounts-app/state';
 import { DashboardTab } from './components/DashboardTab';
@@ -12,6 +13,7 @@ import { StatsTab } from './components/StatsTab';
 import { TransactionModal } from './components/TransactionModal';
 import { GroupSettingsModal } from './components/GroupSettingsModal';
 import { AppIcon } from './components/AppIcon';
+import { scheduleInstallmentReminders } from './services/notifications';
 import {
   isNativePlatform,
   getImportHistory,
@@ -30,6 +32,8 @@ export function App() {
     transactions,
     saveTransaction,
     deleteTransaction,
+    deleteInstallmentGroup,
+    settleInstallmentGroup,
     saveAccountGroups,
     addAccountGroup,
     deleteAccountGroup,
@@ -64,9 +68,8 @@ export function App() {
   }, [activeTab]);
 
   // Theme state and runtime application
-  const [theme, setTheme] = useState<'system' | 'light' | 'dark'>(() => {
-    return (localStorage.getItem('keep_accounts_theme') as any) || 'system';
-  });
+  const storedTheme = localStorage.getItem('keep_accounts_theme') as 'system' | 'light' | 'dark' | null;
+  const [theme, setTheme] = useState<'system' | 'light' | 'dark'>(storedTheme || 'system');
 
   useEffect(() => {
     const root = document.documentElement;
@@ -97,6 +100,7 @@ export function App() {
       mediaQuery.addEventListener('change', listener);
       return () => mediaQuery.removeEventListener('change', listener);
     }
+    return undefined;
   }, [theme]);
 
   // Settings & Backup States
@@ -140,7 +144,8 @@ export function App() {
         await exportBackupNative(data);
       } else {
         const zipped = compressBackup(data);
-        const blob = new Blob([zipped], { type: 'application/zip' });
+        const zippedBuffer = new Uint8Array(zipped).buffer as ArrayBuffer;
+        const blob = new Blob([zippedBuffer], { type: 'application/zip' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -332,7 +337,11 @@ export function App() {
     type: 'income' | 'expense',
     category: string,
     date: string,
-    accountGroupId: string
+    accountGroupId: string,
+    installment?: {
+      periods: number;
+      reminder: InstallmentReminderConfig;
+    } | null
   ) => {
     const success = saveTransaction(
       description,
@@ -341,9 +350,24 @@ export function App() {
       category,
       date,
       accountGroupId,
-      editingTx ? editingTx.id : null
+      editingTx ? editingTx.id : null,
+      installment?.periods
     );
     if (success) {
+      // Schedule native payment reminders (no-op on web, silent if permission
+      // is denied). Transaction creation already succeeded, so scheduling never
+      // blocks or reverts it.
+      if (installment && installment.reminder.remindOnDueDate) {
+        scheduleInstallmentReminders(
+          Date.now().toString(),
+          parseFloat(amount),
+          installment.periods,
+          date,
+          installment.reminder
+        ).catch(() => {
+          /* reminder scheduling failures must never affect saved data */
+        });
+      }
       setShowTxModal(false);
       setEditingTx(null);
       setActiveTab('dashboard');
@@ -461,6 +485,8 @@ export function App() {
                   accountGroups={accountGroups}
                   transactions={transactions}
                   onDeleteTransaction={deleteTransaction}
+                  onDeleteInstallmentGroup={deleteInstallmentGroup}
+                  onSettleInstallmentGroup={settleInstallmentGroup}
                   getCategoryEmoji={getCategoryEmoji}
                   getGroupName={getGroupName}
                   onEditTransaction={(tx) => {

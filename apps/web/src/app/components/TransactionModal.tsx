@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   IonModal,
   IonDatetimeButton,
@@ -10,9 +10,11 @@ import {
 import {
   Transaction,
   AccountGroup,
+  InstallmentReminderConfig,
   getLocalISOString,
 } from '@keep-accounts-app/domain';
 import { AppIcon } from './AppIcon';
+import { isNotificationSupported } from '../services/notifications';
 
 interface CustomSelectProps {
   value: string;
@@ -147,9 +149,16 @@ interface TransactionModalProps {
     type: 'income' | 'expense',
     category: string,
     date: string,
-    accountGroupId: string
+    accountGroupId: string,
+    installment?: {
+      periods: number;
+      reminder: InstallmentReminderConfig;
+    } | null
   ) => void;
 }
+
+const DEFAULT_NOTIFICATION_TITLE = '信用卡分期繳費提醒';
+const DEFAULT_NOTIFICATION_BODY = '今天有一期分期款項需要繳納，別忘了！';
 
 export const TransactionModal: React.FC<TransactionModalProps> = ({
   isOpen,
@@ -164,6 +173,22 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const [category, setCategory] = useState('');
   const [date, setDate] = useState(getLocalISOString());
   const [accountGroupId, setAccountGroupId] = useState('1');
+
+  // Installment (分期) configuration state
+  const [activeTab, setActiveTab] = useState<'basic' | 'installment'>('basic');
+  const [installmentPeriods, setInstallmentPeriods] = useState('');
+  const [remindOnDueDate, setRemindOnDueDate] = useState(false);
+  const [notificationTitle, setNotificationTitle] = useState(DEFAULT_NOTIFICATION_TITLE);
+  const [notificationBody, setNotificationBody] = useState(DEFAULT_NOTIFICATION_BODY);
+  const basicNameInputRef = useRef<any>(null);
+  const installmentNameInputRef = useRef<any>(null);
+
+  const reminderSupported = isNotificationSupported();
+  // Installment configuration only applies to new expense entries.
+  const canConfigureInstallment = !editingTx && type === 'expense';
+  // When editing a single period of an existing installment, the amount is a
+  // computed split and must not be edited directly.
+  const isEditingInstallment = !!editingTx?.installmentId;
 
   // Sync form states with editingTx when modal opens or editingTx changes
   useEffect(() => {
@@ -181,7 +206,27 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       setAccountGroupId(accountGroups[0]?.id || '1');
       setDate(getLocalISOString());
     }
+    // Reset installment config each time the modal opens
+    setActiveTab('basic');
+    setInstallmentPeriods('');
+    setRemindOnDueDate(false);
+    setNotificationTitle(DEFAULT_NOTIFICATION_TITLE);
+    setNotificationBody(DEFAULT_NOTIFICATION_BODY);
   }, [editingTx, isOpen, accountGroups]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const timer = window.setTimeout(() => {
+      const targetInput = canConfigureInstallment && activeTab === 'installment'
+        ? installmentNameInputRef.current
+        : basicNameInputRef.current;
+
+      targetInput?.setFocus?.();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [isOpen, activeTab, canConfigureInstallment]);
 
   // Dynamically set category when group, type, or groups change
   useEffect(() => {
@@ -200,8 +245,43 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(description, amount, type, category, date, accountGroupId);
+    // Entering a valid total + period count on the 分期 tab implies installment.
+    const useInstallment =
+      canConfigureInstallment && activeTab === 'installment' && hasValidInstallment;
+    const periodsNum = parseInt(installmentPeriods, 10);
+    onSave(
+      description,
+      amount,
+      type,
+      category,
+      date,
+      accountGroupId,
+      useInstallment
+        ? {
+            periods: periodsNum,
+            reminder: {
+              remindOnDueDate: reminderSupported && remindOnDueDate,
+              notificationTitle,
+              notificationBody,
+            },
+          }
+        : null
+    );
   };
+
+  // Per-period preview: base amount for periods 1..N-1, last period absorbs the
+  // remainder (Taiwan convention).
+  const totalNum = parseFloat(amount);
+  const periodsNum = parseInt(installmentPeriods, 10);
+  const hasValidInstallment =
+    !isNaN(totalNum) &&
+    totalNum > 0 &&
+    Number.isInteger(periodsNum) &&
+    periodsNum >= 1;
+  const basePerPeriod = hasValidInstallment ? Math.floor(totalNum / periodsNum) : 0;
+  const lastPerPeriod = hasValidInstallment
+    ? totalNum - basePerPeriod * (periodsNum - 1)
+    : 0;
 
   if (!isOpen) return null;
 
@@ -253,6 +333,31 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         >
           {editingTx ? '修改收支記帳' : '新增收支記帳'}
         </h3>
+
+        {isEditingInstallment && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '10px 12px',
+              marginBottom: '16px',
+              borderRadius: 'var(--border-radius-sm)',
+              background: 'rgba(99, 102, 241, 0.08)',
+              color: 'var(--primary-color)',
+              fontSize: '0.8rem',
+            }}
+          >
+            <AppIcon name="credit-card" size={16} />
+            <span>
+              分期交易{' '}
+              {editingTx?.installmentPeriod && editingTx?.installmentCount
+                ? `· 第 ${editingTx.installmentPeriod} / ${editingTx.installmentCount} 期`
+                : ''}
+              ·分期金額不可修改
+            </span>
+          </div>
+        )}
 
         <form
           onSubmit={handleSubmit}
@@ -317,6 +422,43 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             </div>
           </div>
 
+          {/* Tab bar: 基本 / 分期 (new expense entries only) */}
+          {canConfigureInstallment && (
+            <div
+              style={{
+                display: 'flex',
+                gap: '4px',
+                marginBottom: '12px',
+                background: 'var(--input-bg)',
+                padding: '4px',
+                borderRadius: 'var(--border-radius-md)',
+              }}
+            >
+              {([
+                { key: 'basic', label: '基本' },
+                { key: 'installment', label: '分期' },
+              ] as const).map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setActiveTab(tab.key)}
+                  style={{
+                    flex: 1,
+                    padding: '8px',
+                    borderRadius: 'var(--border-radius-sm)',
+                    fontWeight: 600,
+                    fontSize: '0.85rem',
+                    background:
+                      activeTab === tab.key ? 'var(--primary-color)' : 'transparent',
+                    color: activeTab === tab.key ? '#fff' : 'var(--text-secondary)',
+                  }}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Scrollable form fields wrapper */}
           <div
             style={{
@@ -329,6 +471,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               paddingBottom: '16px',
             }}
           >
+          {(!canConfigureInstallment || activeTab === 'basic') && (
+          <>
           {/* Account Group selection */}
           <div>
             <label
@@ -350,49 +494,6 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 icon: group.emoji,
               }))}
               placeholder="選擇資金帳戶"
-            />
-          </div>
-
-          {/* Amount */}
-          <div>
-            <label
-              style={{
-                display: 'block',
-                fontSize: '0.85rem',
-                color: 'var(--text-secondary)',
-                marginBottom: '8px',
-              }}
-            >
-              金額 ($)
-            </label>
-            <IonInput
-              type="number"
-              inputmode="decimal"
-              placeholder="輸入金額"
-              value={amount}
-              onIonInput={(e) => setAmount(e.detail.value ?? '')}
-              required
-            />
-          </div>
-
-          {/* Description */}
-          <div>
-            <label
-              style={{
-                display: 'block',
-                fontSize: '0.85rem',
-                color: 'var(--text-secondary)',
-                marginBottom: '8px',
-              }}
-            >
-              交易說明
-            </label>
-            <IonInput
-              type="text"
-              placeholder="例如: 買咖啡、午餐、薪水"
-              value={description}
-              onIonInput={(e) => setDescription(e.detail.value ?? '')}
-              required
             />
           </div>
 
@@ -421,6 +522,53 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 icon: cat.emoji,
               }))}
               placeholder="選擇分類"
+            />
+          </div>
+
+          {/* Description */}
+          <div>
+            <label
+              style={{
+                display: 'block',
+                fontSize: '0.85rem',
+                color: 'var(--text-secondary)',
+                marginBottom: '8px',
+              }}
+            >
+              名稱
+            </label>
+            <IonInput
+                    ref={basicNameInputRef}
+                    autofocus={true}
+              type="text"
+              placeholder="例如: 買咖啡、午餐、薪水"
+              value={description}
+              onIonInput={(e) => setDescription(e.detail.value ?? '')}
+              required
+            />
+          </div>
+
+          {/* Amount */}
+          <div>
+            <label
+              style={{
+                display: 'block',
+                fontSize: '0.85rem',
+                color: 'var(--text-secondary)',
+                marginBottom: '8px',
+              }}
+            >
+              金額 ($)
+            </label>
+            <IonInput
+              type="number"
+              inputmode="decimal"
+              placeholder="輸入金額"
+              value={amount}
+              readonly={isEditingInstallment}
+              disabled={isEditingInstallment}
+              onIonInput={(e) => setAmount(e.detail.value ?? '')}
+              required
             />
           </div>
 
@@ -468,6 +616,219 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               />
             </IonModal>
           </div>
+          </>
+          )}
+
+          {/* 分期 (Installment) tab */}
+          {canConfigureInstallment && activeTab === 'installment' && (
+            <>
+              <div>
+                {/* Name (mirrors the basic 名稱 field) */}
+                <div style={{ marginBottom: '16px' }}>
+                  <label
+                    style={{
+                      display: 'block',
+                      fontSize: '0.85rem',
+                      color: 'var(--text-secondary)',
+                      marginBottom: '8px',
+                    }}
+                  >
+                    名稱
+                  </label>
+                  <IonInput
+                    ref={installmentNameInputRef}
+                    autofocus={true}
+                    type="text"
+                    placeholder="例如: 手機分期、家電分期"
+                    value={description}
+                    onIonInput={(e) => setDescription(e.detail.value ?? '')}
+                  />
+                </div>
+
+                {/* Total amount (mirrors the basic 金額 field) */}
+                <div style={{ marginBottom: '16px' }}>
+                  <label
+                    style={{
+                      display: 'block',
+                      fontSize: '0.85rem',
+                      color: 'var(--text-secondary)',
+                      marginBottom: '8px',
+                    }}
+                  >
+                    分期總額 ($)
+                  </label>
+                  <IonInput
+                    type="number"
+                    inputmode="decimal"
+                    placeholder="輸入分期總額"
+                    value={amount}
+                    onIonInput={(e) => setAmount(e.detail.value ?? '')}
+                  />
+                </div>
+
+                {/* Period count */}
+                <div style={{ marginBottom: '16px' }}>
+                  <label
+                    style={{
+                      display: 'block',
+                      fontSize: '0.85rem',
+                      color: 'var(--text-secondary)',
+                      marginBottom: '8px',
+                    }}
+                  >
+                    分期期數
+                  </label>
+                  <IonInput
+                    type="number"
+                    inputmode="numeric"
+                    placeholder="例如: 12"
+                    value={installmentPeriods}
+                    onIonInput={(e) => setInstallmentPeriods(e.detail.value ?? '')}
+                  />
+                </div>
+
+                {/* Read-only per-period preview */}
+                <div style={{ marginBottom: '16px' }}>
+                  <label
+                    style={{
+                      display: 'block',
+                      fontSize: '0.85rem',
+                      color: 'var(--text-secondary)',
+                      marginBottom: '8px',
+                    }}
+                  >
+                    每期繳交額度
+                  </label>
+                  <div
+                    style={{
+                      padding: '10px 0',
+                      borderBottom: '1px solid var(--input-border)',
+                      color: 'var(--text-primary)',
+                      minHeight: '40px',
+                      fontSize: '1rem',
+                    }}
+                  >
+                    {hasValidInstallment ? (
+                      periodsNum > 1 ? (
+                        <span>
+                          每期 ${basePerPeriod.toLocaleString('zh-TW')}，末期 $
+                          {lastPerPeriod.toLocaleString('zh-TW')}
+                        </span>
+                      ) : (
+                        <span>${lastPerPeriod.toLocaleString('zh-TW')}</span>
+                      )
+                    ) : (
+                      <span style={{ color: 'var(--text-tertiary)' }}>
+                        輸入總額與期數後自動計算
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Payment-reminder switch */}
+                <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <label
+                      style={{
+                        fontSize: '0.9rem',
+                        color: 'var(--text-primary)',
+                        fontWeight: 600,
+                      }}
+                    >
+                      啟用通知
+                    </label>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={remindOnDueDate}
+                      onClick={() => setRemindOnDueDate((v) => !v)}
+                      style={{
+                        width: '48px',
+                        height: '28px',
+                        borderRadius: '14px',
+                        padding: '3px',
+                        display: 'flex',
+                        justifyContent: remindOnDueDate ? 'flex-end' : 'flex-start',
+                        background: remindOnDueDate
+                          ? 'var(--primary-color)'
+                          : 'var(--input-border)',
+                        transition: 'var(--transition-smooth)',
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: '22px',
+                          height: '22px',
+                          borderRadius: '50%',
+                          background: '#fff',
+                          display: 'block',
+                        }}
+                      />
+                    </button>
+                  </div>
+
+                {/* Notification message fields (only relevant once the reminder switch is on) */}
+                {remindOnDueDate && (
+                  <div style={{ marginTop: '16px' }}>
+                    <div style={{ marginBottom: '16px' }}>
+                      <label
+                        style={{
+                          display: 'block',
+                          fontSize: '0.85rem',
+                          color: 'var(--text-secondary)',
+                          marginBottom: '8px',
+                        }}
+                      >
+                        通知標題
+                      </label>
+                      <IonInput
+                        type="text"
+                        placeholder="通知標題"
+                        value={notificationTitle}
+                        onIonInput={(e) => setNotificationTitle(e.detail.value ?? '')}
+                      />
+                    </div>
+
+                    <div>
+                      <label
+                        style={{
+                          display: 'block',
+                          fontSize: '0.85rem',
+                          color: 'var(--text-secondary)',
+                          marginBottom: '8px',
+                        }}
+                      >
+                        通知內容
+                      </label>
+                      <IonInput
+                        type="text"
+                        placeholder="通知內容"
+                        value={notificationBody}
+                        onIonInput={(e) => setNotificationBody(e.detail.value ?? '')}
+                      />
+                    </div>
+
+                    {!reminderSupported && (
+                      <p
+                        style={{
+                          fontSize: '0.8rem',
+                          color: 'var(--text-tertiary)',
+                          margin: '8px 0 0',
+                        }}
+                      >
+                        繳費通知僅在手機 App 上發送。
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
 
           </div>
 
