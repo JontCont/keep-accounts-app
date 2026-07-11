@@ -76,7 +76,7 @@ jobs:
         run: npm install -D @capacitor/assets
 
       - name: Generate App Icons for Android
-        run: npx capacitor-assets generate --config capacitor.assets.config.yml
+        run: npx capacitor-assets generate --android --iconBackgroundColor '#312E81' --iconBackgroundColorDark '#312E81'
         working-directory: apps/web
 
       - name: Sync Capacitor Android
@@ -123,7 +123,7 @@ jobs:
         run: npm install -D @capacitor/assets
 
       - name: Generate App Icons for iOS
-        run: npx capacitor-assets generate --config capacitor.assets.config.yml
+        run: npx capacitor-assets generate --ios --iconBackgroundColor '#312E81' --iconBackgroundColorDark '#312E81'
         working-directory: apps/web
 
       - name: Cache CocoaPods

@@ -1,0 +1,47 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="g1" x1="52" y1="44" x2="468" y2="468" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#312E81"/>
+      <stop offset="0.52" stop-color="#4F46E5"/>
+      <stop offset="1" stop-color="#0EA5E9"/>
+    </linearGradient>
+    <linearGradient id="g2" x1="122" y1="104" x2="392" y2="408" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.98"/>
+      <stop offset="1" stop-color="#E0E7FF" stop-opacity="0.95"/>
+    </linearGradient>
+    <linearGradient id="aCut" x1="224" y1="138" x2="354" y2="314" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#22D3EE"/>
+      <stop offset="1" stop-color="#38BDF8"/>
+    </linearGradient>
+    <filter id="softShadow" x="84" y="84" width="344" height="344" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+      <feOffset dy="10"/>
+      <feGaussianBlur stdDeviation="10"/>
+      <feComposite in2="hardAlpha" operator="out"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.192157 0 0 0 0 0.180392 0 0 0 0 0.572549 0 0 0 0.28 0"/>
+      <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_1_1"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_1_1" result="shape"/>
+    </filter>
+  </defs>
+
+  <rect x="28" y="28" width="456" height="456" rx="112" fill="url(#g1)"/>
+
+  <circle cx="404" cy="108" r="16" fill="#FDE047" fill-opacity="0.95"/>
+  <circle cx="108" cy="404" r="14" fill="#A7F3D0" fill-opacity="0.9"/>
+
+  <g filter="url(#softShadow)">
+    <rect x="104" y="104" width="304" height="304" rx="64" fill="url(#g2)"/>
+  </g>
+
+  <!-- K monogram -->
+  <rect x="156" y="156" width="34" height="200" rx="17" fill="#312E81"/>
+  <path d="M188 254L286 156H332L232 256L332 356H286L188 258V254Z" fill="#312E81"/>
+
+  <!-- A monogram, integrated as a geometric cut -->
+  <path d="M236 356L308 156H340L268 356H236Z" fill="url(#aCut)"/>
+  <path d="M252 286H322V314H242L252 286Z" fill="#DBEAFE"/>
+
+  <!-- subtle ledger baseline -->
+  <rect x="136" y="374" width="240" height="8" rx="4" fill="#C7D2FE"/>
+</svg>
