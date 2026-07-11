@@ -39,18 +39,25 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
 }) => {
   const [period, setPeriod] = useState<'today' | 'month'>('month');
 
-  const totalIncome = transactions
+  const todayStr = new Date().toISOString().split('T')[0];
+  const currentMonthStr = todayStr.substring(0, 7);
+
+  // Realized transactions only: future-dated entries (e.g. not-yet-due
+  // installment periods) are excluded from lifetime balance totals but still
+  // appear in the History tab as upcoming entries.
+  const realizedTxs = transactions.filter(
+    (tx) => tx.date.substring(0, 10) <= todayStr
+  );
+
+  const totalIncome = realizedTxs
     .filter((tx) => tx.type === 'income')
     .reduce((sum, tx) => sum + tx.amount, 0);
 
-  const totalExpense = transactions
+  const totalExpense = realizedTxs
     .filter((tx) => tx.type === 'expense')
     .reduce((sum, tx) => sum + tx.amount, 0);
 
   const totalBalance = totalIncome - totalExpense;
-
-  const todayStr = new Date().toISOString().split('T')[0];
-  const currentMonthStr = todayStr.substring(0, 7);
 
   const displayIncome = transactions
     .filter((tx) => tx.type === 'income')
@@ -100,7 +107,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   const remainingToday = allowedToday - todayExpenseForDailyGroup;
 
   const getGroupBalance = (groupId: string) => {
-    const groupTxs = transactions.filter((tx) => tx.accountGroupId === groupId);
+    const groupTxs = realizedTxs.filter((tx) => tx.accountGroupId === groupId);
     const income = groupTxs
       .filter((tx) => tx.type === 'income')
       .reduce((sum, tx) => sum + tx.amount, 0);
@@ -721,7 +728,22 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                         </span>
 
                         {/* Edit & Delete Action Buttons */}
-                        <div style={{ display: 'flex', gap: '4px' }}>
+                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                          {tx.installmentId ? (
+                            <span
+                              style={{
+                                fontSize: '0.7rem',
+                                color: 'var(--primary-color)',
+                                background: 'rgba(99, 102, 241, 0.08)',
+                                borderRadius: 'var(--border-radius-sm)',
+                                padding: '2px 6px',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              分期{tx.installmentPeriod && tx.installmentCount ? ` ${tx.installmentPeriod}/${tx.installmentCount}` : ''}
+                            </span>
+                          ) : (
+                            <>
                           <button
                             type="button"
                             onClick={() => onEditTransactionClick(tx)}
@@ -760,6 +782,8 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                           >
                             <AppIcon name="trash-2" size={16} />
                           </button>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>

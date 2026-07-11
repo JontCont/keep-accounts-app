@@ -4,6 +4,7 @@ import {
   Transaction,
   DEFAULT_ACCOUNT_GROUPS,
   INITIAL_TRANSACTIONS,
+  InstallmentReminderConfig,
 } from '@keep-accounts-app/domain';
 import { useKeepAccounts } from '@keep-accounts-app/state';
 import { DashboardTab } from './components/DashboardTab';
@@ -12,6 +13,7 @@ import { StatsTab } from './components/StatsTab';
 import { TransactionModal } from './components/TransactionModal';
 import { GroupSettingsModal } from './components/GroupSettingsModal';
 import { AppIcon } from './components/AppIcon';
+import { scheduleInstallmentReminders } from './services/notifications';
 import {
   isNativePlatform,
   getImportHistory,
@@ -30,6 +32,8 @@ export function App() {
     transactions,
     saveTransaction,
     deleteTransaction,
+    deleteInstallmentGroup,
+    settleInstallmentGroup,
     saveAccountGroups,
     addAccountGroup,
     deleteAccountGroup,
@@ -43,6 +47,8 @@ export function App() {
   const [isEditingGroups, setIsEditingGroups] = useState(false);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
   const [showTxModal, setShowTxModal] = useState(false);
+  const [showHistoryCreateMenu, setShowHistoryCreateMenu] = useState(false);
+  const [txModalInitialTab, setTxModalInitialTab] = useState<'basic' | 'installment'>('basic');
 
   // FAB scroll behavior state
   const [showFab, setShowFab] = useState(true);
@@ -64,9 +70,8 @@ export function App() {
   }, [activeTab]);
 
   // Theme state and runtime application
-  const [theme, setTheme] = useState<'system' | 'light' | 'dark'>(() => {
-    return (localStorage.getItem('keep_accounts_theme') as any) || 'system';
-  });
+  const storedTheme = localStorage.getItem('keep_accounts_theme') as 'system' | 'light' | 'dark' | null;
+  const [theme, setTheme] = useState<'system' | 'light' | 'dark'>(storedTheme || 'system');
 
   useEffect(() => {
     const root = document.documentElement;
@@ -97,6 +102,7 @@ export function App() {
       mediaQuery.addEventListener('change', listener);
       return () => mediaQuery.removeEventListener('change', listener);
     }
+    return undefined;
   }, [theme]);
 
   // Settings & Backup States
@@ -140,7 +146,8 @@ export function App() {
         await exportBackupNative(data);
       } else {
         const zipped = compressBackup(data);
-        const blob = new Blob([zipped], { type: 'application/zip' });
+        const zippedBuffer = new Uint8Array(zipped).buffer as ArrayBuffer;
+        const blob = new Blob([zippedBuffer], { type: 'application/zip' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -254,6 +261,12 @@ export function App() {
     }, 500);
   };
 
+  const openTransactionModal = (initialTab: 'basic' | 'installment' = 'basic') => {
+    setEditingTx(null);
+    setTxModalInitialTab(initialTab);
+    setShowTxModal(true);
+  };
+
   // Automatic backup trigger on change
   useEffect(() => {
     const isAutoBackupEnabled = localStorage.getItem('keep_accounts_auto_backup') === 'true';
@@ -332,7 +345,11 @@ export function App() {
     type: 'income' | 'expense',
     category: string,
     date: string,
-    accountGroupId: string
+    accountGroupId: string,
+    installment?: {
+      periods: number;
+      reminder: InstallmentReminderConfig;
+    } | null
   ) => {
     const success = saveTransaction(
       description,
@@ -341,12 +358,26 @@ export function App() {
       category,
       date,
       accountGroupId,
-      editingTx ? editingTx.id : null
+      editingTx ? editingTx.id : null,
+      installment?.periods
     );
     if (success) {
+      // Schedule native payment reminders (no-op on web, silent if permission
+      // is denied). Transaction creation already succeeded, so scheduling never
+      // blocks or reverts it.
+      if (installment && installment.reminder.remindOnDueDate) {
+        scheduleInstallmentReminders(
+          Date.now().toString(),
+          parseFloat(amount),
+          installment.periods,
+          date,
+          installment.reminder
+        ).catch(() => {
+          /* reminder scheduling failures must never affect saved data */
+        });
+      }
       setShowTxModal(false);
       setEditingTx(null);
-      setActiveTab('dashboard');
     }
   };
 
@@ -365,22 +396,36 @@ export function App() {
               }}
             >
               <div>
-                <h1
-                  style={{
-                    fontSize: activeTab === 'dashboard' ? '1.6rem' : '1.3rem',
-                    fontWeight: 700,
-                    background: 'linear-gradient(90deg, #6366f1, #a855f7)',
-                    WebkitBackgroundClip: 'text',
-                    WebkitTextFillColor: 'transparent',
-                    margin: 0,
-                    transition: 'font-size 0.2s ease',
-                  }}
-                >
-                  {activeTab === 'dashboard' && 'Keep Accounts'}
-                  {activeTab === 'history' && '歷史交易明細'}
-                  {activeTab === 'stats' && '支出統計分析'}
-                  {activeTab === 'settings' && '系統設定'}
-                </h1>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  {activeTab === 'dashboard' && (
+                    <img
+                      src="/keep-accounts-logo.svg"
+                      alt="Keep Accounts logo"
+                      style={{
+                        width: '34px',
+                        height: '34px',
+                        borderRadius: '9px',
+                        boxShadow: '0 8px 20px rgba(99, 102, 241, 0.25)',
+                      }}
+                    />
+                  )}
+                  <h1
+                    style={{
+                      fontSize: activeTab === 'dashboard' ? '1.6rem' : '1.3rem',
+                      fontWeight: 700,
+                      background: 'linear-gradient(90deg, #6366f1, #a855f7)',
+                      WebkitBackgroundClip: 'text',
+                      WebkitTextFillColor: 'transparent',
+                      margin: 0,
+                      transition: 'font-size 0.2s ease',
+                    }}
+                  >
+                    {activeTab === 'dashboard' && 'Keep Accounts'}
+                    {activeTab === 'history' && '歷史交易明細'}
+                    {activeTab === 'stats' && '支出統計分析'}
+                    {activeTab === 'settings' && '系統設定'}
+                  </h1>
+                </div>
                 {activeTab === 'dashboard' && (
                   <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0 }}>
                     精緻微型記帳系統
@@ -396,25 +441,103 @@ export function App() {
                 </div>
               )}
               {activeTab === 'history' && (
-                <button
-                  onClick={() => setShowTxModal(true)}
-                  style={{
-                    background: 'var(--input-bg)',
-                    border: '1px solid var(--input-border)',
-                    borderRadius: '50%',
-                    width: '36px',
-                    height: '36px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: 'var(--primary-color)',
-                    cursor: 'pointer',
-                    boxShadow: 'var(--nav-shadow)',
-                  }}
-                  title="新增記帳"
-                >
-                  <AppIcon name="plus" size={18} />
-                </button>
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <button
+                    onClick={() => setShowHistoryCreateMenu((current) => !current)}
+                    style={{
+                      background: 'var(--input-bg)',
+                      border: '1px solid var(--input-border)',
+                      borderRadius: '50%',
+                      width: '36px',
+                      height: '36px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'var(--primary-color)',
+                      cursor: 'pointer',
+                      boxShadow: 'var(--nav-shadow)',
+                    }}
+                    title="新增記帳"
+                  >
+                    <AppIcon name="plus" size={18} />
+                  </button>
+
+                  {showHistoryCreateMenu && (
+                    <>
+                      <button
+                        type="button"
+                        aria-label="關閉新增選單"
+                        onClick={() => setShowHistoryCreateMenu(false)}
+                        style={{
+                          position: 'fixed',
+                          inset: 0,
+                          background: 'transparent',
+                          border: 'none',
+                          padding: 0,
+                          margin: 0,
+                        }}
+                      />
+                      <div
+                        role="menu"
+                        aria-label="新增記帳類型選單"
+                        style={{
+                          position: 'absolute',
+                          top: 'calc(100% + 8px)',
+                          right: 0,
+                          minWidth: '160px',
+                          background: 'var(--modal-card-bg)',
+                          border: '1px solid var(--card-border)',
+                          borderRadius: 'var(--border-radius-md)',
+                          boxShadow: 'var(--card-shadow)',
+                          padding: '6px',
+                          zIndex: 50,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '4px',
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowHistoryCreateMenu(false);
+                            openTransactionModal('basic');
+                          }}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            textAlign: 'left',
+                            padding: '10px 12px',
+                            borderRadius: 'var(--border-radius-sm)',
+                            color: 'var(--text-primary)',
+                            cursor: 'pointer',
+                            fontSize: '0.95rem',
+                          }}
+                        >
+                          一般記帳
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowHistoryCreateMenu(false);
+                            openTransactionModal('installment');
+                          }}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            textAlign: 'left',
+                            padding: '10px 12px',
+                            borderRadius: 'var(--border-radius-sm)',
+                            color: 'var(--text-primary)',
+                            cursor: 'pointer',
+                            fontSize: '0.95rem',
+                          }}
+                        >
+                          分期記帳
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
               )}
             </header>
 
@@ -425,11 +548,11 @@ export function App() {
                   accountGroups={accountGroups}
                   transactions={transactions}
                   onAddTransactionClick={() => {
-                    setEditingTx(null);
-                    setShowTxModal(true);
+                    openTransactionModal('basic');
                   }}
                   onEditTransactionClick={(tx) => {
                     setEditingTx(tx);
+                    setTxModalInitialTab('basic');
                     setShowTxModal(true);
                   }}
                   onDeleteTransaction={deleteTransaction}
@@ -461,15 +584,17 @@ export function App() {
                   accountGroups={accountGroups}
                   transactions={transactions}
                   onDeleteTransaction={deleteTransaction}
+                  onDeleteInstallmentGroup={deleteInstallmentGroup}
+                  onSettleInstallmentGroup={settleInstallmentGroup}
                   getCategoryEmoji={getCategoryEmoji}
                   getGroupName={getGroupName}
                   onEditTransaction={(tx) => {
                     setEditingTx(tx);
+                    setTxModalInitialTab('basic');
                     setShowTxModal(true);
                   }}
                   onAddTransaction={() => {
-                    setEditingTx(null);
-                    setShowTxModal(true);
+                    openTransactionModal('basic');
                   }}
                   showFab={showFab}
                 />
@@ -908,9 +1033,12 @@ export function App() {
           onClose={() => {
             setShowTxModal(false);
             setEditingTx(null);
+            setTxModalInitialTab('basic');
+            setShowHistoryCreateMenu(false);
           }}
           editingTx={editingTx}
           accountGroups={accountGroups}
+          initialTab={txModalInitialTab}
           onSave={handleSaveTransaction}
         />
       </IonPage>

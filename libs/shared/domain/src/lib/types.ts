@@ -25,4 +25,13 @@ export interface Transaction {
   category: string;
   date: string;
   accountGroupId: string; // Associated account group
+  installmentId?: string; // Shared id linking all periods of one installment
+  installmentPeriod?: number; // 1-based period number within the installment
+  installmentCount?: number; // Total number of periods in the installment
+}
+
+export interface InstallmentReminderConfig {
+  remindOnDueDate: boolean;
+  notificationTitle: string;
+  notificationBody: string;
 }

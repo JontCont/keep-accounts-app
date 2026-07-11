@@ -5,6 +5,7 @@ export const getDefaultCategoriesForNewGroup = (): Category[] => [
   { name: '生活交通', emoji: '🚗', color: '#3b82f6', type: 'expense' },
   { name: '購物消費', emoji: '🛍️', color: '#10b981', type: 'expense' },
   { name: '日常雜項', emoji: '🏷️', color: '#6b7280', type: 'expense' },
+  { name: '分期', emoji: '💳', color: '#6366f1', type: 'expense' },
   { name: '主動收入', emoji: '💰', color: '#10b981', type: 'income' },
   { name: '其他收入', emoji: '🏷️', color: '#6b7280', type: 'income' }
 ];

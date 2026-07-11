@@ -38,6 +38,7 @@ export const DEFAULT_ACCOUNT_GROUPS: AccountGroup[] = [
       { name: '定存儲蓄', emoji: 'landmark', color: '#f43f5e', type: 'expense' },     // Rose
       { name: '緊急備用', emoji: 'shield', color: '#dc2626', type: 'expense' },        // Red-Dark
       { name: '其他儲蓄', emoji: 'tag', color: '#71717a', type: 'expense' },           // Zinc
+      { name: '分期', emoji: 'credit-card', color: '#6366f1', type: 'expense' },       // Indigo
       { name: '定存利息', emoji: 'dollar-sign', color: '#16a34a', type: 'income' },    // Green-Dark
       { name: '其他存款收入', emoji: 'tag', color: '#38bdf8', type: 'income' },        // Light Sky
       { name: '其他收入', emoji: 'tag', color: '#d946ef', type: 'income' }             // Fuchsia
@@ -58,6 +59,7 @@ export const DEFAULT_ACCOUNT_GROUPS: AccountGroup[] = [
       { name: '居住房租', emoji: 'home', color: '#8b5cf6', type: 'expense' },         // Violet
       { name: '水電雜費', emoji: 'zap', color: '#eab308', type: 'expense' },          // Yellow
       { name: '日常雜項', emoji: 'tag', color: '#64748b', type: 'expense' }           // Slate
+      ,{ name: '分期', emoji: 'credit-card', color: '#6366f1', type: 'expense' }      // Indigo
     ]
   },
   {
@@ -72,6 +74,7 @@ export const DEFAULT_ACCOUNT_GROUPS: AccountGroup[] = [
       { name: '基金認購', emoji: 'landmark', color: '#a855f7', type: 'expense' },      // Purple
       { name: '投資理財', emoji: 'trending-up', color: '#3b82f6', type: 'expense' },   // Blue
       { name: '其他投資', emoji: 'tag', color: '#f97316', type: 'expense' },           // Orange
+      { name: '分期', emoji: 'credit-card', color: '#6366f1', type: 'expense' },       // Indigo
       { name: '投資收益', emoji: 'trending-up', color: '#84cc16', type: 'income' },    // Lime
       { name: '股利發放', emoji: 'dollar-sign', color: '#d97706', type: 'income' },    // Amber-Dark
       { name: '其他投資收入', emoji: 'tag', color: '#14b8a6', type: 'income' }         // Teal

@@ -4,6 +4,8 @@ import {
   Transaction,
   getCurrentMonthExpenseForGroup,
   getDefaultCategoriesForNewGroup,
+  getLocalISOString,
+  expandInstallment,
 } from '@keep-accounts-app/domain';
 import { migrateAccountGroups } from './migrations';
 
@@ -48,6 +50,46 @@ export function useKeepAccounts() {
     localStorage.setItem('keep_accounts_transactions', JSON.stringify(transactions));
   }, [transactions]);
 
+  // Legacy repair: before installment account-group selection existed, some
+  // installment transactions with system category "分期" were saved into source
+  // groups (e.g. 當月薪資). Move them to a non-source group so expense stats and
+  // budget cards reflect the user's expected spending bucket.
+  useEffect(() => {
+    if (accountGroups.length === 0 || transactions.length === 0) {
+      return;
+    }
+
+    const preferredDailyGroup = accountGroups.find(
+      (group) => group.id === '1' && !group.isSource
+    );
+    const fallbackExpenseGroup = accountGroups.find((group) => !group.isSource);
+    const targetGroupId = preferredDailyGroup?.id ?? fallbackExpenseGroup?.id;
+    if (!targetGroupId) {
+      return;
+    }
+
+    const sourceGroupIds = new Set(
+      accountGroups.filter((group) => group.isSource).map((group) => group.id)
+    );
+
+    let changed = false;
+    const repaired = transactions.map((tx) => {
+      if (
+        tx.installmentId &&
+        tx.category === '分期' &&
+        sourceGroupIds.has(tx.accountGroupId)
+      ) {
+        changed = true;
+        return { ...tx, accountGroupId: targetGroupId };
+      }
+      return tx;
+    });
+
+    if (changed) {
+      setTransactions(repaired);
+    }
+  }, [accountGroups, transactions]);
+
   const saveTransaction = (
     description: string,
     amountStr: string,
@@ -55,7 +97,8 @@ export function useKeepAccounts() {
     category: string,
     date: string,
     accountGroupId: string,
-    editingTxId: string | null
+    editingTxId: string | null,
+    installmentPeriods?: number
   ): boolean => {
     const amount = parseFloat(amountStr);
     if (amount < 0) {
@@ -70,8 +113,17 @@ export function useKeepAccounts() {
       return false;
     }
 
+    const isInstallment = !editingTxId && !!installmentPeriods;
+    if (isInstallment) {
+      if (!Number.isInteger(installmentPeriods) || (installmentPeriods as number) < 1) {
+        alert('分期期數必須為至少 1 期的整數！');
+        return false;
+      }
+    }
+
     const targetGroup = accountGroups.find((g) => g.id === accountGroupId);
     if (
+      !isInstallment &&
       targetGroup &&
       targetGroup.budget &&
       targetGroup.budget > 0 &&
@@ -135,22 +187,156 @@ export function useKeepAccounts() {
         )
       );
     } else {
-      const newTx: Transaction = {
-        id: Date.now().toString(),
-        description: description.trim(),
-        amount,
-        type,
-        category,
-        date,
-        accountGroupId,
-      };
-      setTransactions([newTx, ...transactions]);
+      if (isInstallment) {
+        const installmentId = Date.now().toString();
+        const periods = expandInstallment(
+          amount,
+          installmentPeriods as number,
+          date
+        );
+        const newTxs: Transaction[] = periods.map((p) => ({
+          id: `${installmentId}-${p.period}`,
+          description: description.trim(),
+          amount: p.amount,
+          type,
+          category,
+          date: p.date,
+          accountGroupId,
+          installmentId,
+          installmentPeriod: p.period,
+          installmentCount: installmentPeriods as number,
+        }));
+        setTransactions([...newTxs, ...transactions]);
+      } else {
+        const newTx: Transaction = {
+          id: Date.now().toString(),
+          description: description.trim(),
+          amount,
+          type,
+          category,
+          date,
+          accountGroupId,
+        };
+        setTransactions([newTx, ...transactions]);
+      }
     }
     return true;
   };
 
   const deleteTransaction = (id: string) => {
+    const target = transactions.find((tx) => tx.id === id);
+    if (target?.installmentId) {
+      deleteInstallmentPeriod(id);
+      return;
+    }
+
     setTransactions(transactions.filter((tx) => tx.id !== id));
+  };
+
+  const sortInstallmentTransactions = (groupTxs: Transaction[]) => {
+    return [...groupTxs].sort((a, b) => {
+      const periodDiff = (a.installmentPeriod ?? 0) - (b.installmentPeriod ?? 0);
+      if (periodDiff !== 0) return periodDiff;
+      return a.date.localeCompare(b.date);
+    });
+  };
+
+  const replaceInstallmentGroup = (
+    installmentId: string,
+    updatedGroup: Transaction[]
+  ) => {
+    const updatedById = new Map(updatedGroup.map((tx) => [tx.id, tx]));
+    setTransactions(
+      transactions.flatMap((tx) => {
+        if (tx.installmentId !== installmentId) {
+          return [tx];
+        }
+
+        const replacement = updatedById.get(tx.id);
+        return replacement ? [replacement] : [];
+      })
+    );
+  };
+
+  const deleteInstallmentPeriod = (id: string): boolean => {
+    const target = transactions.find((tx) => tx.id === id);
+    if (!target?.installmentId) {
+      return false;
+    }
+
+    const remainingGroup = sortInstallmentTransactions(
+      transactions.filter(
+        (tx) => tx.installmentId === target.installmentId && tx.id !== id
+      )
+    );
+
+    if (remainingGroup.length === 0) {
+      setTransactions(
+        transactions.filter((tx) => tx.installmentId !== target.installmentId)
+      );
+      return true;
+    }
+
+    const reindexed = remainingGroup.map((tx, index) => ({
+      ...tx,
+      installmentPeriod: index + 1,
+      installmentCount: remainingGroup.length,
+    }));
+
+    replaceInstallmentGroup(target.installmentId, reindexed);
+    return true;
+  };
+
+  const deleteInstallmentGroup = (installmentId: string): boolean => {
+    const hasGroup = transactions.some((tx) => tx.installmentId === installmentId);
+    if (!hasGroup) {
+      return false;
+    }
+
+    setTransactions(transactions.filter((tx) => tx.installmentId !== installmentId));
+    return true;
+  };
+
+  const settleInstallmentGroup = (installmentId: string): boolean => {
+    const groupTxs = sortInstallmentTransactions(
+      transactions.filter((tx) => tx.installmentId === installmentId)
+    );
+    if (groupTxs.length === 0) {
+      return false;
+    }
+
+    const settledAt = getLocalISOString();
+    const remainingTxs = groupTxs.filter((tx) => new Date(tx.date).getTime() > new Date(settledAt).getTime());
+    if (remainingTxs.length === 0) {
+      return false;
+    }
+
+    const settledTxs = groupTxs.filter((tx) => new Date(tx.date).getTime() <= new Date(settledAt).getTime());
+    const totalRemainingAmount = remainingTxs.reduce((sum, tx) => sum + tx.amount, 0);
+    const nextPeriod = settledTxs.length + 1;
+    const template = groupTxs[0];
+
+    const updatedSettledTxs = settledTxs.map((tx, index) => ({
+      ...tx,
+      installmentPeriod: index + 1,
+      installmentCount: nextPeriod,
+    }));
+
+    const settlementTx: Transaction = {
+      id: `${installmentId}-settlement-${Date.now()}`,
+      description: template.description,
+      amount: totalRemainingAmount,
+      type: template.type,
+      category: template.category,
+      date: settledAt,
+      accountGroupId: template.accountGroupId,
+      installmentId,
+      installmentPeriod: nextPeriod,
+      installmentCount: nextPeriod,
+    };
+
+    replaceInstallmentGroup(installmentId, [...updatedSettledTxs, settlementTx]);
+    return true;
   };
 
   const saveAccountGroups = (groups: AccountGroup[]): boolean => {
@@ -287,6 +473,9 @@ export function useKeepAccounts() {
     setTransactions,
     saveTransaction,
     deleteTransaction,
+    deleteInstallmentPeriod,
+    deleteInstallmentGroup,
+    settleInstallmentGroup,
     saveAccountGroups,
     addAccountGroup,
     deleteAccountGroup,

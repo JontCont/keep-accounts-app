@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, fireEvent, renderHook, act } from '@testing-library/react';
+import { render, fireEvent, renderHook, act, within, waitFor } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { useKeepAccounts } from '@keep-accounts-app/state';
 
@@ -26,6 +26,32 @@ describe('App', () => {
   it('should render successfully', () => {
     const { baseElement } = render(<BrowserRouter><App /></BrowserRouter>);
     expect(baseElement).toBeTruthy();
+  });
+
+  it('shows installment rows as read-only in flat history views', () => {
+    const groups = [
+      { id: '0', name: '當月薪資', emoji: 'briefcase', color: '#22c55e', isSource: true, categories: [] },
+      { id: '1', name: '日常開銷', emoji: 'credit-card', color: '#6366f1', targetRatio: 100, categories: [] },
+    ];
+    localStorage.setItem('keep_accounts_groups', JSON.stringify(groups));
+
+    const installmentId = 'inst-flat';
+    const mockTxs: Transaction[] = [
+      { id: `${installmentId}-1`, description: '手機分期', amount: 1000, type: 'expense', category: '購物消費', date: '2026-01-15T10:00:00+08:00', accountGroupId: '1', installmentId, installmentPeriod: 1, installmentCount: 3 },
+      { id: `${installmentId}-2`, description: '手機分期', amount: 1000, type: 'expense', category: '購物消費', date: '2026-02-15T10:00:00+08:00', accountGroupId: '1', installmentId, installmentPeriod: 2, installmentCount: 3 },
+      { id: 'normal-1', description: '午餐', amount: 150, type: 'expense', category: '餐飲食品', date: '2026-02-16T10:00:00+08:00', accountGroupId: '1' },
+    ];
+    localStorage.setItem('keep_accounts_transactions', JSON.stringify(mockTxs));
+
+    const { getByText, getByTitle, getAllByText } = render(<BrowserRouter><App /></BrowserRouter>);
+
+    fireEvent.click(getByText('明細'));
+    const installmentRow = getAllByText('手機分期')[0].closest('.glass-card') as HTMLElement;
+    expect(installmentRow.textContent).toContain('分期');
+    expect(within(installmentRow).queryByTitle('編輯')).toBeNull();
+    expect(within(installmentRow).queryByTitle('刪除')).toBeNull();
+
+    expect(getByTitle('新增記帳')).toBeTruthy();
   });
 
   it('should have Keep Accounts as the title', () => {
@@ -216,19 +242,34 @@ describe('App', () => {
     expect(deleteBtns.length).toBe(3);
   });
 
-  it('should open empty TransactionModal in creation mode when clicking FAB in HistoryTab', () => {
-    const { getByText, getByTitle } = render(<BrowserRouter><App /></BrowserRouter>);
-    
-    // Switch to History tab
-    const historyTabBtn = getByText('明細');
-    fireEvent.click(historyTabBtn);
-    
-    // Clicking the FAB (+ button)
-    const fabBtn = getByTitle('新增記帳');
-    fireEvent.click(fabBtn);
-    
-    // Modal header "新增收支記帳" should be visible
+  it('should open TransactionModal in creation mode when clicking the dashboard add button', () => {
+    const { getByText } = render(<BrowserRouter><App /></BrowserRouter>);
+
+    fireEvent.click(getByText('新增記帳明細'));
+
     expect(getByText('新增收支記帳')).toBeTruthy();
+  });
+
+  it('opens the transaction modal when choosing the general option from the history create menu', () => {
+    const { getByText, getByTitle } = render(<BrowserRouter><App /></BrowserRouter>);
+
+    fireEvent.click(getByText('明細'));
+    fireEvent.click(getByTitle('新增記帳'));
+
+    fireEvent.click(getByText('一般記帳'));
+
+    expect(getByText('新增收支記帳')).toBeTruthy();
+  });
+
+  it('opens installment mode when choosing the installment option from the history create menu', () => {
+    const { getByText, getByTitle } = render(<BrowserRouter><App /></BrowserRouter>);
+
+    fireEvent.click(getByText('明細'));
+    fireEvent.click(getByTitle('新增記帳'));
+
+    fireEvent.click(getByText('分期記帳'));
+
+    expect(getByText('分期總額 ($)')).toBeTruthy();
   });
 
   it('should open TransactionModal populated with transaction data when clicking edit on a row in HistoryTab', () => {
@@ -356,6 +397,333 @@ describe('Salary source group', () => {
     // User transactions are preserved
     const storedTxs = JSON.parse(localStorage.getItem('keep_accounts_transactions') || '[]');
     expect(storedTxs.length).toBe(1);
+  });
+});
+
+describe('Credit-card installments', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('repairs legacy installment system-category transactions saved under source group', async () => {
+    const groups = [
+      { id: '0', name: '當月薪資', emoji: 'briefcase', color: '#22c55e', isSource: true, categories: [] },
+      { id: '1', name: '日常開銷', emoji: 'credit-card', color: '#6366f1', targetRatio: 100, categories: [] },
+    ];
+    localStorage.setItem('keep_accounts_groups', JSON.stringify(groups));
+
+    const installmentId = 'legacy-inst';
+    const txs: Transaction[] = [
+      {
+        id: `${installmentId}-1`,
+        description: '手機分期',
+        amount: 1300,
+        type: 'expense',
+        category: '分期',
+        date: '2026-07-10T12:36:00+08:00',
+        accountGroupId: '0',
+        installmentId,
+        installmentPeriod: 1,
+        installmentCount: 3,
+      },
+    ];
+    localStorage.setItem('keep_accounts_transactions', JSON.stringify(txs));
+
+    const { result } = renderHook(() => useKeepAccounts());
+
+    await waitFor(() => {
+      expect(result.current.transactions[0].accountGroupId).toBe('1');
+    });
+  });
+
+  it('creates N dated transactions sharing one installment id with the last period carrying the remainder', () => {
+    const { result } = renderHook(() => useKeepAccounts());
+
+    act(() => {
+      result.current.saveTransaction(
+        '手機分期',
+        '10007',
+        'expense',
+        '購物消費',
+        '2026-01-15T10:00:00+08:00',
+        '1',
+        null,
+        10
+      );
+    });
+
+    const installmentTxs = result.current.transactions.filter(
+      (t) => t.installmentId
+    );
+    expect(installmentTxs.length).toBe(10);
+    // All periods share one installment id and the same group/category
+    expect(new Set(installmentTxs.map((t) => t.installmentId)).size).toBe(1);
+    expect(
+      installmentTxs.every(
+        (t) => t.accountGroupId === '1' && t.category === '購物消費'
+      )
+    ).toBe(true);
+
+    const sorted = [...installmentTxs].sort(
+      (a, b) => (a.installmentPeriod ?? 0) - (b.installmentPeriod ?? 0)
+    );
+    // Periods 1..9 are the base amount; the last period absorbs the remainder
+    expect(sorted.slice(0, 9).every((t) => t.amount === 1000)).toBe(true);
+    expect(sorted[9].amount).toBe(1007);
+    // Dated one month apart
+    expect(sorted[0].date.substring(0, 7)).toBe('2026-01');
+    expect(sorted[1].date.substring(0, 7)).toBe('2026-02');
+    expect(sorted[9].date.substring(0, 7)).toBe('2026-10');
+  });
+
+  it('creates exactly one transaction when installment is off', () => {
+    const { result } = renderHook(() => useKeepAccounts());
+
+    act(() => {
+      result.current.saveTransaction(
+        '咖啡',
+        '100',
+        'expense',
+        '購物消費',
+        '2026-07-10T10:00:00+08:00',
+        '1',
+        null
+      );
+    });
+
+    expect(result.current.transactions.length).toBe(1);
+    expect(result.current.transactions[0].installmentId).toBeUndefined();
+  });
+
+  it('excludes future-dated periods from realized balance but still shows them in history', () => {
+    const groups = [
+      { id: '0', name: '當月薪資', emoji: 'briefcase', color: '#22c55e', isSource: true, categories: [] },
+      { id: '1', name: '日常開銷', emoji: 'credit-card', color: '#6366f1', targetRatio: 100, categories: [] },
+    ];
+    localStorage.setItem('keep_accounts_groups', JSON.stringify(groups));
+
+    const installmentId = 'inst-1';
+    const mockTxs: Transaction[] = [
+      { id: 'inc', description: '薪水', amount: 50000, type: 'income', category: '薪資收入', date: '2020-01-01T10:00:00+08:00', accountGroupId: '0' },
+      { id: `${installmentId}-1`, description: '分期消費', amount: 1000, type: 'expense', category: '購物消費', date: '2020-02-01T10:00:00+08:00', accountGroupId: '1', installmentId, installmentPeriod: 1, installmentCount: 3 },
+      { id: `${installmentId}-2`, description: '分期消費', amount: 1000, type: 'expense', category: '購物消費', date: '2099-01-01T10:00:00+08:00', accountGroupId: '1', installmentId, installmentPeriod: 2, installmentCount: 3 },
+      { id: `${installmentId}-3`, description: '分期消費', amount: 1000, type: 'expense', category: '購物消費', date: '2099-02-01T10:00:00+08:00', accountGroupId: '1', installmentId, installmentPeriod: 3, installmentCount: 3 },
+    ];
+    localStorage.setItem('keep_accounts_transactions', JSON.stringify(mockTxs));
+
+    const { getByText, getAllByText } = render(<BrowserRouter><App /></BrowserRouter>);
+
+    // Realized balance = 50000 income - 1000 realized period = 49000.
+    // The two future periods (2099) must NOT be subtracted.
+    expect(getByText('$49,000')).toBeTruthy();
+
+    // History still lists all three periods, including the future-dated ones.
+    fireEvent.click(getByText('明細'));
+    expect(getAllByText('分期消費').length).toBe(3);
+  });
+
+  it('shows the 啟用通知 switch on the 分期 tab with a web-only delivery note', () => {
+    const { getByText, getByTitle, getByTestId, queryByText } = render(<BrowserRouter><App /></BrowserRouter>);
+
+    // Open the history create menu and enter installment mode directly
+    fireEvent.click(getByText('明細'));
+    fireEvent.click(getByTitle('新增記帳'));
+    fireEvent.click(getByText('分期記帳'));
+
+    expect(getByText('分期總額 ($)')).toBeTruthy();
+
+    // The notification switch is available on all platforms.
+    expect(getByText('啟用通知')).toBeTruthy();
+
+    // On web (jsdom) delivery is unsupported, but the message config is not
+    // yet shown until the notification switch is turned on.
+    expect(queryByText('通知標題')).toBeNull();
+  });
+
+  it('groups installment transactions in the 分期 view', () => {
+    const groups = [
+      { id: '0', name: '當月薪資', emoji: 'briefcase', color: '#22c55e', isSource: true, categories: [] },
+      { id: '1', name: '日常開銷', emoji: 'credit-card', color: '#6366f1', targetRatio: 100, categories: [] },
+    ];
+    localStorage.setItem('keep_accounts_groups', JSON.stringify(groups));
+
+    const installmentId = 'inst-group';
+    const mockTxs: Transaction[] = [
+      { id: `${installmentId}-1`, description: '手機分期', amount: 1000, type: 'expense', category: '購物消費', date: '2026-01-15T10:00:00+08:00', accountGroupId: '1', installmentId, installmentPeriod: 1, installmentCount: 3 },
+      { id: `${installmentId}-2`, description: '手機分期', amount: 1000, type: 'expense', category: '購物消費', date: '2026-02-15T10:00:00+08:00', accountGroupId: '1', installmentId, installmentPeriod: 2, installmentCount: 3 },
+      { id: `${installmentId}-3`, description: '手機分期', amount: 1007, type: 'expense', category: '購物消費', date: '2026-03-15T10:00:00+08:00', accountGroupId: '1', installmentId, installmentPeriod: 3, installmentCount: 3 },
+    ];
+    localStorage.setItem('keep_accounts_transactions', JSON.stringify(mockTxs));
+
+    const { getByText, getAllByText } = render(<BrowserRouter><App /></BrowserRouter>);
+
+    fireEvent.click(getByText('明細'));
+    fireEvent.click(getAllByText('分期')[0]);
+
+    expect(getByText('手機分期')).toBeTruthy();
+    expect(getByText('已繳 3 / 3 期 · 總額 $3007 · 剩餘 $0')).toBeTruthy();
+    expect(getByText('刪除整組')).toBeTruthy();
+    expect(getByText('第 1 期')).toBeTruthy();
+    expect(getAllByText(/\/3/).length).toBeGreaterThan(0);
+  });
+
+  it('edits one installment period without mutating sibling periods', () => {
+    const groups = [
+      { id: '0', name: '當月薪資', emoji: 'briefcase', color: '#22c55e', isSource: true, categories: [] },
+      { id: '1', name: '日常開銷', emoji: 'credit-card', color: '#6366f1', targetRatio: 100, categories: [] },
+    ];
+    localStorage.setItem('keep_accounts_groups', JSON.stringify(groups));
+
+    const installmentId = 'inst-isolated';
+    const txs: Transaction[] = [
+      { id: `${installmentId}-1`, description: '家電分期', amount: 1999, type: 'expense', category: '分期', date: '2026-08-10T12:47:00+08:00', accountGroupId: '1', installmentId, installmentPeriod: 1, installmentCount: 5 },
+      { id: `${installmentId}-2`, description: '家電分期', amount: 1999, type: 'expense', category: '分期', date: '2026-09-10T12:47:00+08:00', accountGroupId: '1', installmentId, installmentPeriod: 2, installmentCount: 5 },
+      { id: `${installmentId}-3`, description: '家電分期', amount: 1999, type: 'expense', category: '分期', date: '2026-10-10T12:47:00+08:00', accountGroupId: '1', installmentId, installmentPeriod: 3, installmentCount: 5 },
+      { id: `${installmentId}-4`, description: '家電分期', amount: 1999, type: 'expense', category: '分期', date: '2026-11-10T12:47:00+08:00', accountGroupId: '1', installmentId, installmentPeriod: 4, installmentCount: 5 },
+      { id: `${installmentId}-5`, description: '家電分期', amount: 2003, type: 'expense', category: '分期', date: '2026-12-10T12:47:00+08:00', accountGroupId: '1', installmentId, installmentPeriod: 5, installmentCount: 5 },
+    ];
+    localStorage.setItem('keep_accounts_transactions', JSON.stringify(txs));
+
+    const { result } = renderHook(() => useKeepAccounts());
+
+    act(() => {
+      result.current.saveTransaction(
+        '家電分期',
+        '1999',
+        'expense',
+        '分期',
+        '2026-12-25T12:47:00+08:00',
+        '1',
+        `${installmentId}-5`
+      );
+    });
+
+    const sorted = [...result.current.transactions]
+      .filter((t) => t.installmentId === installmentId)
+      .sort((a, b) => (a.installmentPeriod ?? 0) - (b.installmentPeriod ?? 0));
+
+    expect(sorted[4].amount).toBe(1999);
+    expect(sorted[4].date.startsWith('2026-12-25')).toBe(true);
+
+    expect(sorted.slice(0, 4).every((t) => t.amount === 1999)).toBe(true);
+    expect(sorted[0].date.startsWith('2026-08-10')).toBe(true);
+    expect(sorted[1].date.startsWith('2026-09-10')).toBe(true);
+    expect(sorted[2].date.startsWith('2026-10-10')).toBe(true);
+    expect(sorted[3].date.startsWith('2026-11-10')).toBe(true);
+
+    expect(sorted.every((t) => t.installmentId === installmentId)).toBe(true);
+    expect(sorted.every((t, idx) => (t.installmentPeriod ?? 0) === idx + 1)).toBe(true);
+    expect(sorted.every((t) => t.installmentCount === 5)).toBe(true);
+  });
+
+  it('rejects invalid installment period edits and keeps sibling rows unchanged', () => {
+    const groups = [
+      { id: '0', name: '當月薪資', emoji: 'briefcase', color: '#22c55e', isSource: true, categories: [] },
+      { id: '1', name: '日常開銷', emoji: 'credit-card', color: '#6366f1', targetRatio: 100, categories: [] },
+    ];
+    localStorage.setItem('keep_accounts_groups', JSON.stringify(groups));
+
+    const installmentId = 'inst-invalid';
+    const txs: Transaction[] = [
+      { id: `${installmentId}-1`, description: '家電分期', amount: 1999, type: 'expense', category: '分期', date: '2026-08-10T12:47:00+08:00', accountGroupId: '1', installmentId, installmentPeriod: 1, installmentCount: 2 },
+      { id: `${installmentId}-2`, description: '家電分期', amount: 2003, type: 'expense', category: '分期', date: '2026-09-10T12:47:00+08:00', accountGroupId: '1', installmentId, installmentPeriod: 2, installmentCount: 2 },
+    ];
+    localStorage.setItem('keep_accounts_transactions', JSON.stringify(txs));
+
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => undefined);
+    const { result } = renderHook(() => useKeepAccounts());
+
+    let success = true;
+    act(() => {
+      success = result.current.saveTransaction(
+        '家電分期',
+        '0',
+        'expense',
+        '分期',
+        '2026-09-25T12:47:00+08:00',
+        '1',
+        `${installmentId}-2`
+      );
+    });
+
+    expect(success).toBe(false);
+    expect(alertSpy).toHaveBeenCalled();
+
+    const sorted = [...result.current.transactions]
+      .filter((t) => t.installmentId === installmentId)
+      .sort((a, b) => (a.installmentPeriod ?? 0) - (b.installmentPeriod ?? 0));
+
+    expect(sorted[0].amount).toBe(1999);
+    expect(sorted[1].amount).toBe(2003);
+    expect(sorted[1].date.startsWith('2026-09-10')).toBe(true);
+
+    alertSpy.mockRestore();
+  });
+
+  it('opens edit modal for the targeted installment period from installment view', () => {
+    const groups = [
+      { id: '0', name: '當月薪資', emoji: 'briefcase', color: '#22c55e', isSource: true, categories: [] },
+      { id: '1', name: '日常開銷', emoji: 'credit-card', color: '#6366f1', targetRatio: 100, categories: [] },
+    ];
+    localStorage.setItem('keep_accounts_groups', JSON.stringify(groups));
+
+    const installmentId = 'inst-edit';
+    const mockTxs: Transaction[] = [
+      { id: `${installmentId}-1`, description: '家電分期', amount: 1999, type: 'expense', category: '分期', date: '2026-08-10T12:47:00+08:00', accountGroupId: '1', installmentId, installmentPeriod: 1, installmentCount: 5 },
+      { id: `${installmentId}-2`, description: '家電分期', amount: 2003, type: 'expense', category: '分期', date: '2026-09-10T12:47:00+08:00', accountGroupId: '1', installmentId, installmentPeriod: 2, installmentCount: 5 },
+    ];
+    localStorage.setItem('keep_accounts_transactions', JSON.stringify(mockTxs));
+
+    const { getByText, getAllByText, getAllByTitle, container } = render(<BrowserRouter><App /></BrowserRouter>);
+
+    fireEvent.click(getByText('明細'));
+    fireEvent.click(getAllByText('分期')[0]);
+
+    fireEvent.click(getAllByTitle('編輯單期')[1]);
+
+    expect(getByText('修改收支記帳')).toBeTruthy();
+    expect(getByText(/第 2 \/ 5 期/)).toBeTruthy();
+
+    const amountInput = container.querySelector('ion-input[placeholder*="輸入金額"]') as any;
+    expect(amountInput).toBeTruthy();
+    expect(amountInput.value.toString()).toBe('2003');
+  });
+
+  it('recomputes installment summary totals from edited period rows', () => {
+    const groups = [
+      { id: '0', name: '當月薪資', emoji: 'briefcase', color: '#22c55e', isSource: true, categories: [] },
+      { id: '1', name: '日常開銷', emoji: 'credit-card', color: '#6366f1', targetRatio: 100, categories: [] },
+    ];
+    localStorage.setItem('keep_accounts_groups', JSON.stringify(groups));
+
+    const installmentId = 'inst-summary';
+    const txs: Transaction[] = [
+      { id: `${installmentId}-1`, description: '家電分期', amount: 1999, type: 'expense', category: '分期', date: '2099-08-10T12:47:00+08:00', accountGroupId: '1', installmentId, installmentPeriod: 1, installmentCount: 5 },
+      { id: `${installmentId}-2`, description: '家電分期', amount: 1999, type: 'expense', category: '分期', date: '2099-09-10T12:47:00+08:00', accountGroupId: '1', installmentId, installmentPeriod: 2, installmentCount: 5 },
+      { id: `${installmentId}-3`, description: '家電分期', amount: 1999, type: 'expense', category: '分期', date: '2099-10-10T12:47:00+08:00', accountGroupId: '1', installmentId, installmentPeriod: 3, installmentCount: 5 },
+      { id: `${installmentId}-4`, description: '家電分期', amount: 1999, type: 'expense', category: '分期', date: '2099-11-10T12:47:00+08:00', accountGroupId: '1', installmentId, installmentPeriod: 4, installmentCount: 5 },
+      { id: `${installmentId}-5`, description: '家電分期', amount: 2003, type: 'expense', category: '分期', date: '2099-12-10T12:47:00+08:00', accountGroupId: '1', installmentId, installmentPeriod: 5, installmentCount: 5 },
+    ];
+    localStorage.setItem('keep_accounts_transactions', JSON.stringify(txs));
+
+    const { result } = renderHook(() => useKeepAccounts());
+    act(() => {
+      result.current.saveTransaction(
+        '家電分期',
+        '1999',
+        'expense',
+        '分期',
+        '2099-12-10T12:47:00+08:00',
+        '1',
+        `${installmentId}-5`
+      );
+    });
+
+    const { getByText, getAllByText } = render(<BrowserRouter><App /></BrowserRouter>);
+    fireEvent.click(getByText('明細'));
+    fireEvent.click(getAllByText('分期')[0]);
+
+    expect(getByText('已繳 0 / 5 期 · 總額 $9995 · 剩餘 $9995')).toBeTruthy();
   });
 });
 
