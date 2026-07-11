@@ -72,6 +72,16 @@ jobs:
           name: web-dist
           path: apps/web/dist
 
+      - name: Install Capacitor Assets
+        run: npm install -D @capacitor/assets
+
+      - name: Generate App Icons for Android
+        run: |
+          npx @capacitor/assets generate \
+            --iconPath public/keep-accounts-logo.svg \
+            --platforms android
+        working-directory: apps/web
+
       - name: Sync Capacitor Android
         run: npx cap sync android
         working-directory: apps/web
@@ -111,6 +121,16 @@ jobs:
         with:
           name: web-dist
           path: apps/web/dist
+
+      - name: Install Capacitor Assets
+        run: npm install -D @capacitor/assets
+
+      - name: Generate App Icons for iOS
+        run: |
+          npx @capacitor/assets generate \
+            --iconPath public/keep-accounts-logo.svg \
+            --platforms ios
+        working-directory: apps/web
 
       - name: Cache CocoaPods
         uses: actions/cache@v4

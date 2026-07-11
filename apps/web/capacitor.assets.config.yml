@@ -1,0 +1,20 @@
+# Capacitor Assets Configuration
+# Generates app icons and splash screens for iOS and Android
+
+ios:
+  icon:
+    sources:
+      - path: public/keep-accounts-logo.svg
+        density: universal
+    destinations:
+      - path: ios/App/App/Assets.xcassets/AppIcon.appiconset
+
+android:
+  icon:
+    sources:
+      - path: public/keep-accounts-logo.svg
+    destinations:
+      - path: android/app/src/main/res
+
+# Generate only icons, not splash screens
+splash: false
