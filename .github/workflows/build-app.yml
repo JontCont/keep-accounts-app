@@ -76,10 +76,7 @@ jobs:
         run: npm install -D @capacitor/assets
 
       - name: Generate App Icons for Android
-        run: |
-          npx capacitor-assets generate \
-            --input public/keep-accounts-logo.svg \
-            --platforms android
+        run: npx capacitor-assets generate --config capacitor.assets.config.yml
         working-directory: apps/web
 
       - name: Sync Capacitor Android
@@ -126,10 +123,7 @@ jobs:
         run: npm install -D @capacitor/assets
 
       - name: Generate App Icons for iOS
-        run: |
-          npx capacitor-assets generate \
-            --input public/keep-accounts-logo.svg \
-            --platforms ios
+        run: npx capacitor-assets generate --config capacitor.assets.config.yml
         working-directory: apps/web
 
       - name: Cache CocoaPods
