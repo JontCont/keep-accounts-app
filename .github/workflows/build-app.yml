@@ -77,8 +77,8 @@ jobs:
 
       - name: Generate App Icons for Android
         run: |
-          npx @capacitor/assets generate \
-            --iconPath public/keep-accounts-logo.svg \
+          npx capacitor-assets generate \
+            --input public/keep-accounts-logo.svg \
             --platforms android
         working-directory: apps/web
 
@@ -127,8 +127,8 @@ jobs:
 
       - name: Generate App Icons for iOS
         run: |
-          npx @capacitor/assets generate \
-            --iconPath public/keep-accounts-logo.svg \
+          npx capacitor-assets generate \
+            --input public/keep-accounts-logo.svg \
             --platforms ios
         working-directory: apps/web
 
