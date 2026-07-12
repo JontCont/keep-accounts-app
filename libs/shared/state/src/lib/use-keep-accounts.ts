@@ -155,7 +155,7 @@ export function useKeepAccounts() {
   const saveTransaction = (
     description: string,
     amountStr: string,
-    type: 'income' | 'expense',
+    type: 'income' | 'expense' | 'transfer',
     category: string,
     date: string,
     accountGroupId: string,

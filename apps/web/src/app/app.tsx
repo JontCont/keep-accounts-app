@@ -16,8 +16,8 @@ import {
 import { DashboardTab } from './components/DashboardTab';
 import { HistoryTab } from './components/HistoryTab';
 import { StatsTab } from './components/StatsTab';
-import { TransactionModal } from './components/TransactionModal';
 import { GroupSettingsModal } from './components/GroupSettingsModal';
+import { TransactionEntryPage } from './components/TransactionEntryPage';
 import { AppIcon } from './components/AppIcon';
 import { scheduleInstallmentReminders } from './services/notifications';
 import {
@@ -33,6 +33,14 @@ import {
 } from './services/backup';
 
 export function App() {
+    type MainTab = 'dashboard' | 'history' | 'stats' | 'settings';
+    type TransactionEntryOrigin = 'dashboard' | 'history';
+    type TransactionEntryContext = {
+      mode: 'create' | 'edit';
+      origin: TransactionEntryOrigin;
+      initialTab: 'basic' | 'installment';
+    } | null;
+
   const NAV_COLLAPSE_SCROLL_TOP_THRESHOLD = 72;
   const NAV_COLLAPSE_DELTA_THRESHOLD = 48;
   const NAV_EXPAND_DELTA_THRESHOLD = 28;
@@ -53,12 +61,11 @@ export function App() {
     setTransactions,
   } = useKeepAccounts();
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'history' | 'stats' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<MainTab>('dashboard');
   const [isEditingGroups, setIsEditingGroups] = useState(false);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
-  const [showTxModal, setShowTxModal] = useState(false);
+  const [transactionEntryContext, setTransactionEntryContext] = useState<TransactionEntryContext>(null);
   const [showHistoryCreateMenu, setShowHistoryCreateMenu] = useState(false);
-  const [txModalInitialTab, setTxModalInitialTab] = useState<'basic' | 'installment'>('basic');
 
   // FAB scroll behavior state
   const [showFab, setShowFab] = useState(true);
@@ -68,8 +75,10 @@ export function App() {
   const upScrollTravel = useRef(0);
   const [hasFocusedInput, setHasFocusedInput] = useState(false);
 
+  const isTransactionEntryActive = transactionEntryContext !== null;
+
   const isHighPriorityInteractionActive =
-    showTxModal || isEditingGroups || showHistoryCreateMenu || hasFocusedInput;
+    isTransactionEntryActive || isEditingGroups || showHistoryCreateMenu || hasFocusedInput;
 
   const handleScroll = (e: CustomEvent<any>) => {
     const currentScrollY = Math.max(0, e.detail.scrollTop ?? 0);
@@ -406,10 +415,25 @@ export function App() {
     }, 500);
   };
 
-  const openTransactionModal = (initialTab: 'basic' | 'installment' = 'basic') => {
+  const openTransactionEntry = (
+    origin: TransactionEntryOrigin,
+    initialTab: 'basic' | 'installment' = 'basic'
+  ) => {
     setEditingTx(null);
-    setTxModalInitialTab(initialTab);
-    setShowTxModal(true);
+    setTransactionEntryContext({ mode: 'create', origin, initialTab });
+  };
+
+  const openTransactionEditEntry = (tx: Transaction, origin: TransactionEntryOrigin) => {
+    setEditingTx(tx);
+    setTransactionEntryContext({ mode: 'edit', origin, initialTab: 'basic' });
+  };
+
+  const closeTransactionEntry = () => {
+    const fallbackTab: MainTab = transactionEntryContext?.origin ?? 'dashboard';
+    setActiveTab(fallbackTab);
+    setTransactionEntryContext(null);
+    setEditingTx(null);
+    setShowHistoryCreateMenu(false);
   };
 
   // Automatic backup trigger on change
@@ -508,7 +532,7 @@ export function App() {
   const handleSaveTransaction = (
     description: string,
     amount: string,
-    type: 'income' | 'expense',
+    type: 'income' | 'expense' | 'transfer',
     category: string,
     date: string,
     accountGroupId: string,
@@ -543,8 +567,7 @@ export function App() {
           /* reminder scheduling failures must never affect saved data */
         });
       }
-      setShowTxModal(false);
-      setEditingTx(null);
+      closeTransactionEntry();
     }
   };
 
@@ -606,7 +629,7 @@ export function App() {
             >
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  {activeTab === 'dashboard' && (
+                  {!isTransactionEntryActive && activeTab === 'dashboard' && (
                     <img
                       src="/keep-accounts-logo.svg"
                       alt="Keep Accounts logo"
@@ -629,27 +652,50 @@ export function App() {
                       transition: 'font-size 0.2s ease',
                     }}
                   >
-                    {activeTab === 'dashboard' && 'Keep Accounts'}
-                    {activeTab === 'history' && '歷史交易明細'}
-                    {activeTab === 'stats' && '支出統計分析'}
-                    {activeTab === 'settings' && '系統設定'}
+                    {isTransactionEntryActive && transactionEntryContext?.mode === 'create' && '新增收支記帳'}
+                    {isTransactionEntryActive && transactionEntryContext?.mode === 'edit' && '修改收支記帳'}
+                    {!isTransactionEntryActive && activeTab === 'dashboard' && 'Keep Accounts'}
+                    {!isTransactionEntryActive && activeTab === 'history' && '歷史交易明細'}
+                    {!isTransactionEntryActive && activeTab === 'stats' && '支出統計分析'}
+                    {!isTransactionEntryActive && activeTab === 'settings' && '系統設定'}
                   </h1>
                 </div>
-                {activeTab === 'dashboard' && (
+                {!isTransactionEntryActive && activeTab === 'dashboard' && (
                   <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0 }}>
                     精緻微型記帳系統
                   </p>
                 )}
               </div>
-              {activeTab === 'dashboard' && (
+              {isTransactionEntryActive ? (
+                <button
+                  type="button"
+                  onClick={closeTransactionEntry}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    background: 'var(--input-bg)',
+                    border: '1px solid var(--input-border)',
+                    borderRadius: '999px',
+                    padding: '8px 12px',
+                    color: 'var(--text-secondary)',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                  title="返回上一頁"
+                >
+                  <AppIcon name="chevron-down" size={14} style={{ transform: 'rotate(90deg)' }} />
+                  返回
+                </button>
+              ) : activeTab === 'dashboard' ? (
                 <div style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', textAlign: 'right' }}>
                   <div>{new Date().toLocaleDateString('zh-TW', { weekday: 'long' })}</div>
                   <div style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>
                     {new Date().toLocaleDateString('zh-TW')}
                   </div>
                 </div>
-              )}
-              {activeTab === 'history' && (
+              ) : null}
+              {!isTransactionEntryActive && activeTab === 'history' && (
                 <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                   <button
                     onClick={() => setShowHistoryCreateMenu((current) => !current)}
@@ -709,7 +755,7 @@ export function App() {
                           type="button"
                           onClick={() => {
                             setShowHistoryCreateMenu(false);
-                            openTransactionModal('basic');
+                            openTransactionEntry('history', 'basic');
                           }}
                           style={{
                             background: 'transparent',
@@ -728,7 +774,7 @@ export function App() {
                           type="button"
                           onClick={() => {
                             setShowHistoryCreateMenu(false);
-                            openTransactionModal('installment');
+                            openTransactionEntry('history', 'installment');
                           }}
                           style={{
                             background: 'transparent',
@@ -752,19 +798,28 @@ export function App() {
 
             {/* Main Content Area */}
             <main style={{ flex: 1, paddingBottom: '120px' }}>
-              {activeTab === 'dashboard' && (
+              {isTransactionEntryActive && transactionEntryContext && (
+                <TransactionEntryPage
+                  isOpen={true}
+                  onClose={closeTransactionEntry}
+                  editingTx={editingTx}
+                  accountGroups={accountGroups}
+                  initialTab={transactionEntryContext.initialTab}
+                  onSave={handleSaveTransaction}
+                />
+              )}
+
+              {!isTransactionEntryActive && activeTab === 'dashboard' && (
                 <>
                   <DashboardTab
                     accountGroups={accountGroups}
                     transactions={transactions}
                         onApplyStarterPreset={handleApplyStarterPreset}
                     onAddTransactionClick={() => {
-                      openTransactionModal('basic');
+                      openTransactionEntry('dashboard', 'basic');
                     }}
                     onEditTransactionClick={(tx) => {
-                      setEditingTx(tx);
-                      setTxModalInitialTab('basic');
-                      setShowTxModal(true);
+                      openTransactionEditEntry(tx, 'dashboard');
                     }}
                     onDeleteTransaction={deleteTransaction}
                     onAdjustTotalBalance={handleAdjustTotalBalance}
@@ -792,7 +847,7 @@ export function App() {
                 </>
               )}
 
-              {activeTab === 'history' && (
+              {!isTransactionEntryActive && activeTab === 'history' && (
                 <HistoryTab
                   accountGroups={accountGroups}
                   transactions={transactions}
@@ -803,18 +858,16 @@ export function App() {
                   getCategoryEmoji={getCategoryEmoji}
                   getGroupName={getGroupName}
                   onEditTransaction={(tx) => {
-                    setEditingTx(tx);
-                    setTxModalInitialTab('basic');
-                    setShowTxModal(true);
+                    openTransactionEditEntry(tx, 'history');
                   }}
                   onAddTransaction={() => {
-                    openTransactionModal('basic');
+                    openTransactionEntry('history', 'basic');
                   }}
                   showFab={showFab}
                 />
               )}
 
-              {activeTab === 'stats' && (
+              {!isTransactionEntryActive && activeTab === 'stats' && (
                 <StatsTab
                   accountGroups={accountGroups}
                   transactions={transactions}
@@ -824,7 +877,7 @@ export function App() {
               )}
 
               {/* TAB 4: SETTINGS (BACKUP & RESTORE) */}
-              {activeTab === 'settings' && (
+              {!isTransactionEntryActive && activeTab === 'settings' && (
                 <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                   
                   {/* Card 1: Theme Settings */}
@@ -1165,6 +1218,7 @@ export function App() {
             bottom: '16px',
             left: '50%',
             transform: 'translateX(-50%)',
+            visibility: isTransactionEntryActive ? 'hidden' : 'visible',
           }}
         >
           <button
@@ -1243,20 +1297,6 @@ export function App() {
           </button>
         </nav>
 
-        {/* TRANSACTION MODAL (Add/Edit) */}
-        <TransactionModal
-          isOpen={showTxModal}
-          onClose={() => {
-            setShowTxModal(false);
-            setEditingTx(null);
-            setTxModalInitialTab('basic');
-            setShowHistoryCreateMenu(false);
-          }}
-          editingTx={editingTx}
-          accountGroups={accountGroups}
-          initialTab={txModalInitialTab}
-          onSave={handleSaveTransaction}
-        />
       </IonPage>
     </IonApp>
   );

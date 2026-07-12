@@ -139,7 +139,7 @@ describe('App', () => {
     expect(nav.className).toContain('bottom-nav--expanded');
   });
 
-  it('keeps bottom navigation expanded while modal overlay is active', () => {
+  it('hides bottom navigation while transaction entry page is active', () => {
     const { container, getByTestId, getByText } = render(<BrowserRouter><App /></BrowserRouter>);
 
     const nav = getByTestId('bottom-nav');
@@ -154,6 +154,7 @@ describe('App', () => {
     fireEvent.click(getByText('新增記帳明細'));
     expect(getByText('新增收支記帳')).toBeTruthy();
     expect(nav.className).toContain('bottom-nav--expanded');
+    expect((nav as HTMLElement).style.visibility).toBe('hidden');
   });
 
   it('keeps header title behavior stable while bottom nav presentation changes', () => {
@@ -438,7 +439,7 @@ describe('App', () => {
     expect(deleteBtns.length).toBe(3);
   });
 
-  it('should open TransactionModal in creation mode when clicking the dashboard add button', () => {
+  it('should open transaction entry page in creation mode when clicking the dashboard add button', () => {
     const groups = [
       { id: '0', name: '當月薪資', emoji: 'briefcase', color: '#22c55e', isSource: true, categories: [] },
       { id: '1', name: '日常開銷', emoji: 'credit-card', color: '#6366f1', targetRatio: 100, categories: [] },
@@ -453,7 +454,7 @@ describe('App', () => {
     expect(getByText('新增收支記帳')).toBeTruthy();
   });
 
-  it('opens the transaction modal when choosing the general option from the history create menu', () => {
+  it('opens the transaction entry page when choosing the general option from the history create menu', () => {
     const { getByText, getByTitle } = render(<BrowserRouter><App /></BrowserRouter>);
 
     fireEvent.click(getByText('明細'));
@@ -475,7 +476,7 @@ describe('App', () => {
     expect(getByText('分期總額 ($)')).toBeTruthy();
   });
 
-  it('should open TransactionModal populated with transaction data when clicking edit on a row in HistoryTab', () => {
+  it('should open transaction entry page populated with transaction data when clicking edit on a row in HistoryTab', () => {
     const mockTxs: Transaction[] = [
       { id: 'tx-test-id', description: 'test-history-item', amount: 500, type: 'expense', category: '餐飲食品', date: '2026-07-08T12:00:00.000Z', accountGroupId: '1' }
     ];
@@ -494,7 +495,7 @@ describe('App', () => {
     const editBtn = getByTitle('編輯');
     fireEvent.click(editBtn);
     
-    // Modal header "修改收支記帳" should be visible
+    // Page header "修改收支記帳" should be visible
     expect(getByText('修改收支記帳')).toBeTruthy();
     // Modal inputs should be populated with the transaction data
     const descInput = container.querySelector('ion-input[placeholder*="例如"]') as any;
@@ -504,6 +505,28 @@ describe('App', () => {
     const amountInput = container.querySelector('ion-input[placeholder*="金額"]') as any;
     expect(amountInput).toBeTruthy();
     expect(amountInput.value.toString()).toBe('500');
+  });
+
+  it('returns to dashboard when backing out from a dashboard-origin transaction entry page', () => {
+    const { getByText } = render(<BrowserRouter><App /></BrowserRouter>);
+
+    fireEvent.click(getByText('新增記帳明細'));
+    expect(getByText('新增收支記帳')).toBeTruthy();
+
+    fireEvent.click(getByText('返回'));
+    expect(getByText('Keep Accounts')).toBeTruthy();
+  });
+
+  it('returns to history when backing out from a history-origin transaction entry page', () => {
+    const { getByText, getByTitle } = render(<BrowserRouter><App /></BrowserRouter>);
+
+    fireEvent.click(getByText('明細'));
+    fireEvent.click(getByTitle('新增記帳'));
+    fireEvent.click(getByText('一般記帳'));
+    expect(getByText('新增收支記帳')).toBeTruthy();
+
+    fireEvent.click(getByText('返回'));
+    expect(getByText('歷史交易明細')).toBeTruthy();
   });
 });
 
@@ -770,7 +793,7 @@ describe('Credit-card installments', () => {
   });
 
   it('shows the 啟用通知 switch on the 分期 tab with a web-only delivery note', () => {
-    const { getByText, getByTitle, getByTestId, queryByText } = render(<BrowserRouter><App /></BrowserRouter>);
+    const { getByText, getByTitle, queryByText } = render(<BrowserRouter><App /></BrowserRouter>);
 
     // Open the history create menu and enter installment mode directly
     fireEvent.click(getByText('明細'));

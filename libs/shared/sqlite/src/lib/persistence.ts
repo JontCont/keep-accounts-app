@@ -238,7 +238,7 @@ const readSqliteStructuredSnapshot = async (): Promise<KeepAccountsSnapshot | nu
     id: string;
     description: string;
     amount: number;
-    type: 'income' | 'expense';
+    type: 'income' | 'expense' | 'transfer';
     category: string;
     date: string;
     account_group_id: string;

@@ -73,6 +73,20 @@ export function migrateAccountGroups(parsed: any[]): AccountGroup[] {
         );
         return defaultCat ? { ...cat, color: defaultCat.color } : cat;
       });
+
+      // Ensure newly introduced default category exists for 投資理財.
+      if (defaultGroup.id === '2') {
+        const defaultStockCategory = defaultGroup.categories.find(
+          (dc) => dc.name === '股票' && dc.type === 'expense'
+        );
+        const hasStockCategory = categories.some(
+          (cat: any) => cat.name === '股票' && cat.type === 'expense'
+        );
+
+        if (defaultStockCategory && !hasStockCategory) {
+          categories = [...categories, { ...defaultStockCategory }];
+        }
+      }
     }
 
     const ratio =

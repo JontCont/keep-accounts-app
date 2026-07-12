@@ -70,6 +70,7 @@ export const DEFAULT_ACCOUNT_GROUPS: AccountGroup[] = [
     description: '投資理財：投入股市、基金等，用於創造被動收入與資產增值。',
     targetRatio: 30,
     categories: [
+      { name: '股票', emoji: 'trending-up', color: '#2563eb', type: 'expense' },        // Blue-Dark
       { name: '股市投資', emoji: 'trending-down', color: '#6366f1', type: 'expense' }, // Indigo
       { name: '基金認購', emoji: 'landmark', color: '#a855f7', type: 'expense' },      // Purple
       { name: '投資理財', emoji: 'trending-up', color: '#3b82f6', type: 'expense' },   // Blue
@@ -124,7 +125,7 @@ export const INITIAL_TRANSACTIONS: Transaction[] = [
   { id: 'tmpl-9', description: '定存轉入', amount: 12000, type: 'expense', category: '定存儲蓄', date: monthsAgoDay(0, 6, 13, 0), accountGroupId: '3' },
   { id: 'tmpl-10', description: '緊急預備金補足', amount: 4000, type: 'expense', category: '緊急備用', date: monthsAgoDay(0, 12, 16, 45), accountGroupId: '3' },
   { id: 'tmpl-11', description: '定存利息入帳', amount: 360, type: 'income', category: '定存利息', date: monthsAgoDay(0, 18, 9, 15), accountGroupId: '3' },
-  { id: 'tmpl-12', description: 'ETF 定期定額', amount: 6000, type: 'expense', category: '投資理財', date: monthsAgoDay(0, 7, 10, 0), accountGroupId: '2' },
+  { id: 'tmpl-12', description: 'ETF 定期定額', amount: 6000, type: 'expense', category: '股票', date: monthsAgoDay(0, 7, 10, 0), accountGroupId: '2' },
   { id: 'tmpl-13', description: '股利入帳', amount: 1800, type: 'income', category: '股利發放', date: monthsAgoDay(0, 16, 14, 5), accountGroupId: '2' },
   { id: 'tmpl-14', description: '基金加碼', amount: 2500, type: 'expense', category: '基金認購', date: daysAgo(9, 15, 40), accountGroupId: '2' },
 
