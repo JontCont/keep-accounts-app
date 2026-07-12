@@ -197,8 +197,8 @@ describe('App', () => {
     
     expect(getByText('完成編輯')).toBeTruthy();
     
-    // Find all number inputs by placeholder "0"
-    const inputs = getAllByPlaceholderText('0');
+    // Find all number inputs by placeholder "%"
+    const inputs = getAllByPlaceholderText('%');
     expect(inputs.length).toBeGreaterThanOrEqual(3);
     
     // Non-source groups sum to 100% (40 + 30 + 30). Change the first (儲蓄資金) input to 50
@@ -235,7 +235,7 @@ describe('App', () => {
     fireEvent.click(getByText('套用入門資金配置'));
     fireEvent.click(getByText(/編輯帳戶/));
 
-    const inputs = getAllByPlaceholderText('0') as HTMLInputElement[];
+    const inputs = getAllByPlaceholderText('%') as HTMLInputElement[];
     expect(inputs.length).toBeGreaterThanOrEqual(3);
 
     fireEvent.focus(inputs[0]);
@@ -280,7 +280,7 @@ describe('App', () => {
     const editBtn = getByText(/編輯帳戶/);
     fireEvent.click(editBtn);
     
-    const inputs = getAllByPlaceholderText('0') as HTMLInputElement[];
+    const inputs = getAllByPlaceholderText('%') as HTMLInputElement[];
     expect(inputs.length).toBeGreaterThanOrEqual(3);
     
     // Verifying default target migration rules were applied: (Group 1 -> 30, Group 2 -> 30, Group 3 -> 40)
@@ -508,12 +508,12 @@ describe('App', () => {
   });
 
   it('returns to dashboard when backing out from a dashboard-origin transaction entry page', () => {
-    const { getByText } = render(<BrowserRouter><App /></BrowserRouter>);
+    const { getByText, getByTitle } = render(<BrowserRouter><App /></BrowserRouter>);
 
     fireEvent.click(getByText('新增記帳明細'));
     expect(getByText('新增收支記帳')).toBeTruthy();
 
-    fireEvent.click(getByText('返回'));
+    fireEvent.click(getByTitle('返回上一頁'));
     expect(getByText('Keep Accounts')).toBeTruthy();
   });
 
@@ -525,7 +525,7 @@ describe('App', () => {
     fireEvent.click(getByText('一般記帳'));
     expect(getByText('新增收支記帳')).toBeTruthy();
 
-    fireEvent.click(getByText('返回'));
+    fireEvent.click(getByTitle('返回上一頁'));
     expect(getByText('歷史交易明細')).toBeTruthy();
   });
 });
