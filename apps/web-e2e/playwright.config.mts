@@ -31,7 +31,7 @@ export default defineConfig({
   },
   /* Run your local dev server before starting the tests */
   webServer: {
-    command: 'npx nx run @keep-accounts-app/web:preview',
+    command: 'npx nx run @keep-accounts-app/web:dev -- --host 127.0.0.1 --port 4300',
     url: 'http://localhost:4300',
     reuseExistingServer: true,
     cwd: workspaceRoot

@@ -3,7 +3,10 @@ import { BrowserRouter } from 'react-router-dom';
 import { fireEvent, render } from '@testing-library/react';
 
 import {
+  computeStockAmount,
+  filterAccountGroupsByTransactionType,
   TransactionModal,
+  filterTransactionCategoriesByType,
   resolveDefaultTransactionGroupId,
   resolveTransactionCategory,
   shiftLocalIsoMonth,
@@ -42,6 +45,50 @@ describe('TransactionModal', () => {
     expect(shiftLocalIsoMonth(start, 1).startsWith('2026-04-30')).toBe(true);
     expect(shiftLocalIsoMonth(start, -1).startsWith('2026-02-28')).toBe(true);
     expect(shiftLocalIsoMonth(start, -3).startsWith('2025-12-31')).toBe(true);
+  });
+
+  it('only shows salary-like categories for income', () => {
+    const categories = [
+      { name: '薪資收入', emoji: 'briefcase', color: '#22c55e', type: 'income' },
+      { name: '薪資收入', emoji: 'briefcase', color: '#22c55e', type: 'expense' },
+      { name: '一般支出', emoji: 'shopping-cart', color: '#10b981', type: 'expense' },
+      { name: 'Salary Bonus', emoji: 'briefcase', color: '#22c55e', type: 'expense' },
+    ] as any;
+
+    const expenseCategories = filterTransactionCategoriesByType(categories, 'expense');
+    const incomeCategories = filterTransactionCategoriesByType(categories, 'income');
+
+    expect(expenseCategories.map((c: any) => c.name)).toEqual(['一般支出']);
+    expect(incomeCategories.map((c: any) => c.name)).toEqual(['薪資收入']);
+  });
+
+  it('only shows account groups that contain categories for current transaction type', () => {
+    const groups = [
+      {
+        id: '0',
+        name: '當月薪資',
+        isSource: true,
+        categories: [{ name: '薪資收入', emoji: 'briefcase', color: '#22c55e', type: 'income' }],
+      },
+      {
+        id: '1',
+        name: '日常開銷',
+        categories: [{ name: '餐飲', emoji: 'coffee', color: '#6366f1', type: 'expense' }],
+      },
+    ] as any;
+
+    const expenseGroups = filterAccountGroupsByTransactionType(groups, 'expense');
+    const incomeGroups = filterAccountGroupsByTransactionType(groups, 'income');
+
+    expect(expenseGroups.map((g: any) => g.name)).toEqual(['日常開銷']);
+    expect(incomeGroups.map((g: any) => g.name)).toEqual(['當月薪資']);
+  });
+
+  it('computes stock amount with shares multiplied by unit price', () => {
+    expect(computeStockAmount('10', '58.4')).toBe('584');
+    expect(computeStockAmount('3.5', '100.25')).toBe('350.88');
+    expect(computeStockAmount('', '58.4')).toBe('');
+    expect(computeStockAmount('10', '0')).toBe('');
   });
 
   it('shows installment start-month controls', () => {

@@ -73,6 +73,20 @@ export function migrateAccountGroups(parsed: any[]): AccountGroup[] {
         );
         return defaultCat ? { ...cat, color: defaultCat.color } : cat;
       });
+
+      // Ensure newly introduced default category exists for 投資理財.
+      if (defaultGroup.id === '2') {
+        const defaultStockCategory = defaultGroup.categories.find(
+          (dc) => dc.name === '股票' && dc.type === 'expense'
+        );
+        const hasStockCategory = categories.some(
+          (cat: any) => cat.name === '股票' && cat.type === 'expense'
+        );
+
+        if (defaultStockCategory && !hasStockCategory) {
+          categories = [...categories, { ...defaultStockCategory }];
+        }
+      }
     }
 
     const ratio =
@@ -128,40 +142,42 @@ export function migrateAccountGroups(parsed: any[]): AccountGroup[] {
     }
     // Deprecated bound-category list is removed
     localStorage.removeItem('keep_accounts_allocation_categories');
-  }
 
-  // Validate non-source target ratios sum to 100%
-  const nonSource = migrated.filter((g: any) => !g.isSource);
-  const sum = nonSource.reduce(
-    (s: number, g: any) => s + (g.targetRatio || 0),
-    0
-  );
-  if (sum !== 100) {
-    const isCanonical =
-      nonSource.length === 3 &&
-      migrated.some((g: any) => g.id === '1') &&
-      migrated.some((g: any) => g.id === '2') &&
-      migrated.some((g: any) => g.id === '3');
-    if (isCanonical) {
-      migrated = migrated.map((g: any) => {
-        if (g.isSource) return g;
-        let r = 0;
-        if (g.id === '1') r = 30;
-        else if (g.id === '2') r = 30;
-        else if (g.id === '3') r = 40;
-        return { ...g, targetRatio: r };
-      });
-    } else {
-      const count = nonSource.length || 1;
-      const avg = Math.floor(100 / count);
-      const remainder = 100 % count;
-      let i = 0;
-      migrated = migrated.map((g: any) => {
-        if (g.isSource) return g;
-        const r = avg + (i < remainder ? 1 : 0);
-        i++;
-        return { ...g, targetRatio: r };
-      });
+    // Validate legacy non-source target ratios sum to 100% after source-group
+    // injection. For modern data that already has a source group, keep the
+    // user-authored ratios as persisted.
+    const nonSource = migrated.filter((g: any) => !g.isSource);
+    const sum = nonSource.reduce(
+      (s: number, g: any) => s + (g.targetRatio || 0),
+      0
+    );
+    if (sum !== 100) {
+      const isCanonical =
+        nonSource.length === 3 &&
+        migrated.some((g: any) => g.id === '1') &&
+        migrated.some((g: any) => g.id === '2') &&
+        migrated.some((g: any) => g.id === '3');
+      if (isCanonical) {
+        migrated = migrated.map((g: any) => {
+          if (g.isSource) return g;
+          let r = 0;
+          if (g.id === '1') r = 30;
+          else if (g.id === '2') r = 30;
+          else if (g.id === '3') r = 40;
+          return { ...g, targetRatio: r };
+        });
+      } else {
+        const count = nonSource.length || 1;
+        const avg = Math.floor(100 / count);
+        const remainder = 100 % count;
+        let i = 0;
+        migrated = migrated.map((g: any) => {
+          if (g.isSource) return g;
+          const r = avg + (i < remainder ? 1 : 0);
+          i++;
+          return { ...g, targetRatio: r };
+        });
+      }
     }
   }
   return migrated;

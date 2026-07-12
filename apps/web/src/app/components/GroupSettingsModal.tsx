@@ -164,6 +164,7 @@ interface GroupSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   accountGroups: AccountGroup[];
+  referenceMonthlyAmount?: number;
   onSaveGroups: (groups: AccountGroup[]) => boolean;
   onDeleteGroup: (groupId: string) => void;
   onAddGroup: (
@@ -184,22 +185,22 @@ interface GroupSettingsModalProps {
     catName: string,
     type: 'income' | 'expense'
   ) => void;
-  onUpdateGroupBudget: (groupId: string, budget: number | undefined) => void;
 }
 
 export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
   isOpen,
   onClose,
   accountGroups,
+  referenceMonthlyAmount,
   onSaveGroups,
   onDeleteGroup,
   onAddGroup,
   onAddCategory,
   onDeleteCategory,
-  onUpdateGroupBudget,
 }) => {
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [editingGroups, setEditingGroups] = useState<AccountGroup[] | null>(null);
+  const [targetRatioDrafts, setTargetRatioDrafts] = useState<Record<string, string>>({});
 
   // Form State for Adding Account Group
   const [newGroupName, setNewGroupName] = useState('');
@@ -216,9 +217,11 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       setEditingGroups(JSON.parse(JSON.stringify(accountGroups)));
+      setTargetRatioDrafts({});
     } else {
       setEditingGroups(null);
       setEditingGroupId(null);
+      setTargetRatioDrafts({});
     }
   }, [isOpen, accountGroups]);
 
@@ -244,7 +247,90 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
     (s, g) => s + (g.isSource ? 0 : g.targetRatio || 0),
     0
   );
-  const isInvalidRatio = targetSum !== 100;
+  const isOverAllocated = targetSum > 100;
+  const normalizedReferenceAmount =
+    typeof referenceMonthlyAmount === 'number' && Number.isFinite(referenceMonthlyAmount)
+      ? Math.max(0, Math.round(referenceMonthlyAmount))
+      : 0;
+  const hasReferenceAmount = normalizedReferenceAmount > 0;
+  const ratioRulePresets = [
+    {
+      key: '333',
+      label: '333 法則',
+      description: '日常 33% / 投資 33% / 儲蓄 33%',
+      ratiosByGroupId: new Map<string, number>([
+        ['1', 33],
+        ['2', 33],
+        ['3', 33],
+      ]),
+    },
+    {
+      key: '631',
+      label: '631 法則',
+      description: '日常 30% / 投資 10% / 儲蓄 60%',
+      ratiosByGroupId: new Map<string, number>([
+        ['1', 30],
+        ['2', 10],
+        ['3', 60],
+      ]),
+    },
+  ];
+  const nonSourceGroups = editingGroups.filter((group) => !group.isSource);
+
+  const getTargetRatioInputValue = (group: AccountGroup) => {
+    const draft = targetRatioDrafts[group.id];
+    if (draft !== undefined) {
+      return draft;
+    }
+    return group.targetRatio === undefined || group.targetRatio === null ? '' : String(group.targetRatio);
+  };
+
+  const clearTargetRatioDraft = (groupId: string) => {
+    setTargetRatioDrafts((prev) => {
+      const next = { ...prev };
+      delete next[groupId];
+      return next;
+    });
+  };
+
+  const applyTargetRatioRule = (ratiosByGroupId: Map<string, number>) => {
+    const canApplyRule =
+      nonSourceGroups.length === ratiosByGroupId.size &&
+      nonSourceGroups.every((group) => ratiosByGroupId.has(group.id));
+    if (!canApplyRule) {
+      return;
+    }
+
+    const updated = editingGroups.map((group) => {
+      if (group.isSource) {
+        return group;
+      }
+
+      return {
+        ...group,
+        targetRatio: ratiosByGroupId.get(group.id) ?? group.targetRatio ?? 0,
+      };
+    });
+
+    setEditingGroups(updated);
+    setTargetRatioDrafts({});
+  };
+
+  const updateGroupTargetRatio = (groupId: string, ratio: number) => {
+    const normalizedRatio = Math.max(0, Math.min(100, ratio));
+    setTargetRatioDrafts((prev) => ({
+      ...prev,
+      [groupId]: String(normalizedRatio),
+    }));
+    const updated = editingGroups.map((eg) => {
+      if (eg.id === groupId) {
+        return { ...eg, targetRatio: normalizedRatio };
+      }
+      return eg;
+    });
+    setEditingGroups(updated);
+  };
+
   const defaultCategoryItems = Array.from(
     new Map(
       DEFAULT_ACCOUNT_GROUPS.flatMap((group) => group.categories)
@@ -279,13 +365,13 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
         </h3>
         <button
           onClick={handleSave}
-          disabled={isInvalidRatio}
+          disabled={false}
           style={{
             background: 'transparent',
-            color: isInvalidRatio ? 'var(--text-tertiary)' : 'var(--primary-color)',
+            color: 'var(--primary-color)',
             fontSize: '0.9rem',
             fontWeight: 600,
-            cursor: isInvalidRatio ? 'not-allowed' : 'pointer',
+            cursor: 'pointer',
           }}
         >
           完成編輯
@@ -416,8 +502,53 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
           🎯 設定資金大項目標配比
         </h4>
 
+        <div
+          style={{
+            marginTop: '10px',
+            marginBottom: '4px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '8px',
+            flexWrap: 'wrap',
+          }}
+        >
+          <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+            快速套用比例法則：
+          </span>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {ratioRulePresets.map((preset) => {
+              const canApplyPreset =
+                nonSourceGroups.length === preset.ratiosByGroupId.size &&
+                nonSourceGroups.every((group) => preset.ratiosByGroupId.has(group.id));
+
+              return (
+                <button
+                  key={preset.key}
+                  type="button"
+                  title={preset.description}
+                  onClick={() => applyTargetRatioRule(preset.ratiosByGroupId)}
+                  disabled={!canApplyPreset}
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: '6px',
+                    border: '1px solid var(--primary-color)',
+                    background: canApplyPreset ? 'rgba(99, 102, 241, 0.12)' : 'transparent',
+                    color: canApplyPreset ? 'var(--primary-color)' : 'var(--text-tertiary)',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    cursor: canApplyPreset ? 'pointer' : 'not-allowed',
+                  }}
+                >
+                  {preset.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px' }}>
-          {editingGroups.filter((group) => !group.isSource).map((group) => (
+          {nonSourceGroups.map((group) => (
             <div
               key={group.id}
               style={{
@@ -425,29 +556,86 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 gap: '12px',
+                paddingBottom: '10px',
+                borderBottom: '1px dashed rgba(255,255,255,0.06)',
               }}
             >
               <span style={{ fontSize: '0.9rem', display: 'flex', gap: '4px', alignItems: 'center' }}>
                 <AppIcon name={group.emoji} size={18} />
                 <span>{group.name}</span>
               </span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input
+                  type="number"
+                  min={0}
+                  placeholder={hasReferenceAmount ? '金額' : '金額（參考）'}
+                  value={
+                    hasReferenceAmount
+                      ? String(
+                          Math.round(
+                            (normalizedReferenceAmount * (group.targetRatio ?? 0)) / 100
+                          )
+                        )
+                      : ''
+                  }
+                  onChange={(e: any) => {
+                    const raw = e.target.value ?? '';
+                    if (raw === '' || !hasReferenceAmount) {
+                      return;
+                    }
+
+                    const amount = Math.max(0, parseInt(raw, 10));
+                    if (!Number.isFinite(amount)) {
+                      return;
+                    }
+
+                    const convertedRatio = Math.round((amount / normalizedReferenceAmount) * 100);
+                    updateGroupTargetRatio(group.id, convertedRatio);
+                  }}
+                  disabled={!hasReferenceAmount}
+                  style={{
+                    width: '120px',
+                    fontSize: '0.9rem',
+                    padding: '6px',
+                    textAlign: 'right',
+                    background: 'var(--input-bg)',
+                    border: '1px solid var(--input-border)',
+                    color: 'var(--text-primary)',
+                    borderRadius: '4px',
+                    opacity: hasReferenceAmount ? 1 : 0.75,
+                  }}
+                />
                 <input
                   type="number"
                   min={0}
                   max={100}
-                  placeholder="0"
-                  value={group.targetRatio ?? ''}
+                  placeholder="%"
+                  value={getTargetRatioInputValue(group)}
+                  onFocus={() => {
+                    setTargetRatioDrafts((prev) => ({
+                      ...prev,
+                      [group.id]: '',
+                    }));
+                  }}
                   onChange={(e: any) => {
                     const raw = e.target.value ?? '';
-                    const val = raw === '' ? 0 : Math.max(0, parseInt(raw, 10));
-                    const updated = editingGroups.map((eg) => {
-                      if (eg.id === group.id) {
-                        return { ...eg, targetRatio: val };
-                      }
-                      return eg;
-                    });
-                    setEditingGroups(updated);
+                    if (raw === '') {
+                      setTargetRatioDrafts((prev) => ({
+                        ...prev,
+                        [group.id]: '',
+                      }));
+                      return;
+                    }
+
+                    const val = Math.max(0, parseInt(raw, 10));
+                    if (!Number.isFinite(val)) {
+                      return;
+                    }
+
+                    updateGroupTargetRatio(group.id, val);
+                  }}
+                  onBlur={() => {
+                    clearTargetRatioDraft(group.id);
                   }}
                   style={{
                     width: '80px',
@@ -478,13 +666,13 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
             <span
               style={{
                 fontWeight: 600,
-                color: isInvalidRatio ? 'var(--expense-color)' : 'var(--income-color)',
+                color: isOverAllocated ? 'var(--expense-color)' : 'var(--income-color)',
               }}
             >
               {targetSum}%
             </span>
           </div>
-          {isInvalidRatio && (
+          {isOverAllocated && (
             <div
               style={{
                 color: 'var(--expense-color)',
@@ -493,7 +681,7 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
                 fontWeight: 500,
               }}
             >
-              ⚠️ 目標比例加總必須為 100%（目前: {targetSum}%）
+              ⚠️ 目前超配 {targetSum - 100}%（目前: {targetSum}%）
             </div>
           )}
         </div>
@@ -544,51 +732,6 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
               >
                 關閉
               </button>
-            </div>
-
-            {/* Budget Edit Section */}
-            <div
-              style={{
-                marginBottom: '16px',
-                borderBottom: '1px solid rgba(255,255,255,0.06)',
-                paddingBottom: '16px',
-              }}
-            >
-              <label
-                style={{
-                  display: 'block',
-                  fontSize: '0.85rem',
-                  fontWeight: 600,
-                  color: 'var(--text-secondary)',
-                  marginBottom: '8px',
-                }}
-              >
-                設定每月預算 (未設置或 0 表示不限制)
-              </label>
-              <IonInput
-                type="number"
-                min={0}
-                placeholder="例如: 10000"
-                value={group.budget ?? ''}
-                onIonInput={(e) => {
-                  const raw = e.detail.value ?? '';
-                  const val = raw === '' ? undefined : Math.max(0, parseInt(raw, 10));
-                  onUpdateGroupBudget(group.id, val);
-                  const updated = editingGroups.map((eg) => {
-                    if (eg.id === group.id) {
-                      return { ...eg, budget: val };
-                    }
-                    return eg;
-                  });
-                  setEditingGroups(updated);
-                }}
-                style={
-                  {
-                    width: '100%',
-                    fontSize: '1rem',
-                  } as React.CSSProperties
-                }
-              />
             </div>
 
             {/* Type Switcher */}

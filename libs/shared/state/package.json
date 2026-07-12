@@ -3,6 +3,9 @@
   "version": "0.0.1",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
+  "dependencies": {
+    "@keep-accounts-app/sqlite": "0.0.1"
+  },
   "exports": {
     ".": {
       "types": "./src/index.ts",

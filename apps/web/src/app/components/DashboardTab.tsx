@@ -5,13 +5,16 @@ import {
   getCurrentMonthExpenseForGroup,
 } from '@keep-accounts-app/domain';
 import { AppIcon } from './AppIcon';
+import { TransactionLedgerRow } from './TransactionLedgerRow';
 
 interface DashboardTabProps {
   accountGroups: AccountGroup[];
   transactions: Transaction[];
+  onApplyStarterPreset: () => void;
   onAddTransactionClick: () => void;
   onEditTransactionClick: (tx: Transaction) => void;
   onDeleteTransaction: (id: string) => void;
+  onAdjustTotalBalance: (targetBalance: number) => boolean;
   isEditingGroups: boolean;
   setIsEditingGroups: (val: boolean) => void;
   getCategoryEmoji: (catName: string, groupId: string) => string;
@@ -25,9 +28,11 @@ interface DashboardTabProps {
 export const DashboardTab: React.FC<DashboardTabProps> = ({
   accountGroups,
   transactions,
+  onApplyStarterPreset,
   onAddTransactionClick,
   onEditTransactionClick,
   onDeleteTransaction,
+  onAdjustTotalBalance,
   isEditingGroups,
   setIsEditingGroups,
   getCategoryEmoji,
@@ -37,7 +42,11 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   getGroupTotals,
   groupSettingsPanel,
 }) => {
+  const formatAmount = (value: number) => value.toLocaleString('zh-TW');
+
   const [period, setPeriod] = useState<'today' | 'month'>('month');
+  const [isEditingTotalAsset, setIsEditingTotalAsset] = useState(false);
+  const [totalAssetDraft, setTotalAssetDraft] = useState('');
 
   const todayStr = new Date().toISOString().split('T')[0];
   const currentMonthStr = todayStr.substring(0, 7);
@@ -118,6 +127,9 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   };
 
   const sourceGroup = accountGroups.find((g) => g.isSource);
+  const hasUsableAllocationSetup =
+    accountGroups.some((group) => group.isSource) &&
+    accountGroups.some((group) => !group.isSource);
 
   const getGroupMonthlyIncome = (groupId: string) =>
     transactions
@@ -135,7 +147,11 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     Math.round(sourcePool * (targetRatio / 100));
 
   const dashboardTxs = transactions
-    .filter((tx) => tx.date.substring(0, 10) === todayStr)
+    .filter((tx) =>
+      period === 'today'
+        ? tx.date.substring(0, 10) === todayStr
+        : tx.date.startsWith(currentMonthStr)
+    )
     .sort((a, b) => b.date.localeCompare(a.date));
 
   const dashboardGrouped = dashboardTxs.reduce(
@@ -150,6 +166,48 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   const sortedDashboardKeys = Object.keys(dashboardGrouped).sort((a, b) =>
     b.localeCompare(a)
   );
+  const displayTotalBalance = totalBalance;
+
+  const startEditingTotalAsset = () => {
+    const current = Math.max(0, Math.round(displayTotalBalance));
+    setTotalAssetDraft(current.toString());
+    setIsEditingTotalAsset(true);
+  };
+
+  const saveTotalAsset = () => {
+    const trimmed = totalAssetDraft.trim();
+    if (!trimmed) {
+      alert('請輸入總餘額數值。');
+      return;
+    }
+
+    const parsed = Number(trimmed);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      alert('請輸入有效的總餘額金額。');
+      return;
+    }
+
+    const normalized = Math.round(parsed);
+    const success = onAdjustTotalBalance(normalized);
+    if (success) {
+      setIsEditingTotalAsset(false);
+      setTotalAssetDraft('');
+    }
+  };
+
+  const handleTotalAssetDraftChange = (rawValue: string) => {
+    const digitsOnly = rawValue.replace(/\D/g, '');
+    if (!digitsOnly) {
+      setTotalAssetDraft('');
+      return;
+    }
+    setTotalAssetDraft(digitsOnly);
+  };
+
+  const cancelEditingTotalAsset = () => {
+    setIsEditingTotalAsset(false);
+    setTotalAssetDraft('');
+  };
 
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -203,15 +261,88 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             </button>
           </div>
         </div>
-        <div
-          style={{
-            fontSize: '2.5rem',
-            fontWeight: 700,
-            margin: '8px 0',
-            color: totalBalance >= 0 ? 'var(--text-primary)' : 'var(--expense-color)',
-          }}
-        >
-          ${totalBalance.toLocaleString('zh-TW')}
+        {isEditingTotalAsset ? (
+          <div style={{ margin: '8px 0', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <input
+              type="text"
+              inputMode="numeric"
+              autoFocus
+              value={totalAssetDraft}
+              onChange={(e) => handleTotalAssetDraftChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  saveTotalAsset();
+                }
+                if (e.key === 'Escape') {
+                  cancelEditingTotalAsset();
+                }
+              }}
+              style={{
+                flex: 1,
+                minWidth: '180px',
+                background: 'var(--input-bg)',
+                border: '1px solid var(--primary-color)',
+                color: 'var(--text-primary)',
+                borderRadius: '6px',
+                padding: '9px 10px',
+                fontSize: '1.25rem',
+                fontWeight: 700,
+              }}
+            />
+            <button
+              type="button"
+              onClick={saveTotalAsset}
+              style={{
+                padding: '8px 12px',
+                borderRadius: '6px',
+                border: 'none',
+                background: 'var(--primary-color)',
+                color: '#fff',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              儲存
+            </button>
+            <button
+              type="button"
+              onClick={cancelEditingTotalAsset}
+              style={{
+                padding: '8px 12px',
+                borderRadius: '6px',
+                border: '1px solid var(--input-border)',
+                background: 'transparent',
+                color: 'var(--text-secondary)',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              取消
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={startEditingTotalAsset}
+            title="點擊可編輯總餘額"
+            style={{
+              fontSize: '2.5rem',
+              fontWeight: 700,
+              margin: '8px 0',
+              color: displayTotalBalance >= 0 ? 'var(--text-primary)' : 'var(--expense-color)',
+              background: 'transparent',
+              border: 'none',
+              padding: 0,
+              cursor: 'text',
+              textAlign: 'left',
+            }}
+          >
+            ${formatAmount(displayTotalBalance)}
+          </button>
+        )}
+
+        <div style={{ marginTop: '-2px', fontSize: '0.78rem', color: 'var(--text-tertiary)' }}>
+          點擊總餘額數字可直接編輯
         </div>
 
         <div
@@ -339,6 +470,49 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
 
         {/* Total Bound Income to Allocate Block */}
         {/* Accounts scroll container */}
+        {!hasUsableAllocationSetup && (
+          <div
+            className="glass-card"
+            style={{
+              marginBottom: '12px',
+              padding: '16px',
+              border: '1px solid rgba(99, 102, 241, 0.24)',
+              background: 'linear-gradient(180deg, rgba(99, 102, 241, 0.12), rgba(99, 102, 241, 0.04))',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <AppIcon name="layout-template" size={18} style={{ color: 'var(--primary-color)' }} />
+              <span style={{ fontSize: '0.95rem', fontWeight: 600 }}>先套用入門資金配置</span>
+            </div>
+            <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+              系統會先建立「當月薪資 / 日常開銷 / 投資理財 / 儲蓄資金」的預設比例與分類，之後都可以再直接編輯。
+            </div>
+            <button
+              type="button"
+              onClick={onApplyStarterPreset}
+              style={{
+                width: '100%',
+                padding: '12px',
+                borderRadius: '8px',
+                backgroundColor: 'var(--primary-color)',
+                color: '#fff',
+                fontWeight: 600,
+                fontSize: '0.9rem',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: '8px',
+              }}
+            >
+              <AppIcon name="layout-template" size={18} /> 套用入門資金配置
+            </button>
+          </div>
+        )}
         {!isEditingGroups && (
           <div
             style={{
@@ -616,177 +790,67 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             marginBottom: '16px',
           }}
         >
-          <h3 style={{ fontSize: '1.05rem', fontWeight: 600, margin: 0 }}>今日記帳明細</h3>
+          <h3
+            style={{
+              fontSize: '1.05rem',
+              fontWeight: 600,
+              margin: 0,
+              color: 'var(--text-primary)',
+            }}
+          >
+            {period === 'today' ? '今日記帳明細' : '本月記帳明細'}
+          </h3>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {sortedDashboardKeys.map((groupKey) => {
             const groupTxs = dashboardGrouped[groupKey];
+            const { income, expense } = getGroupTotals(groupTxs);
             return (
-              <div key={groupKey} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div key={groupKey} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {/* Group Header */}
                 <div
                   style={{
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    padding: '0 4px',
+                    padding: '8px 12px',
+                    borderRadius: 'var(--border-radius-sm)',
+                    background: 'var(--sub-card-bg)',
+                    border: '1px solid var(--sub-card-border)',
                     fontSize: '0.85rem',
+                    color: 'var(--text-secondary)',
                   }}
                 >
-                  <span
-                    style={{
-                      fontWeight: 600,
-                      color: 'var(--text-secondary)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                    }}
-                  >
-                    📅 {formatGroupHeader(groupKey, 'day')}
+                  <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                    {formatGroupHeader(groupKey, 'day')}
                   </span>
+                  <div style={{ display: 'flex', gap: '12px', fontSize: '0.8rem', fontWeight: 500 }}>
+                    {income > 0 && <span style={{ color: 'var(--income-color)' }}>收入: +${formatAmount(income)}</span>}
+                    {expense > 0 && <span style={{ color: 'var(--expense-color)' }}>支出: -${formatAmount(expense)}</span>}
+                  </div>
                 </div>
 
                 {/* Group Items */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   {groupTxs.map((tx) => (
-                    <div
+                    <TransactionLedgerRow
                       key={tx.id}
-                      className="glass-card"
-                      style={{
-                        padding: '12px 16px',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        borderRadius: 'var(--border-radius-md)',
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '12px',
-                          overflow: 'hidden',
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontSize: '1.3rem',
-                            width: '36px',
-                            height: '36px',
-                            borderRadius: '50%',
-                            background: tx.type === 'income' ? 'var(--income-bg)' : 'var(--expense-bg)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            flexShrink: 0,
-                          }}
-                        >
-                          <AppIcon name={getCategoryEmoji(tx.category, tx.accountGroupId)} size={20} />
-                        </div>
-                        <div style={{ overflow: 'hidden' }}>
-                          <div
-                            style={{
-                              fontWeight: 500,
-                              fontSize: '0.9rem',
-                              whiteSpace: 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                            }}
-                          >
-                            {tx.description}
-                          </div>
-                          <div
-                            style={{
-                              fontSize: '0.75rem',
-                              color: 'var(--text-tertiary)',
-                              whiteSpace: 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                            }}
-                          >
-                            {tx.category} • {getGroupName(tx.accountGroupId)}
-                          </div>
-                        </div>
-                      </div>
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '12px',
-                          flexShrink: 0,
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontWeight: 600,
-                            fontSize: '0.95rem',
-                            color: tx.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)',
-                          }}
-                        >
-                          {tx.type === 'income' ? '+' : '-'}${tx.amount}
-                        </span>
-
-                        {/* Edit & Delete Action Buttons */}
-                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                          {tx.installmentId ? (
-                            <span
-                              style={{
-                                fontSize: '0.7rem',
-                                color: 'var(--primary-color)',
-                                background: 'rgba(99, 102, 241, 0.08)',
-                                borderRadius: 'var(--border-radius-sm)',
-                                padding: '2px 6px',
-                                whiteSpace: 'nowrap',
-                              }}
-                            >
-                              分期{tx.installmentPeriod && tx.installmentCount ? ` ${tx.installmentPeriod}/${tx.installmentCount}` : ''}
-                            </span>
-                          ) : (
-                            <>
-                          <button
-                            type="button"
-                            onClick={() => onEditTransactionClick(tx)}
-                            style={{
-                              background: 'transparent',
-                              color: 'var(--text-tertiary)',
-                              fontSize: '0.9rem',
-                              padding: '4px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              cursor: 'pointer',
-                            }}
-                            title="編輯"
-                          >
-                            <AppIcon name="edit" size={16} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
+                      dataTestId="dashboard-flat-row"
+                      tx={tx}
+                      getCategoryEmoji={getCategoryEmoji}
+                      getGroupName={getGroupName}
+                      onEditTransaction={tx.installmentId ? undefined : onEditTransactionClick}
+                      onDeleteTransaction={
+                        tx.installmentId
+                          ? undefined
+                          : (id) => {
                               if (window.confirm('確定要刪除此筆記帳嗎？')) {
-                                onDeleteTransaction(tx.id);
+                                onDeleteTransaction(id);
                               }
-                            }}
-                            style={{
-                              background: 'transparent',
-                              color: 'var(--text-tertiary)',
-                              fontSize: '0.9rem',
-                              padding: '4px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              cursor: 'pointer',
-                            }}
-                            title="刪除"
-                          >
-                            <AppIcon name="trash-2" size={16} />
-                          </button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
+                            }
+                      }
+                    />
                   ))}
                 </div>
               </div>
@@ -801,7 +865,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 fontSize: '0.9rem',
               }}
             >
-              今日尚無交易紀錄
+              {period === 'today' ? '今日尚無交易紀錄' : '本月尚無交易紀錄'}
             </div>
           )}
         </div>

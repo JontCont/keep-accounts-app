@@ -1,7 +1,18 @@
-import React, { useState } from 'react';
-import { IonSelect, IonSelectOption } from '@ionic/react';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  IonInfiniteScroll,
+  IonInfiniteScrollContent,
+  IonSelect,
+  IonSelectOption,
+  IonSkeletonText,
+} from '@ionic/react';
 import { Transaction, AccountGroup } from '@keep-accounts-app/domain';
+import {
+  queryHistoryPage,
+  queryNativeHistoryPage,
+} from '@keep-accounts-app/state';
 import { AppIcon } from './AppIcon';
+import { TransactionLedgerRow } from './TransactionLedgerRow';
 
 interface HistoryTabProps {
   accountGroups: AccountGroup[];
@@ -14,7 +25,11 @@ interface HistoryTabProps {
   onEditTransaction: (tx: Transaction) => void;
   onAddTransaction: () => void;
   showFab?: boolean;
+  preferNativeQueries?: boolean;
 }
+
+const HISTORY_PAGE_SIZE = 50;
+const HISTORY_SKELETON_COUNT = 3;
 
 export const HistoryTab: React.FC<HistoryTabProps> = ({
   accountGroups,
@@ -27,19 +42,21 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
   onEditTransaction,
   onAddTransaction,
   showFab = true,
+  preferNativeQueries = false,
 }) => {
+  const formatAmount = (value: number) => value.toLocaleString('zh-TW');
+
   const [filter, setFilter] = useState<'all' | 'income' | 'expense' | 'installment'>('all');
   const [filterGroup, setFilterGroup] = useState<string>('all');
+  const [visibleFlatTxs, setVisibleFlatTxs] = useState<Transaction[]>([]);
+  const [nextOffset, setNextOffset] = useState(0);
+  const [hasMoreFlatTxs, setHasMoreFlatTxs] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const loadingRef = useRef(false);
 
-  const flatTypeFilter = filter === 'installment' ? 'all' : filter;
-  const flatFilteredTxs = transactions
-    .filter((tx) => flatTypeFilter === 'all' || tx.type === flatTypeFilter)
-    .filter((tx) => filterGroup === 'all' || tx.accountGroupId === filterGroup)
-    .sort((a, b) => b.date.localeCompare(a.date));
-
-  const installmentFilteredTxs = transactions
+  const installmentFilteredTxs = visibleFlatTxs
     .filter((tx) => !!tx.installmentId)
-    .filter((tx) => filterGroup === 'all' || tx.accountGroupId === filterGroup)
     .sort((a, b) => b.date.localeCompare(a.date));
 
   type InstallmentGroup = {
@@ -75,6 +92,67 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
   const isInstallmentView = filter === 'installment';
 
   const [groupBy, setGroupBy] = useState<'year' | 'month' | 'day'>('month');
+  const fetchPage = async (offset: number) => {
+    if (preferNativeQueries) {
+      const nativePage = await queryNativeHistoryPage({
+        filterType: filter,
+        filterGroup,
+        offset,
+        pageSize: HISTORY_PAGE_SIZE,
+      });
+      if (nativePage) {
+        return nativePage;
+      }
+    }
+
+    return queryHistoryPage({
+      transactions,
+      filterType: filter,
+      filterGroup,
+      offset,
+      pageSize: HISTORY_PAGE_SIZE,
+    });
+  };
+
+  useEffect(() => {
+    if (!preferNativeQueries) {
+      const firstPage = queryHistoryPage({
+        transactions,
+        filterType: filter,
+        filterGroup,
+        offset: 0,
+        pageSize: HISTORY_PAGE_SIZE,
+      });
+      setVisibleFlatTxs(firstPage.items);
+      setNextOffset(firstPage.nextOffset);
+      setHasMoreFlatTxs(firstPage.hasMore);
+      setLoadFailed(false);
+      setIsLoadingMore(false);
+      loadingRef.current = false;
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadFirstPage = async () => {
+      const firstPage = await fetchPage(0);
+
+      if (!firstPage || cancelled) {
+        return;
+      }
+      setVisibleFlatTxs(firstPage.items);
+      setNextOffset(firstPage.nextOffset);
+      setHasMoreFlatTxs(firstPage.hasMore);
+      setLoadFailed(false);
+      setIsLoadingMore(false);
+      loadingRef.current = false;
+    };
+
+    void loadFirstPage();
+    return () => {
+      cancelled = true;
+    };
+  }, [transactions, filter, filterGroup, preferNativeQueries]);
 
   const getGroupKey = (dateStr: string, mode: 'day' | 'month' | 'year') => {
     const datePart = dateStr.substring(0, 10);
@@ -113,7 +191,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
 
   // Group transactions by date key
   const groupedTxs: Record<string, Transaction[]> = {};
-  flatFilteredTxs.forEach((tx) => {
+  visibleFlatTxs.forEach((tx) => {
     const key = getGroupKey(tx.date, groupBy);
     if (!groupedTxs[key]) {
       groupedTxs[key] = [];
@@ -123,6 +201,43 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
 
   // Sort keys descending
   const sortedGroupKeys = Object.keys(groupedTxs).sort((a, b) => b.localeCompare(a));
+
+  const loadNextPage = async (event: any) => {
+    const complete = () => event?.target?.complete?.();
+    if (!hasMoreFlatTxs || loadingRef.current) {
+      complete();
+      return;
+    }
+
+    loadingRef.current = true;
+    setLoadFailed(false);
+    setIsLoadingMore(true);
+
+    try {
+      await new Promise((resolve) => window.setTimeout(resolve, 160));
+      const nextPage = preferNativeQueries
+        ? await fetchPage(nextOffset)
+        : queryHistoryPage({
+            transactions,
+            filterType: filter,
+            filterGroup,
+            offset: nextOffset,
+            pageSize: HISTORY_PAGE_SIZE,
+          });
+      if (!nextPage) {
+        throw new Error('history page unavailable');
+      }
+      setVisibleFlatTxs((prev) => [...prev, ...nextPage.items]);
+      setNextOffset(nextPage.nextOffset);
+      setHasMoreFlatTxs(nextPage.hasMore);
+    } catch {
+      setLoadFailed(true);
+    } finally {
+      loadingRef.current = false;
+      setIsLoadingMore(false);
+      complete();
+    }
+  };
 
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingBottom: '80px', position: 'relative' }}>
@@ -243,122 +358,31 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
 
                 {/* Transactions list in group */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {groupTransactions.map((tx) => {
-                    const datePart = tx.date.substring(0, 10);
-                    const timePart = tx.date.includes('T') ? tx.date.substring(11, 16) : '';
-                    return (
-                      <div
-                        key={tx.id}
-                        className="glass-card"
-                        style={{
-                          padding: '16px',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          borderRadius: 'var(--border-radius-md)',
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          <div
-                            style={{
-                              fontSize: '1.4rem',
-                              width: '40px',
-                              height: '40px',
-                              borderRadius: '50%',
-                              background: tx.type === 'income' ? 'var(--income-bg)' : 'var(--expense-bg)',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                            }}
-                          >
-                            <AppIcon name={getCategoryEmoji(tx.category, tx.accountGroupId)} size={22} />
-                          </div>
-                          <div>
-                            <div style={{ fontWeight: 500, fontSize: '0.95rem' }}>{tx.description}</div>
-                            <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
-                              {tx.category}
-                            </div>
-                            <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
-                              {getGroupName(tx.accountGroupId)}
-                            </div>
-                            <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
-                              {datePart}
-                              {timePart ? ` ${timePart}` : ''}
-                            </div>
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          <span
-                            style={{
-                              fontWeight: 600,
-                              color: tx.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)',
-                            }}
-                          >
-                            {tx.type === 'income' ? '+' : '-'}${tx.amount}
-                          </span>
-                          {tx.installmentId ? (
-                            <span
-                              style={{
-                                fontSize: '0.7rem',
-                                color: 'var(--primary-color)',
-                                background: 'rgba(99, 102, 241, 0.08)',
-                                borderRadius: 'var(--border-radius-sm)',
-                                padding: '2px 6px',
-                                whiteSpace: 'nowrap',
-                              }}
-                            >
-                              分期{tx.installmentPeriod && tx.installmentCount ? ` ${tx.installmentPeriod}/${tx.installmentCount}` : ''}
-                            </span>
-                          ) : (
-                            <>
-                              <button
-                                onClick={() => onEditTransaction(tx)}
-                                style={{
-                                  background: 'transparent',
-                                  color: 'var(--text-tertiary)',
-                                  fontSize: '0.9rem',
-                                  padding: '4px',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  cursor: 'pointer',
-                                }}
-                                title="編輯"
-                              >
-                                <AppIcon name="edit" size={16} />
-                              </button>
-                              <button
-                                onClick={() => {
-                                  if (window.confirm('確定要刪除此筆記帳嗎？')) {
-                                    onDeleteTransaction(tx.id);
-                                  }
-                                }}
-                                style={{
-                                  background: 'transparent',
-                                  color: 'var(--text-tertiary)',
-                                  fontSize: '0.9rem',
-                                  padding: '4px',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  cursor: 'pointer',
-                                }}
-                                title="刪除"
-                              >
-                                <AppIcon name="trash" size={16} />
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+                  {groupTransactions.map((tx) => (
+                    <TransactionLedgerRow
+                      key={tx.id}
+                      dataTestId="history-flat-row"
+                      tx={tx}
+                      getCategoryEmoji={getCategoryEmoji}
+                      getGroupName={getGroupName}
+                      onEditTransaction={tx.installmentId ? undefined : onEditTransaction}
+                      onDeleteTransaction={
+                        tx.installmentId
+                          ? undefined
+                          : (id) => {
+                              if (window.confirm('確定要刪除此筆記帳嗎？')) {
+                                onDeleteTransaction(id);
+                              }
+                            }
+                      }
+                    />
+                  ))}
                 </div>
               </div>
             );
           })}
 
-          {flatFilteredTxs.length === 0 && (
+          {visibleFlatTxs.length === 0 && (
             <div
               style={{
                 textAlign: 'center',
@@ -370,6 +394,71 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
               沒有找到符合條件的明細
             </div>
           )}
+
+          {isLoadingMore && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {Array.from({ length: HISTORY_SKELETON_COUNT }).map((_, index) => (
+                <div
+                  key={`history-skeleton-${index}`}
+                  className="glass-card"
+                  data-testid="history-skeleton-card"
+                  style={{
+                    padding: '16px',
+                    borderRadius: 'var(--border-radius-md)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: '12px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
+                    <IonSkeletonText animated style={{ width: '40px', height: '40px', borderRadius: '50%' }} />
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <IonSkeletonText animated style={{ width: '45%', height: '14px' }} />
+                      <IonSkeletonText animated style={{ width: '30%', height: '11px' }} />
+                      <IonSkeletonText animated style={{ width: '40%', height: '11px' }} />
+                    </div>
+                  </div>
+                  <IonSkeletonText animated style={{ width: '70px', height: '14px' }} />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {loadFailed && (
+            <div
+              style={{
+                textAlign: 'center',
+                color: 'var(--text-tertiary)',
+                fontSize: '0.82rem',
+              }}
+            >
+              載入失敗，請繼續下滑重試
+            </div>
+          )}
+
+          {!hasMoreFlatTxs && visibleFlatTxs.length > 0 && (
+            <div
+              data-testid="history-end-of-list"
+              style={{
+                textAlign: 'center',
+                color: 'var(--text-tertiary)',
+                fontSize: '0.82rem',
+                padding: '8px 0',
+              }}
+            >
+              已載入全部
+            </div>
+          )}
+
+          <IonInfiniteScroll
+            data-testid="history-infinite-scroll"
+            threshold="120px"
+            disabled={!hasMoreFlatTxs || isLoadingMore}
+            onIonInfinite={loadNextPage}
+          >
+            <IonInfiniteScrollContent />
+          </IonInfiniteScroll>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -407,7 +496,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
                       {groupTx.category} • {getGroupName(groupTx.accountGroupId)}
                     </div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
-                      已繳 {completedPeriods} / {totalPeriods} 期 · 總額 ${totalAmount} · 剩餘 ${remainingAmount}
+                      已繳 {completedPeriods} / {totalPeriods} 期 · 總額 ${formatAmount(totalAmount)} · 剩餘 ${formatAmount(remainingAmount)}
                     </div>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
@@ -484,7 +573,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                           <span style={{ fontWeight: 600, color: 'var(--expense-color)' }}>
-                            -${tx.amount}
+                            -${formatAmount(tx.amount)}
                           </span>
                           <span style={{ fontSize: '0.7rem', color: 'var(--primary-color)', background: 'rgba(99, 102, 241, 0.08)', borderRadius: 'var(--border-radius-sm)', padding: '2px 6px', whiteSpace: 'nowrap' }}>
                             {tx.installmentPeriod && tx.installmentCount ? `${tx.installmentPeriod}/${tx.installmentCount}` : '分期'}

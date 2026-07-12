@@ -4,14 +4,20 @@ import {
   Transaction,
   DEFAULT_ACCOUNT_GROUPS,
   INITIAL_TRANSACTIONS,
+  STARTER_ALLOCATION_PRESET,
   InstallmentReminderConfig,
 } from '@keep-accounts-app/domain';
-import { useKeepAccounts } from '@keep-accounts-app/state';
+import {
+  isNativePersistenceEnabled,
+  loadAllNativeTransactions,
+  saveKeepAccountsSnapshot,
+  useKeepAccounts,
+} from '@keep-accounts-app/state';
 import { DashboardTab } from './components/DashboardTab';
 import { HistoryTab } from './components/HistoryTab';
 import { StatsTab } from './components/StatsTab';
-import { TransactionModal } from './components/TransactionModal';
 import { GroupSettingsModal } from './components/GroupSettingsModal';
+import { TransactionEntryPage } from './components/TransactionEntryPage';
 import { AppIcon } from './components/AppIcon';
 import { scheduleInstallmentReminders } from './services/notifications';
 import {
@@ -27,6 +33,18 @@ import {
 } from './services/backup';
 
 export function App() {
+    type MainTab = 'dashboard' | 'history' | 'stats' | 'settings';
+    type TransactionEntryOrigin = 'dashboard' | 'history';
+    type TransactionEntryContext = {
+      mode: 'create' | 'edit';
+      origin: TransactionEntryOrigin;
+      initialTab: 'basic' | 'installment';
+    } | null;
+
+  const NAV_COLLAPSE_SCROLL_TOP_THRESHOLD = 72;
+  const NAV_COLLAPSE_DELTA_THRESHOLD = 48;
+  const NAV_EXPAND_DELTA_THRESHOLD = 28;
+
   const {
     accountGroups,
     transactions,
@@ -43,31 +61,122 @@ export function App() {
     setTransactions,
   } = useKeepAccounts();
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'history' | 'stats' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<MainTab>('dashboard');
   const [isEditingGroups, setIsEditingGroups] = useState(false);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
-  const [showTxModal, setShowTxModal] = useState(false);
+  const [transactionEntryContext, setTransactionEntryContext] = useState<TransactionEntryContext>(null);
   const [showHistoryCreateMenu, setShowHistoryCreateMenu] = useState(false);
-  const [txModalInitialTab, setTxModalInitialTab] = useState<'basic' | 'installment'>('basic');
 
   // FAB scroll behavior state
   const [showFab, setShowFab] = useState(true);
   const lastScrollY = useRef(0);
+  const [navPresentation, setNavPresentation] = useState<'expanded' | 'compact'>('expanded');
+  const downScrollTravel = useRef(0);
+  const upScrollTravel = useRef(0);
+  const [hasFocusedInput, setHasFocusedInput] = useState(false);
+
+  const isTransactionEntryActive = transactionEntryContext !== null;
+
+  const isHighPriorityInteractionActive =
+    isTransactionEntryActive || isEditingGroups || showHistoryCreateMenu || hasFocusedInput;
 
   const handleScroll = (e: CustomEvent<any>) => {
-    const currentScrollY = e.detail.scrollTop;
+    const currentScrollY = Math.max(0, e.detail.scrollTop ?? 0);
+    const scrollDelta = currentScrollY - lastScrollY.current;
+
     if (currentScrollY > lastScrollY.current && currentScrollY > 50) {
       setShowFab(false);
     } else if (currentScrollY < lastScrollY.current) {
       setShowFab(true);
     }
+
+    if (scrollDelta > 0) {
+      downScrollTravel.current += scrollDelta;
+      upScrollTravel.current = 0;
+
+      if (
+        !isHighPriorityInteractionActive &&
+        navPresentation === 'expanded' &&
+        currentScrollY > NAV_COLLAPSE_SCROLL_TOP_THRESHOLD &&
+        downScrollTravel.current >= NAV_COLLAPSE_DELTA_THRESHOLD
+      ) {
+        setNavPresentation('compact');
+        downScrollTravel.current = 0;
+      }
+    } else if (scrollDelta < 0) {
+      upScrollTravel.current += Math.abs(scrollDelta);
+      downScrollTravel.current = 0;
+
+      if (navPresentation === 'compact' && upScrollTravel.current >= NAV_EXPAND_DELTA_THRESHOLD) {
+        setNavPresentation('expanded');
+        upScrollTravel.current = 0;
+      }
+    }
+
+    if (currentScrollY <= 8 && navPresentation !== 'expanded') {
+      setNavPresentation('expanded');
+      downScrollTravel.current = 0;
+      upScrollTravel.current = 0;
+    }
+
     lastScrollY.current = currentScrollY;
   };
 
   useEffect(() => {
     setShowFab(true);
     lastScrollY.current = 0;
+    downScrollTravel.current = 0;
+    upScrollTravel.current = 0;
   }, [activeTab]);
+
+  useEffect(() => {
+    if (isHighPriorityInteractionActive && navPresentation !== 'expanded') {
+      setNavPresentation('expanded');
+      downScrollTravel.current = 0;
+      upScrollTravel.current = 0;
+    }
+  }, [isHighPriorityInteractionActive, navPresentation]);
+
+  useEffect(() => {
+    const isInteractiveTarget = (target: EventTarget | null) => {
+      if (!(target instanceof Element)) {
+        return false;
+      }
+
+      return target.matches(
+        [
+          'input',
+          'textarea',
+          'select',
+          'button[contenteditable="true"]',
+          '[contenteditable="true"]',
+          'ion-input',
+          'ion-textarea',
+          'ion-select',
+        ].join(',')
+      );
+    };
+
+    const handleFocusIn = (event: FocusEvent) => {
+      if (isInteractiveTarget(event.target)) {
+        setHasFocusedInput(true);
+      }
+    };
+
+    const handleFocusOut = () => {
+      requestAnimationFrame(() => {
+        setHasFocusedInput(isInteractiveTarget(document.activeElement));
+      });
+    };
+
+    document.addEventListener('focusin', handleFocusIn);
+    document.addEventListener('focusout', handleFocusOut);
+
+    return () => {
+      document.removeEventListener('focusin', handleFocusIn);
+      document.removeEventListener('focusout', handleFocusOut);
+    };
+  }, []);
 
   // Theme state and runtime application
   const storedTheme = localStorage.getItem('keep_accounts_theme') as 'system' | 'light' | 'dark' | null;
@@ -114,7 +223,38 @@ export function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isNative = isNativePlatform();
+  const nativeMode = isNativePersistenceEnabled() && isNative;
 
+  const applyImportedSnapshot = async (snapshot: {
+    keep_accounts_groups: typeof accountGroups;
+    keep_accounts_transactions: typeof transactions;
+  }) => {
+    await saveKeepAccountsSnapshot({
+      accountGroups: snapshot.keep_accounts_groups,
+      transactions: snapshot.keep_accounts_transactions,
+    });
+
+    setAccountGroups(snapshot.keep_accounts_groups);
+    if (nativeMode) {
+      setTransactions([]);
+      return;
+    }
+    setTransactions(snapshot.keep_accounts_transactions);
+  };
+
+  const cloneAllocationGroups = (groups: typeof STARTER_ALLOCATION_PRESET) =>
+    groups.map((group) => ({
+      ...group,
+      categories: group.categories.map((category) => ({ ...category })),
+    }));
+
+  const handleApplyStarterPreset = () => {
+    if ((accountGroups.length > 0 || transactions.length > 0) && !window.confirm('套用入門資金配置會覆蓋目前的資金大項設定，確定要繼續嗎？')) {
+      return;
+    }
+
+    setAccountGroups(cloneAllocationGroups(STARTER_ALLOCATION_PRESET));
+  };
   // Check if native auto-backup file exists
   useEffect(() => {
     if (isNative) {
@@ -126,20 +266,34 @@ export function App() {
     setAutoBackupEnabled(enabled);
     localStorage.setItem('keep_accounts_auto_backup', enabled ? 'true' : 'false');
     if (enabled) {
-      autoBackupNative({
-        keep_accounts_groups: accountGroups,
-        keep_accounts_transactions: transactions
-      }).catch(err => {
-        console.error('Initial auto-backup failed', err);
-      });
+      if (nativeMode) {
+        void (async () => {
+          const allNativeTxs = (await loadAllNativeTransactions()) ?? transactions;
+          autoBackupNative({
+            keep_accounts_groups: accountGroups,
+            keep_accounts_transactions: allNativeTxs,
+          }).catch((err) => {
+            console.error('Initial auto-backup failed', err);
+          });
+        })();
+      } else {
+        autoBackupNative({
+          keep_accounts_groups: accountGroups,
+          keep_accounts_transactions: transactions,
+        }).catch((err) => {
+          console.error('Initial auto-backup failed', err);
+        });
+      }
     }
   };
 
   const handleExportBackup = async () => {
     try {
+      const exportTransactions =
+        nativeMode ? ((await loadAllNativeTransactions()) ?? transactions) : transactions;
       const data = {
         keep_accounts_groups: accountGroups,
-        keep_accounts_transactions: transactions
+        keep_accounts_transactions: exportTransactions
       };
       
       if (isNative) {
@@ -177,11 +331,10 @@ export function App() {
         const decompressed = decompressBackup(zipBytes);
         
         if (!Array.isArray(decompressed.keep_accounts_groups) || !Array.isArray(decompressed.keep_accounts_transactions)) {
-          throw new Error('備份檔案格式不正確');
+          throw new Error('備份檔格式錯誤：請確認 backup_data.json 內含 keep_accounts_groups 與 keep_accounts_transactions');
         }
         
-        setAccountGroups(decompressed.keep_accounts_groups);
-        setTransactions(decompressed.keep_accounts_transactions);
+        await applyImportedSnapshot(decompressed);
         
         const groupsCount = decompressed.keep_accounts_groups.length;
         const transactionsCount = decompressed.keep_accounts_transactions.length;
@@ -213,8 +366,7 @@ export function App() {
     try {
       const decompressed = await restoreFromAutoBackupNative();
       
-      setAccountGroups(decompressed.keep_accounts_groups);
-      setTransactions(decompressed.keep_accounts_transactions);
+      await applyImportedSnapshot(decompressed);
       
       const groupsCount = decompressed.keep_accounts_groups.length;
       const transactionsCount = decompressed.keep_accounts_transactions.length;
@@ -235,55 +387,93 @@ export function App() {
     }
   };
 
-  const handleImportTemplate = () => {
+  const handleImportTemplate = async () => {
     if (!window.confirm('確定要導入範例模板資料嗎？這將覆蓋您目前的所有帳戶與明細資料！')) {
       return;
     }
-    setAccountGroups(DEFAULT_ACCOUNT_GROUPS);
-    setTransactions(INITIAL_TRANSACTIONS);
+    await applyImportedSnapshot({
+      keep_accounts_groups: cloneAllocationGroups(DEFAULT_ACCOUNT_GROUPS),
+      keep_accounts_transactions: INITIAL_TRANSACTIONS,
+    });
     alert('已導入範例模板資料！頁面即將重新整理。');
     setTimeout(() => {
       window.location.reload();
     }, 500);
   };
 
-  const handleClearData = () => {
+  const handleClearData = async () => {
     if (!window.confirm('確定要清除當前所有資料嗎？此操作將刪除所有帳戶群組與交易明細，且無法撤銷！')) {
       return;
     }
-    localStorage.removeItem('keep_accounts_groups');
-    localStorage.removeItem('keep_accounts_transactions');
-    setAccountGroups([]);
-    setTransactions([]);
+    await applyImportedSnapshot({
+      keep_accounts_groups: [],
+      keep_accounts_transactions: [],
+    });
     alert('已清除所有資料！頁面即將重新整理。');
     setTimeout(() => {
       window.location.reload();
     }, 500);
   };
 
-  const openTransactionModal = (initialTab: 'basic' | 'installment' = 'basic') => {
+  const openTransactionEntry = (
+    origin: TransactionEntryOrigin,
+    initialTab: 'basic' | 'installment' = 'basic'
+  ) => {
     setEditingTx(null);
-    setTxModalInitialTab(initialTab);
-    setShowTxModal(true);
+    setTransactionEntryContext({ mode: 'create', origin, initialTab });
+  };
+
+  const openTransactionEditEntry = (tx: Transaction, origin: TransactionEntryOrigin) => {
+    setEditingTx(tx);
+    setTransactionEntryContext({ mode: 'edit', origin, initialTab: 'basic' });
+  };
+
+  const closeTransactionEntry = () => {
+    const fallbackTab: MainTab = transactionEntryContext?.origin ?? 'dashboard';
+    setActiveTab(fallbackTab);
+    setTransactionEntryContext(null);
+    setEditingTx(null);
+    setShowHistoryCreateMenu(false);
   };
 
   // Automatic backup trigger on change
   useEffect(() => {
     const isAutoBackupEnabled = localStorage.getItem('keep_accounts_auto_backup') === 'true';
     if (isAutoBackupEnabled && isNativePlatform()) {
-      autoBackupNative({
-        keep_accounts_groups: accountGroups,
-        keep_accounts_transactions: transactions
-      }).catch(err => {
-        console.error('Auto backup failed', err);
-      });
+      if (nativeMode) {
+        void (async () => {
+          const allNativeTxs = (await loadAllNativeTransactions()) ?? transactions;
+          autoBackupNative({
+            keep_accounts_groups: accountGroups,
+            keep_accounts_transactions: allNativeTxs,
+          }).catch((err) => {
+            console.error('Auto backup failed', err);
+          });
+        })();
+      } else {
+        autoBackupNative({
+          keep_accounts_groups: accountGroups,
+          keep_accounts_transactions: transactions,
+        }).catch((err) => {
+          console.error('Auto backup failed', err);
+        });
+      }
     }
-  }, [accountGroups, transactions]);
+  }, [accountGroups, transactions, nativeMode]);
 
   // Group Settings internal budget update callback
-  const handleUpdateGroupBudget = (groupId: string, budget: number | undefined) => {
-    // Left for potential state extension, handled by saveAccountGroups at hook level
-  };
+  const currentMonthPrefix = new Date().toISOString().slice(0, 7);
+  const sourceGroup = accountGroups.find((group) => group.isSource);
+  const monthlySourceAmount = sourceGroup
+    ? transactions
+        .filter(
+          (tx) =>
+            tx.accountGroupId === sourceGroup.id &&
+            tx.type === 'income' &&
+            tx.date.startsWith(currentMonthPrefix)
+        )
+        .reduce((sum, tx) => sum + tx.amount, 0)
+    : 0;
 
   // Helpers
   const getCategoryEmoji = (catName: string, groupId: string) => {
@@ -342,7 +532,7 @@ export function App() {
   const handleSaveTransaction = (
     description: string,
     amount: string,
-    type: 'income' | 'expense',
+    type: 'income' | 'expense' | 'transfer',
     category: string,
     date: string,
     accountGroupId: string,
@@ -366,9 +556,10 @@ export function App() {
       // is denied). Transaction creation already succeeded, so scheduling never
       // blocks or reverts it.
       if (installment && installment.reminder.remindOnDueDate) {
+        const numericAmount = parseFloat(amount.replace(/,/g, ''));
         scheduleInstallmentReminders(
           Date.now().toString(),
-          parseFloat(amount),
+          numericAmount,
           installment.periods,
           date,
           installment.reminder
@@ -376,9 +567,50 @@ export function App() {
           /* reminder scheduling failures must never affect saved data */
         });
       }
-      setShowTxModal(false);
-      setEditingTx(null);
+      closeTransactionEntry();
     }
+  };
+
+  const handleAdjustTotalBalance = (targetBalance: number) => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const realizedTxs = transactions.filter(
+      (tx) => tx.date.substring(0, 10) <= todayStr
+    );
+
+    const currentIncome = realizedTxs
+      .filter((tx) => tx.type === 'income')
+      .reduce((sum, tx) => sum + tx.amount, 0);
+    const currentExpense = realizedTxs
+      .filter((tx) => tx.type === 'expense')
+      .reduce((sum, tx) => sum + tx.amount, 0);
+    const currentBalance = currentIncome - currentExpense;
+    const delta = targetBalance - currentBalance;
+
+    if (delta === 0) {
+      return true;
+    }
+
+    const targetGroup = accountGroups.find((group) => group.isSource) ?? accountGroups[0];
+    if (!targetGroup) {
+      alert('請先建立至少一個帳戶群組，才能調整總餘額。');
+      return false;
+    }
+
+    const type: 'income' | 'expense' = delta > 0 ? 'income' : 'expense';
+    const category = '餘額調整';
+    const direction = delta > 0 ? '增加' : '減少';
+    const formatBalance = (value: number) => `$${value.toLocaleString('zh-TW')}`;
+    const description = `手動調整總餘額（${direction}：${formatBalance(currentBalance)} -> ${formatBalance(targetBalance)}）`;
+
+    return saveTransaction(
+      description,
+      Math.abs(delta).toString(),
+      type,
+      category,
+      new Date().toISOString(),
+      targetGroup.id,
+      null
+    );
   };
 
   return (
@@ -397,7 +629,7 @@ export function App() {
             >
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  {activeTab === 'dashboard' && (
+                  {!isTransactionEntryActive && activeTab === 'dashboard' && (
                     <img
                       src="/keep-accounts-logo.svg"
                       alt="Keep Accounts logo"
@@ -420,27 +652,50 @@ export function App() {
                       transition: 'font-size 0.2s ease',
                     }}
                   >
-                    {activeTab === 'dashboard' && 'Keep Accounts'}
-                    {activeTab === 'history' && '歷史交易明細'}
-                    {activeTab === 'stats' && '支出統計分析'}
-                    {activeTab === 'settings' && '系統設定'}
+                    {isTransactionEntryActive && transactionEntryContext?.mode === 'create' && '新增收支記帳'}
+                    {isTransactionEntryActive && transactionEntryContext?.mode === 'edit' && '修改收支記帳'}
+                    {!isTransactionEntryActive && activeTab === 'dashboard' && 'Keep Accounts'}
+                    {!isTransactionEntryActive && activeTab === 'history' && '歷史交易明細'}
+                    {!isTransactionEntryActive && activeTab === 'stats' && '支出統計分析'}
+                    {!isTransactionEntryActive && activeTab === 'settings' && '系統設定'}
                   </h1>
                 </div>
-                {activeTab === 'dashboard' && (
+                {!isTransactionEntryActive && activeTab === 'dashboard' && (
                   <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0 }}>
                     精緻微型記帳系統
                   </p>
                 )}
               </div>
-              {activeTab === 'dashboard' && (
+              {isTransactionEntryActive ? (
+                <button
+                  type="button"
+                  onClick={closeTransactionEntry}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    background: 'var(--input-bg)',
+                    border: '1px solid var(--input-border)',
+                    borderRadius: '999px',
+                    padding: '8px 12px',
+                    color: 'var(--text-secondary)',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                  title="返回上一頁"
+                >
+                  <AppIcon name="chevron-down" size={14} style={{ transform: 'rotate(90deg)' }} />
+                  返回
+                </button>
+              ) : activeTab === 'dashboard' ? (
                 <div style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', textAlign: 'right' }}>
                   <div>{new Date().toLocaleDateString('zh-TW', { weekday: 'long' })}</div>
                   <div style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>
                     {new Date().toLocaleDateString('zh-TW')}
                   </div>
                 </div>
-              )}
-              {activeTab === 'history' && (
+              ) : null}
+              {!isTransactionEntryActive && activeTab === 'history' && (
                 <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                   <button
                     onClick={() => setShowHistoryCreateMenu((current) => !current)}
@@ -500,7 +755,7 @@ export function App() {
                           type="button"
                           onClick={() => {
                             setShowHistoryCreateMenu(false);
-                            openTransactionModal('basic');
+                            openTransactionEntry('history', 'basic');
                           }}
                           style={{
                             background: 'transparent',
@@ -519,7 +774,7 @@ export function App() {
                           type="button"
                           onClick={() => {
                             setShowHistoryCreateMenu(false);
-                            openTransactionModal('installment');
+                            openTransactionEntry('history', 'installment');
                           }}
                           style={{
                             background: 'transparent',
@@ -543,73 +798,86 @@ export function App() {
 
             {/* Main Content Area */}
             <main style={{ flex: 1, paddingBottom: '120px' }}>
-              {activeTab === 'dashboard' && (
-                <DashboardTab
+              {isTransactionEntryActive && transactionEntryContext && (
+                <TransactionEntryPage
+                  isOpen={true}
+                  onClose={closeTransactionEntry}
+                  editingTx={editingTx}
                   accountGroups={accountGroups}
-                  transactions={transactions}
-                  onAddTransactionClick={() => {
-                    openTransactionModal('basic');
-                  }}
-                  onEditTransactionClick={(tx) => {
-                    setEditingTx(tx);
-                    setTxModalInitialTab('basic');
-                    setShowTxModal(true);
-                  }}
-                  onDeleteTransaction={deleteTransaction}
-                  isEditingGroups={isEditingGroups}
-                  setIsEditingGroups={setIsEditingGroups}
-                  getCategoryEmoji={getCategoryEmoji}
-                  getGroupName={getGroupName}
-                  getGroupKey={getGroupKey}
-                  formatGroupHeader={formatGroupHeader}
-                  getGroupTotals={getGroupTotals}
-                  groupSettingsPanel={
-                    <GroupSettingsModal
-                      isOpen={isEditingGroups}
-                      onClose={() => setIsEditingGroups(false)}
-                      accountGroups={accountGroups}
-                      onSaveGroups={saveAccountGroups}
-                      onDeleteGroup={deleteAccountGroup}
-                      onAddGroup={addAccountGroup}
-                      onAddCategory={addCategory}
-                      onDeleteCategory={deleteCategory}
-                      onUpdateGroupBudget={handleUpdateGroupBudget}
-                    />
-                  }
+                  initialTab={transactionEntryContext.initialTab}
+                  onSave={handleSaveTransaction}
                 />
               )}
 
-              {activeTab === 'history' && (
+              {!isTransactionEntryActive && activeTab === 'dashboard' && (
+                <>
+                  <DashboardTab
+                    accountGroups={accountGroups}
+                    transactions={transactions}
+                        onApplyStarterPreset={handleApplyStarterPreset}
+                    onAddTransactionClick={() => {
+                      openTransactionEntry('dashboard', 'basic');
+                    }}
+                    onEditTransactionClick={(tx) => {
+                      openTransactionEditEntry(tx, 'dashboard');
+                    }}
+                    onDeleteTransaction={deleteTransaction}
+                    onAdjustTotalBalance={handleAdjustTotalBalance}
+                    isEditingGroups={isEditingGroups}
+                    setIsEditingGroups={setIsEditingGroups}
+                    getCategoryEmoji={getCategoryEmoji}
+                    getGroupName={getGroupName}
+                    getGroupKey={getGroupKey}
+                    formatGroupHeader={formatGroupHeader}
+                    getGroupTotals={getGroupTotals}
+                    groupSettingsPanel={
+                      <GroupSettingsModal
+                        isOpen={isEditingGroups}
+                        onClose={() => setIsEditingGroups(false)}
+                        accountGroups={accountGroups}
+                        referenceMonthlyAmount={monthlySourceAmount}
+                        onSaveGroups={saveAccountGroups}
+                        onDeleteGroup={deleteAccountGroup}
+                        onAddGroup={addAccountGroup}
+                        onAddCategory={addCategory}
+                        onDeleteCategory={deleteCategory}
+                      />
+                    }
+                  />
+                </>
+              )}
+
+              {!isTransactionEntryActive && activeTab === 'history' && (
                 <HistoryTab
                   accountGroups={accountGroups}
                   transactions={transactions}
+                  preferNativeQueries={nativeMode}
                   onDeleteTransaction={deleteTransaction}
                   onDeleteInstallmentGroup={deleteInstallmentGroup}
                   onSettleInstallmentGroup={settleInstallmentGroup}
                   getCategoryEmoji={getCategoryEmoji}
                   getGroupName={getGroupName}
                   onEditTransaction={(tx) => {
-                    setEditingTx(tx);
-                    setTxModalInitialTab('basic');
-                    setShowTxModal(true);
+                    openTransactionEditEntry(tx, 'history');
                   }}
                   onAddTransaction={() => {
-                    openTransactionModal('basic');
+                    openTransactionEntry('history', 'basic');
                   }}
                   showFab={showFab}
                 />
               )}
 
-              {activeTab === 'stats' && (
+              {!isTransactionEntryActive && activeTab === 'stats' && (
                 <StatsTab
                   accountGroups={accountGroups}
                   transactions={transactions}
+                  preferNativeQueries={nativeMode}
                   getCategoryEmoji={getCategoryEmoji}
                 />
               )}
 
               {/* TAB 4: SETTINGS (BACKUP & RESTORE) */}
-              {activeTab === 'settings' && (
+              {!isTransactionEntryActive && activeTab === 'settings' && (
                 <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                   
                   {/* Card 1: Theme Settings */}
@@ -797,11 +1065,14 @@ export function App() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <AppIcon name="alert-triangle" size={16} style={{ color: 'var(--expense-color)' }} />
                         <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--expense-color)' }}>
-                          資料還原與覆蓋 (危險操作)
+                          匯入還原與資料覆蓋 (危險操作)
                         </span>
                       </div>
                       <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
-                        ⚠️ 匯入還原操作將會<strong>覆蓋您目前的帳戶與明細資料</strong>，且完成後無法撤銷。建議在還原前先執行「安全資料備份」以防萬一。
+                        ⚠️ 匯入還原將會<strong>覆蓋目前的帳戶群組與交易明細資料</strong>，且完成後無法撤銷。建議先執行「安全資料備份 (匯出)」。
+                      </div>
+                      <div style={{ fontSize: '0.76rem', color: 'var(--text-tertiary)', lineHeight: '1.4' }}>
+                        匯入檔案需為 `.zip`，且壓縮檔需包含 `backup_data.json`，並具有 `keep_accounts_groups` 與 `keep_accounts_transactions` 欄位。
                       </div>
                       
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -927,7 +1198,11 @@ export function App() {
 
         {/* Bottom Tab Bar Navigation */}
         <nav
-          className="bottom-nav"
+          aria-label="底部導覽"
+          data-testid="bottom-nav"
+          className={`bottom-nav ${
+            navPresentation === 'compact' ? 'bottom-nav--compact' : 'bottom-nav--expanded'
+          }`}
           style={{
             width: 'calc(100% - 32px)',
             maxWidth: '448px',
@@ -935,112 +1210,93 @@ export function App() {
             backdropFilter: 'blur(20px)',
             WebkitBackdropFilter: 'blur(20px)',
             border: '1px solid var(--nav-border)',
-            borderRadius: '24px',
             display: 'flex',
             justifyContent: 'space-around',
-            padding: '8px 6px',
             boxShadow: 'var(--nav-shadow)',
             zIndex: 1000,
             position: 'fixed',
             bottom: '16px',
             left: '50%',
             transform: 'translateX(-50%)',
+            visibility: isTransactionEntryActive ? 'hidden' : 'visible',
           }}
         >
           <button
             onClick={() => setActiveTab('dashboard')}
+            className={`bottom-nav-button ${activeTab === 'dashboard' ? 'active' : ''}`}
             style={{
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               background: 'transparent',
               color: activeTab === 'dashboard' ? 'var(--primary-color)' : 'var(--text-tertiary)',
-              padding: '6px 12px',
               fontSize: '0.75rem',
               fontWeight: 500,
-              gap: '4px',
               border: 'none',
               cursor: 'pointer',
             }}
           >
             <AppIcon name="home" size={20} />
-            <span>總覽</span>
+            <span className="bottom-nav-label">總覽</span>
           </button>
           <button
             onClick={() => setActiveTab('history')}
+            className={`bottom-nav-button ${activeTab === 'history' ? 'active' : ''}`}
             style={{
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               background: 'transparent',
               color: activeTab === 'history' ? 'var(--primary-color)' : 'var(--text-tertiary)',
-              padding: '6px 12px',
               fontSize: '0.75rem',
               fontWeight: 500,
-              gap: '4px',
               border: 'none',
               cursor: 'pointer',
             }}
           >
             <AppIcon name="book-open" size={20} />
-            <span>明細</span>
+            <span className="bottom-nav-label">明細</span>
           </button>
 
           <button
             onClick={() => setActiveTab('stats')}
+            className={`bottom-nav-button ${activeTab === 'stats' ? 'active' : ''}`}
             style={{
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               background: 'transparent',
               color: activeTab === 'stats' ? 'var(--primary-color)' : 'var(--text-tertiary)',
-              padding: '6px 12px',
               fontSize: '0.75rem',
               fontWeight: 500,
-              gap: '4px',
               border: 'none',
               cursor: 'pointer',
             }}
           >
             <AppIcon name="bar-chart" size={20} />
-            <span>分析</span>
+            <span className="bottom-nav-label">分析</span>
           </button>
 
           <button
             onClick={() => setActiveTab('settings')}
+            className={`bottom-nav-button ${activeTab === 'settings' ? 'active' : ''}`}
             style={{
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               background: 'transparent',
               color: activeTab === 'settings' ? 'var(--primary-color)' : 'var(--text-tertiary)',
-              padding: '6px 12px',
               fontSize: '0.75rem',
               fontWeight: 500,
-              gap: '4px',
               border: 'none',
               cursor: 'pointer',
             }}
           >
             <AppIcon name="settings" size={20} />
-            <span>設定</span>
+            <span className="bottom-nav-label">設定</span>
           </button>
         </nav>
 
-        {/* TRANSACTION MODAL (Add/Edit) */}
-        <TransactionModal
-          isOpen={showTxModal}
-          onClose={() => {
-            setShowTxModal(false);
-            setEditingTx(null);
-            setTxModalInitialTab('basic');
-            setShowHistoryCreateMenu(false);
-          }}
-          editingTx={editingTx}
-          accountGroups={accountGroups}
-          initialTab={txModalInitialTab}
-          onSave={handleSaveTransaction}
-        />
       </IonPage>
     </IonApp>
   );

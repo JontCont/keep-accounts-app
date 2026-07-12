@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   AccountGroup,
   Transaction,
@@ -8,8 +8,27 @@ import {
   expandInstallment,
 } from '@keep-accounts-app/domain';
 import { migrateAccountGroups } from './migrations';
+import {
+  isNativePersistenceEnabled,
+  loadKeepAccountsSnapshot,
+  queryNativeCurrentMonthExpenseForGroup,
+  queryNativeRecentTransactions,
+  queryNativeTransactionById,
+  queryNativeInstallmentTransactions,
+  insertNativeTransactions,
+  updateNativeTransaction,
+  deleteNativeTransactionById,
+  deleteNativeInstallmentGroupById,
+  replaceNativeInstallmentGroup,
+  reassignNativeTransactionsGroup,
+  saveNativeAccountGroups,
+  saveKeepAccountsSnapshot,
+} from './persistence';
 
 export function useKeepAccounts() {
+  const nativeMode = isNativePersistenceEnabled();
+  const RECENT_CACHE_LIMIT = 200;
+  const hasHydratedPersistenceRef = useRef(true);
   const [accountGroups, setAccountGroups] = useState<AccountGroup[]>(() => {
     const saved = localStorage.getItem('keep_accounts_groups');
     if (saved) {
@@ -43,18 +62,61 @@ export function useKeepAccounts() {
 
   // Sync state to localStorage
   useEffect(() => {
-    localStorage.setItem('keep_accounts_groups', JSON.stringify(accountGroups));
-  }, [accountGroups]);
+    let cancelled = false;
+
+    const hydrate = async () => {
+      const snapshot = await loadKeepAccountsSnapshot();
+      if (cancelled) {
+        return;
+      }
+
+      const migratedGroups = migrateAccountGroups(snapshot.accountGroups);
+      if (JSON.stringify(migratedGroups) !== JSON.stringify(accountGroups)) {
+        setAccountGroups(migratedGroups);
+      }
+      if (nativeMode) {
+        const recent = await queryNativeRecentTransactions(RECENT_CACHE_LIMIT);
+        if (!cancelled && recent && JSON.stringify(recent) !== JSON.stringify(transactions)) {
+          setTransactions(recent);
+        }
+      } else if (JSON.stringify(snapshot.transactions) !== JSON.stringify(transactions)) {
+        setTransactions(snapshot.transactions);
+      }
+      hasHydratedPersistenceRef.current = true;
+    };
+
+    void hydrate();
+    return () => {
+      cancelled = true;
+    };
+  }, [nativeMode]);
 
   useEffect(() => {
-    localStorage.setItem('keep_accounts_transactions', JSON.stringify(transactions));
-  }, [transactions]);
+    if (!hasHydratedPersistenceRef.current) {
+      return;
+    }
+
+    localStorage.setItem('keep_accounts_groups', JSON.stringify(accountGroups));
+    if (!nativeMode) {
+      localStorage.setItem('keep_accounts_transactions', JSON.stringify(transactions));
+      void saveKeepAccountsSnapshot({
+        accountGroups,
+        transactions,
+      });
+      return;
+    }
+
+    void saveNativeAccountGroups(accountGroups);
+  }, [accountGroups, transactions, nativeMode]);
 
   // Legacy repair: before installment account-group selection existed, some
   // installment transactions with system category "分期" were saved into source
   // groups (e.g. 當月薪資). Move them to a non-source group so expense stats and
   // budget cards reflect the user's expected spending bucket.
   useEffect(() => {
+    if (nativeMode) {
+      return;
+    }
     if (accountGroups.length === 0 || transactions.length === 0) {
       return;
     }
@@ -88,19 +150,20 @@ export function useKeepAccounts() {
     if (changed) {
       setTransactions(repaired);
     }
-  }, [accountGroups, transactions]);
+  }, [accountGroups, transactions, nativeMode]);
 
   const saveTransaction = (
     description: string,
     amountStr: string,
-    type: 'income' | 'expense',
+    type: 'income' | 'expense' | 'transfer',
     category: string,
     date: string,
     accountGroupId: string,
     editingTxId: string | null,
     installmentPeriods?: number
   ): boolean => {
-    const amount = parseFloat(amountStr);
+    const normalizedAmountStr = amountStr.replace(/,/g, '');
+    const amount = parseFloat(normalizedAmountStr);
     if (amount < 0) {
       throw new Error('Transaction amount cannot be negative');
     }
@@ -129,101 +192,158 @@ export function useKeepAccounts() {
       targetGroup.budget > 0 &&
       type === 'expense'
     ) {
-      let projectedTxs: Transaction[] = [];
-      if (editingTxId) {
-        projectedTxs = transactions.map((tx) => {
-          if (tx.id === editingTxId) {
-            return { ...tx, amount, type, category, date, accountGroupId };
+      if (nativeMode) {
+        const monthPrefix = date.substring(0, 7);
+        void queryNativeCurrentMonthExpenseForGroup({
+          groupId: accountGroupId,
+          currentMonthPrefix: monthPrefix,
+        }).then((dbExpense) => {
+          if (dbExpense === null) return;
+          const projected = dbExpense + amount;
+          if (projected > targetGroup.budget!) {
+            const diff = projected - targetGroup.budget!;
+            alert(
+              `提醒：「${
+                targetGroup.name
+              }」已超出預算！(目前已支出 $${projected.toLocaleString(
+                'zh-TW'
+              )} / 預算 $${targetGroup.budget!.toLocaleString(
+                'zh-TW'
+              )}，超支 $${diff.toLocaleString('zh-TW')})`
+            );
           }
-          return tx;
         });
       } else {
-        projectedTxs = [
-          {
-            id: 'temp',
-            description: description.trim(),
-            amount,
-            type,
-            category,
-            date,
-            accountGroupId,
-          },
-          ...transactions,
-        ];
-      }
+        let projectedTxs: Transaction[] = [];
+        if (editingTxId) {
+          projectedTxs = transactions.map((tx) => {
+            if (tx.id === editingTxId) {
+              return { ...tx, amount, type, category, date, accountGroupId };
+            }
+            return tx;
+          });
+        } else {
+          projectedTxs = [
+            {
+              id: 'temp',
+              description: description.trim(),
+              amount,
+              type,
+              category,
+              date,
+              accountGroupId,
+            },
+            ...transactions,
+          ];
+        }
 
-      const monthlyExpenses = getCurrentMonthExpenseForGroup(
-        accountGroupId,
-        projectedTxs
-      );
-      if (monthlyExpenses > targetGroup.budget) {
-        const diff = monthlyExpenses - targetGroup.budget;
-        alert(
-          `提醒：「${
-            targetGroup.name
-          }」已超出預算！(目前已支出 $${monthlyExpenses.toLocaleString(
-            'zh-TW'
-          )} / 預算 $${targetGroup.budget.toLocaleString(
-            'zh-TW'
-          )}，超支 $${diff.toLocaleString('zh-TW')})`
+        const monthlyExpenses = getCurrentMonthExpenseForGroup(
+          accountGroupId,
+          projectedTxs
         );
+        if (monthlyExpenses > targetGroup.budget) {
+          const diff = monthlyExpenses - targetGroup.budget;
+          alert(
+            `提醒：「${
+              targetGroup.name
+            }」已超出預算！(目前已支出 $${monthlyExpenses.toLocaleString(
+              'zh-TW'
+            )} / 預算 $${targetGroup.budget.toLocaleString(
+              'zh-TW'
+            )}，超支 $${diff.toLocaleString('zh-TW')})`
+          );
+        }
       }
     }
 
     if (editingTxId) {
-      setTransactions(
-        transactions.map((tx) =>
-          tx.id === editingTxId
-            ? {
-                ...tx,
-                description: description.trim(),
-                amount,
-                type,
-                category,
-                date,
-                accountGroupId,
-              }
-            : tx
-        )
+      const updatedTx: Transaction = {
+        id: editingTxId,
+        description: description.trim(),
+        amount,
+        type,
+        category,
+        date,
+        accountGroupId,
+      };
+
+      if (nativeMode) {
+        void updateNativeTransaction(updatedTx);
+      }
+
+      setTransactions((prev) =>
+        prev
+          .map((tx) => (tx.id === editingTxId ? { ...tx, ...updatedTx } : tx))
+          .sort((a, b) => b.date.localeCompare(a.date))
+          .slice(0, RECENT_CACHE_LIMIT)
+      );
+    } else if (isInstallment) {
+      const installmentId = Date.now().toString();
+      const periods = expandInstallment(
+        amount,
+        installmentPeriods as number,
+        date
+      );
+      const newTxs: Transaction[] = periods.map((p) => ({
+        id: `${installmentId}-${p.period}`,
+        description: description.trim(),
+        amount: p.amount,
+        type,
+        category,
+        date: p.date,
+        accountGroupId,
+        installmentId,
+        installmentPeriod: p.period,
+        installmentCount: installmentPeriods as number,
+      }));
+
+      if (nativeMode) {
+        void insertNativeTransactions(newTxs);
+      }
+
+      setTransactions((prev) =>
+        [...newTxs, ...prev]
+          .sort((a, b) => b.date.localeCompare(a.date))
+          .slice(0, RECENT_CACHE_LIMIT)
       );
     } else {
-      if (isInstallment) {
-        const installmentId = Date.now().toString();
-        const periods = expandInstallment(
-          amount,
-          installmentPeriods as number,
-          date
-        );
-        const newTxs: Transaction[] = periods.map((p) => ({
-          id: `${installmentId}-${p.period}`,
-          description: description.trim(),
-          amount: p.amount,
-          type,
-          category,
-          date: p.date,
-          accountGroupId,
-          installmentId,
-          installmentPeriod: p.period,
-          installmentCount: installmentPeriods as number,
-        }));
-        setTransactions([...newTxs, ...transactions]);
-      } else {
-        const newTx: Transaction = {
-          id: Date.now().toString(),
-          description: description.trim(),
-          amount,
-          type,
-          category,
-          date,
-          accountGroupId,
-        };
-        setTransactions([newTx, ...transactions]);
+      const newTx: Transaction = {
+        id: Date.now().toString(),
+        description: description.trim(),
+        amount,
+        type,
+        category,
+        date,
+        accountGroupId,
+      };
+
+      if (nativeMode) {
+        void insertNativeTransactions([newTx]);
       }
+
+      setTransactions((prev) =>
+        [newTx, ...prev]
+          .sort((a, b) => b.date.localeCompare(a.date))
+          .slice(0, RECENT_CACHE_LIMIT)
+      );
     }
     return true;
   };
 
   const deleteTransaction = (id: string) => {
+    if (nativeMode) {
+      void (async () => {
+        const target = await queryNativeTransactionById(id);
+        if (target?.installmentId) {
+          deleteInstallmentPeriod(id);
+          return;
+        }
+        await deleteNativeTransactionById(id);
+      })();
+      setTransactions((prev) => prev.filter((tx) => tx.id !== id));
+      return;
+    }
+
     const target = transactions.find((tx) => tx.id === id);
     if (target?.installmentId) {
       deleteInstallmentPeriod(id);
@@ -245,6 +365,9 @@ export function useKeepAccounts() {
     installmentId: string,
     updatedGroup: Transaction[]
   ) => {
+    if (nativeMode) {
+      void replaceNativeInstallmentGroup(installmentId, updatedGroup);
+    }
     const updatedById = new Map(updatedGroup.map((tx) => [tx.id, tx]));
     setTransactions(
       transactions.flatMap((tx) => {
@@ -259,6 +382,34 @@ export function useKeepAccounts() {
   };
 
   const deleteInstallmentPeriod = (id: string): boolean => {
+    if (nativeMode) {
+      void (async () => {
+        const target = await queryNativeTransactionById(id);
+        if (!target?.installmentId) return;
+
+        const group = await queryNativeInstallmentTransactions(target.installmentId);
+        if (!group) return;
+
+        const remainingGroup = sortInstallmentTransactions(
+          group.filter((tx) => tx.id !== id)
+        );
+        if (remainingGroup.length === 0) {
+          await deleteNativeInstallmentGroupById(target.installmentId);
+          return;
+        }
+
+        const reindexed = remainingGroup.map((tx, index) => ({
+          ...tx,
+          installmentPeriod: index + 1,
+          installmentCount: remainingGroup.length,
+        }));
+        await replaceNativeInstallmentGroup(target.installmentId, reindexed);
+      })();
+
+      setTransactions((prev) => prev.filter((tx) => tx.id !== id));
+      return true;
+    }
+
     const target = transactions.find((tx) => tx.id === id);
     if (!target?.installmentId) {
       return false;
@@ -288,6 +439,14 @@ export function useKeepAccounts() {
   };
 
   const deleteInstallmentGroup = (installmentId: string): boolean => {
+    if (nativeMode) {
+      void deleteNativeInstallmentGroupById(installmentId);
+      setTransactions((prev) =>
+        prev.filter((tx) => tx.installmentId !== installmentId)
+      );
+      return true;
+    }
+
     const hasGroup = transactions.some((tx) => tx.installmentId === installmentId);
     if (!hasGroup) {
       return false;
@@ -298,6 +457,54 @@ export function useKeepAccounts() {
   };
 
   const settleInstallmentGroup = (installmentId: string): boolean => {
+    if (nativeMode) {
+      void (async () => {
+        const groupTxsRaw = await queryNativeInstallmentTransactions(installmentId);
+        if (!groupTxsRaw || groupTxsRaw.length === 0) return;
+        const groupTxs = sortInstallmentTransactions(groupTxsRaw);
+
+        const settledAt = getLocalISOString();
+        const remainingTxs = groupTxs.filter(
+          (tx) => new Date(tx.date).getTime() > new Date(settledAt).getTime()
+        );
+        if (remainingTxs.length === 0) {
+          return;
+        }
+
+        const settledTxs = groupTxs.filter(
+          (tx) => new Date(tx.date).getTime() <= new Date(settledAt).getTime()
+        );
+        const totalRemainingAmount = remainingTxs.reduce((sum, tx) => sum + tx.amount, 0);
+        const nextPeriod = settledTxs.length + 1;
+        const template = groupTxs[0];
+
+        const updatedSettledTxs = settledTxs.map((tx, index) => ({
+          ...tx,
+          installmentPeriod: index + 1,
+          installmentCount: nextPeriod,
+        }));
+
+        const settlementTx: Transaction = {
+          id: `${installmentId}-settlement-${Date.now()}`,
+          description: template.description,
+          amount: totalRemainingAmount,
+          type: template.type,
+          category: template.category,
+          date: settledAt,
+          accountGroupId: template.accountGroupId,
+          installmentId,
+          installmentPeriod: nextPeriod,
+          installmentCount: nextPeriod,
+        };
+
+        await replaceNativeInstallmentGroup(installmentId, [
+          ...updatedSettledTxs,
+          settlementTx,
+        ]);
+      })();
+      return true;
+    }
+
     const groupTxs = sortInstallmentTransactions(
       transactions.filter((tx) => tx.installmentId === installmentId)
     );
@@ -340,13 +547,6 @@ export function useKeepAccounts() {
   };
 
   const saveAccountGroups = (groups: AccountGroup[]): boolean => {
-    const sum = groups
-      .filter((g) => !g.isSource)
-      .reduce((s, g) => s + (g.targetRatio || 0), 0);
-    if (sum !== 100) {
-      alert('目標比例加總必須為 100%！');
-      throw new Error('Allocation target ratios must sum to exactly 100%');
-    }
     setAccountGroups(groups);
     return true;
   };
@@ -391,15 +591,28 @@ export function useKeepAccounts() {
     const remainingGroups = accountGroups.filter((g) => g.id !== groupId);
     const targetGroupId = remainingGroups[0].id;
 
-    // Re-link transactions to the first remaining group
-    const updatedTxs = transactions.map((tx) => {
-      if (tx.accountGroupId === groupId) {
-        return { ...tx, accountGroupId: targetGroupId };
-      }
-      return tx;
-    });
-
-    setTransactions(updatedTxs);
+    if (nativeMode) {
+      void reassignNativeTransactionsGroup({
+        fromGroupId: groupId,
+        toGroupId: targetGroupId,
+      });
+      setTransactions((prev) =>
+        prev.map((tx) =>
+          tx.accountGroupId === groupId
+            ? { ...tx, accountGroupId: targetGroupId }
+            : tx
+        )
+      );
+    } else {
+      // Re-link transactions to the first remaining group
+      const updatedTxs = transactions.map((tx) => {
+        if (tx.accountGroupId === groupId) {
+          return { ...tx, accountGroupId: targetGroupId };
+        }
+        return tx;
+      });
+      setTransactions(updatedTxs);
+    }
     setAccountGroups(remainingGroups);
     return true;
   };

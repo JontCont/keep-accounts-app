@@ -6,6 +6,18 @@ import { useKeepAccounts } from '@keep-accounts-app/state';
 import App from './app';
 import { getCurrentMonthExpenseForGroup, Transaction } from '@keep-accounts-app/domain';
 
+const dispatchIonScroll = (container: HTMLElement, scrollTop: number) => {
+  const ionContent = container.querySelector('ion-content');
+  expect(ionContent).toBeTruthy();
+  fireEvent(
+    ionContent as Element,
+    new CustomEvent('ionScroll', {
+      detail: { scrollTop },
+      bubbles: true,
+    })
+  );
+};
+
 vi.mock('@ionic/react', async (importOriginal) => {
   const original = await importOriginal<typeof import('@ionic/react')>();
   const React = await import('react');
@@ -26,6 +38,30 @@ describe('App', () => {
   it('should render successfully', () => {
     const { baseElement } = render(<BrowserRouter><App /></BrowserRouter>);
     expect(baseElement).toBeTruthy();
+  });
+
+  it('shows the starter preset action in the empty allocation state and hides it after setup exists', async () => {
+    const emptyStateView = render(<BrowserRouter><App /></BrowserRouter>);
+
+    expect(emptyStateView.getByText('套用入門資金配置')).toBeTruthy();
+
+    fireEvent.click(emptyStateView.getByText('套用入門資金配置'));
+
+    await waitFor(() => {
+      expect(emptyStateView.getByText(/編輯帳戶/)).toBeTruthy();
+    });
+
+    emptyStateView.unmount();
+
+    const customGroups = [
+      { id: '0', name: '當月薪資', emoji: 'briefcase', color: '#22c55e', isSource: true, categories: [] },
+      { id: '1', name: '自訂大項', emoji: 'credit-card', color: '#6366f1', targetRatio: 100, categories: [] },
+    ];
+    localStorage.setItem('keep_accounts_groups', JSON.stringify(customGroups));
+
+    const customSetupView = render(<BrowserRouter><App /></BrowserRouter>);
+
+    expect(customSetupView.queryByText('套用入門資金配置')).toBeNull();
   });
 
   it('shows installment rows as read-only in flat history views', () => {
@@ -59,7 +95,91 @@ describe('App', () => {
     expect(getAllByText(new RegExp('Keep Accounts', 'gi')).length > 0).toBeTruthy();
   });
 
-  it('should block saving and show validation message when target ratios sum is not 100%', () => {
+  it('auto-compacts bottom navigation on downward scroll and keeps tabs usable in compact mode', () => {
+    const { container, getByTestId } = render(<BrowserRouter><App /></BrowserRouter>);
+
+    const nav = getByTestId('bottom-nav');
+    expect(nav.className).toContain('bottom-nav--expanded');
+
+    act(() => {
+      dispatchIonScroll(container, 24);
+      dispatchIonScroll(container, 96);
+      dispatchIonScroll(container, 168);
+    });
+
+    expect(nav.className).toContain('bottom-nav--compact');
+    expect(within(nav).getByText('總覽')).toBeTruthy();
+    expect(within(nav).getByText('明細')).toBeTruthy();
+    expect(within(nav).getByText('分析')).toBeTruthy();
+    expect(within(nav).getByText('設定')).toBeTruthy();
+
+    const activeTabButton = within(nav).getByText('總覽').closest('button');
+    expect(activeTabButton).toBeTruthy();
+    expect(activeTabButton?.className).toContain('active');
+  });
+
+  it('auto-expands bottom navigation on upward scroll after being compacted', () => {
+    const { container, getByTestId } = render(<BrowserRouter><App /></BrowserRouter>);
+
+    const nav = getByTestId('bottom-nav');
+
+    act(() => {
+      dispatchIonScroll(container, 32);
+      dispatchIonScroll(container, 120);
+      dispatchIonScroll(container, 196);
+    });
+    expect(nav.className).toContain('bottom-nav--compact');
+
+    act(() => {
+      dispatchIonScroll(container, 172);
+      dispatchIonScroll(container, 148);
+      dispatchIonScroll(container, 118);
+    });
+
+    expect(nav.className).toContain('bottom-nav--expanded');
+  });
+
+  it('hides bottom navigation while transaction entry page is active', () => {
+    const { container, getByTestId, getByText } = render(<BrowserRouter><App /></BrowserRouter>);
+
+    const nav = getByTestId('bottom-nav');
+
+    act(() => {
+      dispatchIonScroll(container, 30);
+      dispatchIonScroll(container, 108);
+      dispatchIonScroll(container, 184);
+    });
+    expect(nav.className).toContain('bottom-nav--compact');
+
+    fireEvent.click(getByText('新增記帳明細'));
+    expect(getByText('新增收支記帳')).toBeTruthy();
+    expect(nav.className).toContain('bottom-nav--expanded');
+    expect((nav as HTMLElement).style.visibility).toBe('hidden');
+  });
+
+  it('keeps header title behavior stable while bottom nav presentation changes', () => {
+    const { container, getByText, queryByText } = render(<BrowserRouter><App /></BrowserRouter>);
+
+    expect(getByText('Keep Accounts')).toBeTruthy();
+    expect(getByText('精緻微型記帳系統')).toBeTruthy();
+
+    act(() => {
+      dispatchIonScroll(container, 20);
+      dispatchIonScroll(container, 92);
+      dispatchIonScroll(container, 176);
+      dispatchIonScroll(container, 150);
+      dispatchIonScroll(container, 122);
+    });
+
+    expect(getByText('Keep Accounts')).toBeTruthy();
+    expect(getByText('精緻微型記帳系統')).toBeTruthy();
+
+    fireEvent.click(getByText('明細'));
+    expect(getByText('歷史交易明細')).toBeTruthy();
+    expect(queryByText('精緻微型記帳系統')).toBeNull();
+  });
+
+  it('should show over-allocation warning only when target ratios are greater than 100% and still allow saving', () => {
     const groups = [
       { id: '0', name: '當月薪資', emoji: 'briefcase', color: '#22c55e', isSource: true, categories: [] },
       { id: '3', name: '儲蓄資金', emoji: 'piggy-bank', color: '#10b981', targetRatio: 40, categories: [] },
@@ -67,6 +187,7 @@ describe('App', () => {
       { id: '2', name: '投資理財', emoji: 'trending-up', color: '#3b82f6', targetRatio: 30, categories: [] }
     ];
     localStorage.setItem('keep_accounts_groups', JSON.stringify(groups));
+    localStorage.setItem('keep_accounts_onboarding_baseline_asset', '50000');
 
     const { getByText, getAllByPlaceholderText, queryByText } = render(<BrowserRouter><App /></BrowserRouter>);
     
@@ -83,19 +204,67 @@ describe('App', () => {
     // Non-source groups sum to 100% (40 + 30 + 30). Change the first (儲蓄資金) input to 50
     fireEvent.change(inputs[0], { target: { value: '50' } });
     
-    // Warning message should be present
-    expect(getByText(/目標比例加總必須為 100%/)).toBeTruthy();
-    
-    // Save button (完成編輯) should be disabled
+    // Over-allocation warning should be present
+    expect(getByText(/目前超配 10%/)).toBeTruthy();
+
+    // Save button (完成編輯) should remain enabled
     const saveBtn = getByText('完成編輯').closest('button');
-    expect(saveBtn?.hasAttribute('disabled')).toBe(true);
-    
-    // Restore valid sum (40 + 30 + 30 = 100)
-    fireEvent.change(inputs[0], { target: { value: '40' } });
-    
-    // Warning should disappear
-    expect(queryByText(/目標比例加總必須為 100%/)).toBeNull();
     expect(saveBtn?.hasAttribute('disabled')).toBe(false);
+
+    // Change to under-allocation sum (30 + 30 + 30 = 90)
+    fireEvent.change(inputs[0], { target: { value: '30' } });
+
+    // Warning should disappear when not over 100%
+    expect(queryByText(/目前超配/)).toBeNull();
+
+    fireEvent.click(getByText('完成編輯'));
+    expect(queryByText('完成編輯')).toBeNull();
+  });
+
+  it('does not show first-use setup guidance in current dashboard flow', () => {
+    const { queryByText } = render(<BrowserRouter><App /></BrowserRouter>);
+
+    expect(queryByText('首次使用設定引導')).toBeNull();
+    expect(queryByText(/STEP 1/)).toBeNull();
+    expect(queryByText(/STEP 2/)).toBeNull();
+  });
+
+  it('lets the starter preset remain editable after application', () => {
+    const { getByText, getAllByPlaceholderText } = render(<BrowserRouter><App /></BrowserRouter>);
+
+    fireEvent.click(getByText('套用入門資金配置'));
+    fireEvent.click(getByText(/編輯帳戶/));
+
+    const inputs = getAllByPlaceholderText('0') as HTMLInputElement[];
+    expect(inputs.length).toBeGreaterThanOrEqual(3);
+
+    fireEvent.focus(inputs[0]);
+    fireEvent.change(inputs[0], { target: { value: '45' } });
+    fireEvent.blur(inputs[0]);
+
+    expect(inputs[0].value).toBe('45');
+  });
+
+  it('keeps custom allocation data when the template import confirmation is cancelled', () => {
+    const customGroups = [
+      { id: '0', name: '當月薪資', emoji: 'briefcase', color: '#22c55e', isSource: true, categories: [] },
+      { id: '1', name: '自訂大項', emoji: 'credit-card', color: '#6366f1', targetRatio: 100, categories: [] },
+    ];
+    localStorage.setItem('keep_accounts_groups', JSON.stringify(customGroups));
+
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const { getByText, getByRole } = render(<BrowserRouter><App /></BrowserRouter>);
+
+    fireEvent.click(getByText('設定'));
+    fireEvent.click(getByRole('button', { name: /導入範例模板資料/ }));
+
+    const storedGroups = JSON.parse(localStorage.getItem('keep_accounts_groups') || '[]');
+    expect(storedGroups).toHaveLength(2);
+    expect(storedGroups[0].name).toBe('當月薪資');
+    expect(storedGroups[1].name).toBe('自訂大項');
+    expect(storedGroups[1].targetRatio).toBe(100);
+
+    confirmSpy.mockRestore();
   });
 
   it('should migrate target ratios when localStorage has no target ratios or sum is not 100%', () => {
@@ -152,6 +321,33 @@ describe('App', () => {
     expect(getByText('今日支出')).toBeTruthy();
     expect(getAllByText('-$100').length).toBe(2);
     expect(getAllByText('+$500').length).toBe(2);
+  });
+
+  it('shows dashboard detail rows for the selected period', () => {
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const otherDay = now.getDate() === 1 ? '02' : '01';
+    const monthStr = `${year}-${month}-${otherDay}`;
+
+    const mockTxs: Transaction[] = [
+      { id: '1', description: 'today detail', amount: 100, type: 'expense', category: '餐飲食品', date: todayStr, accountGroupId: '1' },
+      { id: '2', description: 'month detail', amount: 200, type: 'expense', category: '餐飲食品', date: monthStr, accountGroupId: '1' },
+    ];
+    localStorage.setItem('keep_accounts_transactions', JSON.stringify(mockTxs));
+
+    const { getByText, queryByText } = render(<BrowserRouter><App /></BrowserRouter>);
+
+    expect(getByText('month detail')).toBeTruthy();
+    expect(getByText('today detail')).toBeTruthy();
+
+    fireEvent.click(getByText('今日'));
+
+    expect(getByText('今日記帳明細')).toBeTruthy();
+    expect(getByText('today detail')).toBeTruthy();
+    expect(queryByText('month detail')).toBeNull();
   });
 
   it('should calculate and display daily allowed consumption and remaining budget when period is today', () => {
@@ -231,6 +427,7 @@ describe('App', () => {
       { id: '2', name: '投資理財', emoji: 'trending-up', color: '#3b82f6', targetRatio: 30, categories: [] }
     ];
     localStorage.setItem('keep_accounts_groups', JSON.stringify(groups));
+    localStorage.setItem('keep_accounts_onboarding_baseline_asset', '50000');
 
     const { getByText, queryAllByTitle } = render(<BrowserRouter><App /></BrowserRouter>);
     
@@ -242,7 +439,14 @@ describe('App', () => {
     expect(deleteBtns.length).toBe(3);
   });
 
-  it('should open TransactionModal in creation mode when clicking the dashboard add button', () => {
+  it('should open transaction entry page in creation mode when clicking the dashboard add button', () => {
+    const groups = [
+      { id: '0', name: '當月薪資', emoji: 'briefcase', color: '#22c55e', isSource: true, categories: [] },
+      { id: '1', name: '日常開銷', emoji: 'credit-card', color: '#6366f1', targetRatio: 100, categories: [] },
+    ];
+    localStorage.setItem('keep_accounts_groups', JSON.stringify(groups));
+    localStorage.setItem('keep_accounts_onboarding_baseline_asset', '50000');
+
     const { getByText } = render(<BrowserRouter><App /></BrowserRouter>);
 
     fireEvent.click(getByText('新增記帳明細'));
@@ -250,7 +454,7 @@ describe('App', () => {
     expect(getByText('新增收支記帳')).toBeTruthy();
   });
 
-  it('opens the transaction modal when choosing the general option from the history create menu', () => {
+  it('opens the transaction entry page when choosing the general option from the history create menu', () => {
     const { getByText, getByTitle } = render(<BrowserRouter><App /></BrowserRouter>);
 
     fireEvent.click(getByText('明細'));
@@ -272,7 +476,7 @@ describe('App', () => {
     expect(getByText('分期總額 ($)')).toBeTruthy();
   });
 
-  it('should open TransactionModal populated with transaction data when clicking edit on a row in HistoryTab', () => {
+  it('should open transaction entry page populated with transaction data when clicking edit on a row in HistoryTab', () => {
     const mockTxs: Transaction[] = [
       { id: 'tx-test-id', description: 'test-history-item', amount: 500, type: 'expense', category: '餐飲食品', date: '2026-07-08T12:00:00.000Z', accountGroupId: '1' }
     ];
@@ -291,7 +495,7 @@ describe('App', () => {
     const editBtn = getByTitle('編輯');
     fireEvent.click(editBtn);
     
-    // Modal header "修改收支記帳" should be visible
+    // Page header "修改收支記帳" should be visible
     expect(getByText('修改收支記帳')).toBeTruthy();
     // Modal inputs should be populated with the transaction data
     const descInput = container.querySelector('ion-input[placeholder*="例如"]') as any;
@@ -301,6 +505,28 @@ describe('App', () => {
     const amountInput = container.querySelector('ion-input[placeholder*="金額"]') as any;
     expect(amountInput).toBeTruthy();
     expect(amountInput.value.toString()).toBe('500');
+  });
+
+  it('returns to dashboard when backing out from a dashboard-origin transaction entry page', () => {
+    const { getByText } = render(<BrowserRouter><App /></BrowserRouter>);
+
+    fireEvent.click(getByText('新增記帳明細'));
+    expect(getByText('新增收支記帳')).toBeTruthy();
+
+    fireEvent.click(getByText('返回'));
+    expect(getByText('Keep Accounts')).toBeTruthy();
+  });
+
+  it('returns to history when backing out from a history-origin transaction entry page', () => {
+    const { getByText, getByTitle } = render(<BrowserRouter><App /></BrowserRouter>);
+
+    fireEvent.click(getByText('明細'));
+    fireEvent.click(getByTitle('新增記帳'));
+    fireEvent.click(getByText('一般記帳'));
+    expect(getByText('新增收支記帳')).toBeTruthy();
+
+    fireEvent.click(getByText('返回'));
+    expect(getByText('歷史交易明細')).toBeTruthy();
   });
 });
 
@@ -356,6 +582,50 @@ describe('Salary source group', () => {
     // Pure virtual overlay: no transaction created
     const stored = JSON.parse(localStorage.getItem('keep_accounts_transactions') || '[]');
     expect(stored.length).toBe(1);
+  });
+
+  it('computes target amounts from stored ratios when total is under 100%', () => {
+    const groups = [
+      { id: '0', name: '當月薪資', emoji: 'briefcase', color: '#22c55e', isSource: true, categories: [] },
+      { id: '3', name: '儲蓄資金', emoji: 'piggy-bank', color: '#10b981', targetRatio: 40, categories: [] },
+      { id: '1', name: '日常開銷', emoji: 'credit-card', color: '#6366f1', targetRatio: 30, categories: [] },
+      { id: '2', name: '投資理財', emoji: 'trending-up', color: '#3b82f6', targetRatio: 20, categories: [] },
+    ];
+    localStorage.setItem('keep_accounts_groups', JSON.stringify(groups));
+    localStorage.setItem('keep_accounts_onboarding_baseline_asset', '50000');
+
+    const mockTxs: Transaction[] = [
+      { id: 's1', description: '發放月薪', amount: 50000, type: 'income', category: '薪資收入', date: currentMonthDate('05'), accountGroupId: '0' },
+    ];
+    localStorage.setItem('keep_accounts_transactions', JSON.stringify(mockTxs));
+
+    const { getAllByText } = render(<BrowserRouter><App /></BrowserRouter>);
+
+    expect(getAllByText('分配額 40% ($20,000)').length).toBeGreaterThanOrEqual(1);
+    expect(getAllByText('分配額 30% ($15,000)').length).toBeGreaterThanOrEqual(1);
+    expect(getAllByText('分配額 20% ($10,000)').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('computes target amounts from stored ratios when total is over 100%', () => {
+    const groups = [
+      { id: '0', name: '當月薪資', emoji: 'briefcase', color: '#22c55e', isSource: true, categories: [] },
+      { id: '3', name: '儲蓄資金', emoji: 'piggy-bank', color: '#10b981', targetRatio: 50, categories: [] },
+      { id: '1', name: '日常開銷', emoji: 'credit-card', color: '#6366f1', targetRatio: 35, categories: [] },
+      { id: '2', name: '投資理財', emoji: 'trending-up', color: '#3b82f6', targetRatio: 25, categories: [] },
+    ];
+    localStorage.setItem('keep_accounts_groups', JSON.stringify(groups));
+    localStorage.setItem('keep_accounts_onboarding_baseline_asset', '50000');
+
+    const mockTxs: Transaction[] = [
+      { id: 's1', description: '發放月薪', amount: 50000, type: 'income', category: '薪資收入', date: currentMonthDate('05'), accountGroupId: '0' },
+    ];
+    localStorage.setItem('keep_accounts_transactions', JSON.stringify(mockTxs));
+
+    const { getAllByText } = render(<BrowserRouter><App /></BrowserRouter>);
+
+    expect(getAllByText('分配額 50% ($25,000)').length).toBeGreaterThanOrEqual(1);
+    expect(getAllByText('分配額 35% ($17,500)').length).toBeGreaterThanOrEqual(1);
+    expect(getAllByText('分配額 25% ($12,500)').length).toBeGreaterThanOrEqual(1);
   });
 
   it('should show allocated versus spent on a non-source card', () => {
@@ -523,7 +793,7 @@ describe('Credit-card installments', () => {
   });
 
   it('shows the 啟用通知 switch on the 分期 tab with a web-only delivery note', () => {
-    const { getByText, getByTitle, getByTestId, queryByText } = render(<BrowserRouter><App /></BrowserRouter>);
+    const { getByText, getByTitle, queryByText } = render(<BrowserRouter><App /></BrowserRouter>);
 
     // Open the history create menu and enter installment mode directly
     fireEvent.click(getByText('明細'));
@@ -561,7 +831,7 @@ describe('Credit-card installments', () => {
     fireEvent.click(getAllByText('分期')[0]);
 
     expect(getByText('手機分期')).toBeTruthy();
-    expect(getByText('已繳 3 / 3 期 · 總額 $3007 · 剩餘 $0')).toBeTruthy();
+    expect(getByText('已繳 3 / 3 期 · 總額 $3,007 · 剩餘 $0')).toBeTruthy();
     expect(getByText('刪除整組')).toBeTruthy();
     expect(getByText('第 1 期')).toBeTruthy();
     expect(getAllByText(/\/3/).length).toBeGreaterThan(0);
@@ -723,7 +993,7 @@ describe('Credit-card installments', () => {
     fireEvent.click(getByText('明細'));
     fireEvent.click(getAllByText('分期')[0]);
 
-    expect(getByText('已繳 0 / 5 期 · 總額 $9995 · 剩餘 $9995')).toBeTruthy();
+    expect(getByText('已繳 0 / 5 期 · 總額 $9,995 · 剩餘 $9,995')).toBeTruthy();
   });
 });
 
@@ -769,17 +1039,20 @@ describe('useKeepAccounts defensive checks', () => {
     }).toThrow('Transaction amount cannot be negative');
   });
 
-  it('should throw an error when saving account groups with ratios not summing to 100%', () => {
+  it('should allow saving account groups when ratios do not sum to 100%', () => {
     const { result } = renderHook(() => useKeepAccounts());
     const invalidGroups = [
       { id: '1', name: '日常開銷', emoji: '💳', color: '#6366f1', targetRatio: 50, categories: [] },
       { id: '2', name: '投資理財', emoji: '📈', color: '#3b82f6', targetRatio: 40, categories: [] }
     ];
-    expect(() => {
-      act(() => {
-        result.current.saveAccountGroups(invalidGroups);
-      });
-    }).toThrow('Allocation target ratios must sum to exactly 100%');
+
+    let success = false;
+    act(() => {
+      success = result.current.saveAccountGroups(invalidGroups);
+    });
+
+    expect(success).toBe(true);
+    expect(result.current.accountGroups).toEqual(invalidGroups);
   });
 
   it('should fall back to empty state silently when localStorage has corrupted JSON', () => {
