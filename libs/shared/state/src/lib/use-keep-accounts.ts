@@ -340,13 +340,6 @@ export function useKeepAccounts() {
   };
 
   const saveAccountGroups = (groups: AccountGroup[]): boolean => {
-    const sum = groups
-      .filter((g) => !g.isSource)
-      .reduce((s, g) => s + (g.targetRatio || 0), 0);
-    if (sum !== 100) {
-      alert('目標比例加總必須為 100%！');
-      throw new Error('Allocation target ratios must sum to exactly 100%');
-    }
     setAccountGroups(groups);
     return true;
   };

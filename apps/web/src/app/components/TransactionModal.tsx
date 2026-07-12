@@ -143,6 +143,8 @@ interface TransactionModalProps {
   onClose: () => void;
   editingTx: Transaction | null;
   accountGroups: AccountGroup[];
+  incomeLocked?: boolean;
+  incomeLockMessage?: string;
   initialTab?: 'basic' | 'installment';
   onSave: (
     description: string,
@@ -242,6 +244,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   onClose,
   editingTx,
   accountGroups,
+  incomeLocked = false,
+  incomeLockMessage = '請先完成首次設定引導。',
   initialTab = 'basic',
   onSave,
 }) => {
@@ -299,6 +303,12 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   }, [editingTx, isOpen, accountGroups, initialTab]);
 
   useEffect(() => {
+    if (incomeLocked && !editingTx && type === 'income') {
+      setType('expense');
+    }
+  }, [incomeLocked, editingTx, type]);
+
+  useEffect(() => {
     if (!isOpen) return;
 
     const timer = window.setTimeout(() => {
@@ -329,6 +339,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (incomeLocked && !editingTx && type === 'income') {
+      alert(incomeLockMessage);
+      return;
+    }
+
     // Entering a valid total + period count on the 分期 tab implies installment.
     const useInstallment =
       canConfigureInstallment && activeTab === 'installment' && hasValidInstallment;
@@ -499,10 +514,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  if (!isEditingInstallment) {
+                  if (!isEditingInstallment && !(incomeLocked && !editingTx)) {
                     setType('income');
                   }
                 }}
+                disabled={incomeLocked && !editingTx}
                 style={{
                   flex: 1,
                   padding: '10px',
@@ -511,11 +527,24 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                   background:
                     type === 'income' ? 'var(--income-color)' : 'transparent',
                   color: type === 'income' ? '#fff' : 'var(--text-secondary)',
+                  opacity: incomeLocked && !editingTx ? 0.55 : 1,
+                  cursor: incomeLocked && !editingTx ? 'not-allowed' : 'pointer',
                 }}
               >
                 收入 💰
               </button>
             </div>
+            {incomeLocked && !editingTx && (
+              <div
+                style={{
+                  marginTop: '8px',
+                  fontSize: '0.78rem',
+                  color: 'var(--expense-color)',
+                }}
+              >
+                ⚠️ {incomeLockMessage}
+              </div>
+            )}
           </div>
 
           {/* Tab bar: 基本 / 分期 (new expense entries only) */}

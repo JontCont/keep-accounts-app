@@ -244,7 +244,7 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
     (s, g) => s + (g.isSource ? 0 : g.targetRatio || 0),
     0
   );
-  const isInvalidRatio = targetSum !== 100;
+  const isOverAllocated = targetSum > 100;
   const defaultCategoryItems = Array.from(
     new Map(
       DEFAULT_ACCOUNT_GROUPS.flatMap((group) => group.categories)
@@ -279,13 +279,13 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
         </h3>
         <button
           onClick={handleSave}
-          disabled={isInvalidRatio}
+          disabled={false}
           style={{
             background: 'transparent',
-            color: isInvalidRatio ? 'var(--text-tertiary)' : 'var(--primary-color)',
+            color: 'var(--primary-color)',
             fontSize: '0.9rem',
             fontWeight: 600,
-            cursor: isInvalidRatio ? 'not-allowed' : 'pointer',
+            cursor: 'pointer',
           }}
         >
           完成編輯
@@ -478,13 +478,13 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
             <span
               style={{
                 fontWeight: 600,
-                color: isInvalidRatio ? 'var(--expense-color)' : 'var(--income-color)',
+                color: isOverAllocated ? 'var(--expense-color)' : 'var(--income-color)',
               }}
             >
               {targetSum}%
             </span>
           </div>
-          {isInvalidRatio && (
+          {isOverAllocated && (
             <div
               style={{
                 color: 'var(--expense-color)',
@@ -493,7 +493,7 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
                 fontWeight: 500,
               }}
             >
-              ⚠️ 目標比例加總必須為 100%（目前: {targetSum}%）
+              ⚠️ 目前超配 {targetSum - 100}%（目前: {targetSum}%）
             </div>
           )}
         </div>

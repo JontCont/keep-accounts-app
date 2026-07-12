@@ -26,6 +26,8 @@ import {
   decompressBackup
 } from './services/backup';
 
+const ONBOARDING_BASELINE_ASSET_KEY = 'keep_accounts_onboarding_baseline_asset';
+
 export function App() {
   const {
     accountGroups,
@@ -49,6 +51,9 @@ export function App() {
   const [showTxModal, setShowTxModal] = useState(false);
   const [showHistoryCreateMenu, setShowHistoryCreateMenu] = useState(false);
   const [txModalInitialTab, setTxModalInitialTab] = useState<'basic' | 'installment'>('basic');
+  const [baselineAssetInput, setBaselineAssetInput] = useState(() => {
+    return localStorage.getItem(ONBOARDING_BASELINE_ASSET_KEY) || '';
+  });
 
   // FAB scroll behavior state
   const [showFab, setShowFab] = useState(true);
@@ -114,6 +119,13 @@ export function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isNative = isNativePlatform();
+  const nonSourceGroups = accountGroups.filter((group) => !group.isSource);
+  const hasBaselineAsset = baselineAssetInput.trim() !== '';
+  const hasMajorGroupSetup = nonSourceGroups.length > 0;
+  const shouldShowFirstUseGuide =
+    transactions.length === 0 && (!hasBaselineAsset || !hasMajorGroupSetup);
+  const firstUseIncomeLockMessage =
+    '先完成首次設定：總資產與資金大項，才能新增收入記帳。';
 
   // Check if native auto-backup file exists
   useEffect(() => {
@@ -265,6 +277,17 @@ export function App() {
     setEditingTx(null);
     setTxModalInitialTab(initialTab);
     setShowTxModal(true);
+  };
+
+  const handleSaveBaselineAsset = () => {
+    const numeric = parseFloat(baselineAssetInput);
+    if (isNaN(numeric) || numeric <= 0) {
+      alert('請輸入大於 0 的總資產金額。');
+      return;
+    }
+    const normalized = Math.round(numeric).toString();
+    setBaselineAssetInput(normalized);
+    localStorage.setItem(ONBOARDING_BASELINE_ASSET_KEY, normalized);
   };
 
   // Automatic backup trigger on change
@@ -544,39 +567,126 @@ export function App() {
             {/* Main Content Area */}
             <main style={{ flex: 1, paddingBottom: '120px' }}>
               {activeTab === 'dashboard' && (
-                <DashboardTab
-                  accountGroups={accountGroups}
-                  transactions={transactions}
-                  onAddTransactionClick={() => {
-                    openTransactionModal('basic');
-                  }}
-                  onEditTransactionClick={(tx) => {
-                    setEditingTx(tx);
-                    setTxModalInitialTab('basic');
-                    setShowTxModal(true);
-                  }}
-                  onDeleteTransaction={deleteTransaction}
-                  isEditingGroups={isEditingGroups}
-                  setIsEditingGroups={setIsEditingGroups}
-                  getCategoryEmoji={getCategoryEmoji}
-                  getGroupName={getGroupName}
-                  getGroupKey={getGroupKey}
-                  formatGroupHeader={formatGroupHeader}
-                  getGroupTotals={getGroupTotals}
-                  groupSettingsPanel={
-                    <GroupSettingsModal
-                      isOpen={isEditingGroups}
-                      onClose={() => setIsEditingGroups(false)}
-                      accountGroups={accountGroups}
-                      onSaveGroups={saveAccountGroups}
-                      onDeleteGroup={deleteAccountGroup}
-                      onAddGroup={addAccountGroup}
-                      onAddCategory={addCategory}
-                      onDeleteCategory={deleteCategory}
-                      onUpdateGroupBudget={handleUpdateGroupBudget}
-                    />
-                  }
-                />
+                <>
+                  {shouldShowFirstUseGuide && (
+                    <section
+                      className="glass-card fade-in"
+                      style={{
+                        padding: '16px',
+                        marginBottom: '16px',
+                        border: '1px solid rgba(99, 102, 241, 0.35)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '12px',
+                      }}
+                    >
+                      <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>
+                        首次使用設定引導
+                      </h3>
+                      <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                        先完成「總資產」與「資金大項」設定，系統再進行收入分配會更準確。
+                      </p>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <div style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span>{hasBaselineAsset ? '✅' : '1.'}</span>
+                          <span>設定總資產基準</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          <input
+                            type="number"
+                            min={0}
+                            placeholder="輸入總資產"
+                            value={baselineAssetInput}
+                            onChange={(e) => setBaselineAssetInput(e.target.value)}
+                            style={{
+                              flex: 1,
+                              background: 'var(--input-bg)',
+                              border: '1px solid var(--input-border)',
+                              color: 'var(--text-primary)',
+                              borderRadius: '6px',
+                              padding: '10px',
+                              fontSize: '0.95rem',
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={handleSaveBaselineAsset}
+                            style={{
+                              padding: '10px 12px',
+                              borderRadius: '6px',
+                              background: 'var(--primary-color)',
+                              color: '#fff',
+                              fontWeight: 600,
+                            }}
+                          >
+                            儲存
+                          </button>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <div style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span>{hasMajorGroupSetup ? '✅' : '2.'}</span>
+                          <span>設定資金大項與配比</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingGroups(true)}
+                          style={{
+                            alignSelf: 'flex-start',
+                            padding: '10px 12px',
+                            borderRadius: '6px',
+                            background: 'transparent',
+                            border: '1px solid var(--primary-color)',
+                            color: 'var(--primary-color)',
+                            fontWeight: 600,
+                          }}
+                        >
+                          開始設定資金大項
+                        </button>
+                      </div>
+                    </section>
+                  )}
+
+                  <DashboardTab
+                    accountGroups={accountGroups}
+                    transactions={transactions}
+                    onAddTransactionClick={() => {
+                      if (shouldShowFirstUseGuide) {
+                        setIsEditingGroups(true);
+                        return;
+                      }
+                      openTransactionModal('basic');
+                    }}
+                    onEditTransactionClick={(tx) => {
+                      setEditingTx(tx);
+                      setTxModalInitialTab('basic');
+                      setShowTxModal(true);
+                    }}
+                    onDeleteTransaction={deleteTransaction}
+                    isEditingGroups={isEditingGroups}
+                    setIsEditingGroups={setIsEditingGroups}
+                    getCategoryEmoji={getCategoryEmoji}
+                    getGroupName={getGroupName}
+                    getGroupKey={getGroupKey}
+                    formatGroupHeader={formatGroupHeader}
+                    getGroupTotals={getGroupTotals}
+                    groupSettingsPanel={
+                      <GroupSettingsModal
+                        isOpen={isEditingGroups}
+                        onClose={() => setIsEditingGroups(false)}
+                        accountGroups={accountGroups}
+                        onSaveGroups={saveAccountGroups}
+                        onDeleteGroup={deleteAccountGroup}
+                        onAddGroup={addAccountGroup}
+                        onAddCategory={addCategory}
+                        onDeleteCategory={deleteCategory}
+                        onUpdateGroupBudget={handleUpdateGroupBudget}
+                      />
+                    }
+                  />
+                </>
               )}
 
               {activeTab === 'history' && (
@@ -1038,6 +1148,8 @@ export function App() {
           }}
           editingTx={editingTx}
           accountGroups={accountGroups}
+          incomeLocked={shouldShowFirstUseGuide}
+          incomeLockMessage={firstUseIncomeLockMessage}
           initialTab={txModalInitialTab}
           onSave={handleSaveTransaction}
         />
