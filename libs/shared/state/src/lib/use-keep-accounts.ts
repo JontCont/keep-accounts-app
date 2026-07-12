@@ -100,7 +100,8 @@ export function useKeepAccounts() {
     editingTxId: string | null,
     installmentPeriods?: number
   ): boolean => {
-    const amount = parseFloat(amountStr);
+    const normalizedAmountStr = amountStr.replace(/,/g, '');
+    const amount = parseFloat(normalizedAmountStr);
     if (amount < 0) {
       throw new Error('Transaction amount cannot be negative');
     }
