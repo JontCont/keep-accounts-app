@@ -307,7 +307,7 @@ export function App() {
         const decompressed = decompressBackup(zipBytes);
         
         if (!Array.isArray(decompressed.keep_accounts_groups) || !Array.isArray(decompressed.keep_accounts_transactions)) {
-          throw new Error('備份檔案格式不正確');
+          throw new Error('備份檔格式錯誤：請確認 backup_data.json 內含 keep_accounts_groups 與 keep_accounts_transactions');
         }
         
         await applyImportedSnapshot(decompressed);
@@ -987,11 +987,14 @@ export function App() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <AppIcon name="alert-triangle" size={16} style={{ color: 'var(--expense-color)' }} />
                         <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--expense-color)' }}>
-                          資料還原與覆蓋 (危險操作)
+                          匯入還原與資料覆蓋 (危險操作)
                         </span>
                       </div>
                       <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
-                        ⚠️ 匯入還原操作將會<strong>覆蓋您目前的帳戶與明細資料</strong>，且完成後無法撤銷。建議在還原前先執行「安全資料備份」以防萬一。
+                        ⚠️ 匯入還原將會<strong>覆蓋目前的帳戶群組與交易明細資料</strong>，且完成後無法撤銷。建議先執行「安全資料備份 (匯出)」。
+                      </div>
+                      <div style={{ fontSize: '0.76rem', color: 'var(--text-tertiary)', lineHeight: '1.4' }}>
+                        匯入檔案需為 `.zip`，且壓縮檔需包含 `backup_data.json`，並具有 `keep_accounts_groups` 與 `keep_accounts_transactions` 欄位。
                       </div>
                       
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>

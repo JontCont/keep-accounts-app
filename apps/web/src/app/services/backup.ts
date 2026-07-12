@@ -58,13 +58,13 @@ export const decompressBackup = (zipBytes: Uint8Array): BackupData => {
   const unzipped = unzipSync(zipBytes);
   const jsonBytes = unzipped['backup_data.json'];
   if (!jsonBytes) {
-    throw new Error('backup_data.json not found in the backup file.');
+    throw new Error('Invalid backup archive: backup_data.json was not found.');
   }
   const jsonStr = strFromU8(jsonBytes);
   const parsed = JSON.parse(jsonStr);
   
   if (!parsed.keep_accounts_groups || !parsed.keep_accounts_transactions) {
-    throw new Error('Missing keep_accounts_groups or keep_accounts_transactions in backup.');
+    throw new Error('Invalid backup_data.json: required keys keep_accounts_groups and keep_accounts_transactions are missing.');
   }
   return parsed;
 };

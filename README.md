@@ -110,6 +110,31 @@ Execute the Playwright E2E suite:
 npx nx e2e web-e2e
 ```
 
+#### Import/Export Setup Notes
+The app ships with a built-in backup flow designed for end users in the Settings tab.
+
+Quick user flow:
+- Open the app and go to **Settings**.
+- In **Data Backup & Security**, click **Export Backup (.zip)** to download a backup archive.
+- To restore, click **Import Restore (.zip)** and choose a previously exported zip file.
+- After import, the app reloads and replaces current account groups and transactions with imported data. This action is irreversible.
+
+Backup format and behavior:
+- The zip payload contains `backup_data.json` with `keep_accounts_groups` and `keep_accounts_transactions`.
+- Native platforms can also enable auto-backup to a local system document file (`keep_accounts_backup.zip`).
+- Import history is recorded for traceability (file name, size, item counts, status).
+
+Template dataset scope (Import Template):
+- Multiple account groups with income and expense categories.
+- Transactions include explicit last-month records and last-year records, plus day/month/year boundary cases (for example Dec 31 and Jan 1) for period filtering and history grouping.
+- Installment sample records (`installmentId`, `installmentPeriod`, `installmentCount`) for installment management views.
+
+Recommended verification commands:
+```bash
+npx nx test web -- --run src/app/services/backup.spec.ts
+npx vitest run libs/shared/state/src/lib/persistence.spec.ts
+```
+
 #### Building the Web App for Production
 Compile and bundle the production assets:
 ```bash
@@ -252,6 +277,31 @@ npx nx test web
 執行 Playwright 端到端整合測試：
 ```bash
 npx nx e2e web-e2e
+```
+
+#### 匯入／匯出設定說明
+本專案已內建可直接給使用者操作的備份流程，入口在設定頁。
+
+使用者快速操作流程：
+- 開啟 App 後進入**設定**分頁。
+- 在**資料備份與安全**區塊點選**匯出資料備份 (.zip)** 下載備份檔。
+- 需要還原時，點選**匯入資料還原 (.zip)** 並選取先前匯出的 zip 檔。
+- 匯入完成後會重新整理頁面，並以匯入資料覆蓋目前帳戶群組與交易資料；此操作不可撤銷。
+
+備份格式與行為：
+- zip 內容包含 `backup_data.json`，內含 `keep_accounts_groups` 與 `keep_accounts_transactions`。
+- Native 平台可啟用自動背景備份，寫入本機文件備份檔（`keep_accounts_backup.zip`）。
+- 系統會保存匯入歷史紀錄（檔名、大小、筆數與成功/失敗狀態），方便追蹤。
+
+範本資料內容（導入範例模板資料）：
+- 包含多個帳戶群組與收入/支出分類。
+- 交易資料包含明確的上個月資料與去年資料，並涵蓋跨天、跨月與跨年（例如 12/31 與 01/01），方便驗證期間篩選與歷史分組。
+- 含分期示例資料（`installmentId`、`installmentPeriod`、`installmentCount`），可直接檢視分期管理相關畫面。
+
+建議驗證指令：
+```bash
+npx nx test web -- --run src/app/services/backup.spec.ts
+npx vitest run libs/shared/state/src/lib/persistence.spec.ts
 ```
 
 #### 建立生產版本
