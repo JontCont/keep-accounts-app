@@ -40,6 +40,30 @@ describe('App', () => {
     expect(baseElement).toBeTruthy();
   });
 
+  it('shows the starter preset action in the empty allocation state and hides it after setup exists', async () => {
+    const emptyStateView = render(<BrowserRouter><App /></BrowserRouter>);
+
+    expect(emptyStateView.getByText('套用入門資金配置')).toBeTruthy();
+
+    fireEvent.click(emptyStateView.getByText('套用入門資金配置'));
+
+    await waitFor(() => {
+      expect(emptyStateView.getByText(/編輯帳戶/)).toBeTruthy();
+    });
+
+    emptyStateView.unmount();
+
+    const customGroups = [
+      { id: '0', name: '當月薪資', emoji: 'briefcase', color: '#22c55e', isSource: true, categories: [] },
+      { id: '1', name: '自訂大項', emoji: 'credit-card', color: '#6366f1', targetRatio: 100, categories: [] },
+    ];
+    localStorage.setItem('keep_accounts_groups', JSON.stringify(customGroups));
+
+    const customSetupView = render(<BrowserRouter><App /></BrowserRouter>);
+
+    expect(customSetupView.queryByText('套用入門資金配置')).toBeNull();
+  });
+
   it('shows installment rows as read-only in flat history views', () => {
     const groups = [
       { id: '0', name: '當月薪資', emoji: 'briefcase', color: '#22c55e', isSource: true, categories: [] },
@@ -204,16 +228,42 @@ describe('App', () => {
     expect(queryByText(/STEP 2/)).toBeNull();
   });
 
-  it('hides first-use setup guidance after baseline and major groups are ready', () => {
-    const groups = [
-      { id: '0', name: '當月薪資', emoji: 'briefcase', color: '#22c55e', isSource: true, categories: [] },
-      { id: '1', name: '日常開銷', emoji: 'credit-card', color: '#6366f1', targetRatio: 100, categories: [] },
-    ];
-    localStorage.setItem('keep_accounts_groups', JSON.stringify(groups));
-    localStorage.setItem('keep_accounts_onboarding_baseline_asset', '80000');
+  it('lets the starter preset remain editable after application', () => {
+    const { getByText, getAllByPlaceholderText } = render(<BrowserRouter><App /></BrowserRouter>);
 
-    const { queryByText } = render(<BrowserRouter><App /></BrowserRouter>);
-    expect(queryByText('首次使用設定引導')).toBeNull();
+    fireEvent.click(getByText('套用入門資金配置'));
+    fireEvent.click(getByText(/編輯帳戶/));
+
+    const inputs = getAllByPlaceholderText('0') as HTMLInputElement[];
+    expect(inputs.length).toBeGreaterThanOrEqual(3);
+
+    fireEvent.focus(inputs[0]);
+    fireEvent.change(inputs[0], { target: { value: '45' } });
+    fireEvent.blur(inputs[0]);
+
+    expect(inputs[0].value).toBe('45');
+  });
+
+  it('keeps custom allocation data when the template import confirmation is cancelled', () => {
+    const customGroups = [
+      { id: '0', name: '當月薪資', emoji: 'briefcase', color: '#22c55e', isSource: true, categories: [] },
+      { id: '1', name: '自訂大項', emoji: 'credit-card', color: '#6366f1', targetRatio: 100, categories: [] },
+    ];
+    localStorage.setItem('keep_accounts_groups', JSON.stringify(customGroups));
+
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const { getByText, getByRole } = render(<BrowserRouter><App /></BrowserRouter>);
+
+    fireEvent.click(getByText('設定'));
+    fireEvent.click(getByRole('button', { name: /導入範例模板資料/ }));
+
+    const storedGroups = JSON.parse(localStorage.getItem('keep_accounts_groups') || '[]');
+    expect(storedGroups).toHaveLength(2);
+    expect(storedGroups[0].name).toBe('當月薪資');
+    expect(storedGroups[1].name).toBe('自訂大項');
+    expect(storedGroups[1].targetRatio).toBe(100);
+
+    confirmSpy.mockRestore();
   });
 
   it('should migrate target ratios when localStorage has no target ratios or sum is not 100%', () => {

@@ -82,6 +82,11 @@ export const DEFAULT_ACCOUNT_GROUPS: AccountGroup[] = [
   }
 ];
 
+export const STARTER_ALLOCATION_PRESET: AccountGroup[] = DEFAULT_ACCOUNT_GROUPS.map((group) => ({
+  ...group,
+  categories: group.categories.map((category) => ({ ...category })),
+}));
+
 const atLocalTime = (base: Date, hour: number, minute: number): string => {
   const d = new Date(base);
   d.setHours(hour, minute, 0, 0);

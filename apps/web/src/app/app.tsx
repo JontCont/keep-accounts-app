@@ -4,6 +4,7 @@ import {
   Transaction,
   DEFAULT_ACCOUNT_GROUPS,
   INITIAL_TRANSACTIONS,
+  STARTER_ALLOCATION_PRESET,
   InstallmentReminderConfig,
 } from '@keep-accounts-app/domain';
 import {
@@ -231,6 +232,20 @@ export function App() {
     }
     setTransactions(snapshot.keep_accounts_transactions);
   };
+
+  const cloneAllocationGroups = (groups: typeof STARTER_ALLOCATION_PRESET) =>
+    groups.map((group) => ({
+      ...group,
+      categories: group.categories.map((category) => ({ ...category })),
+    }));
+
+  const handleApplyStarterPreset = () => {
+    if ((accountGroups.length > 0 || transactions.length > 0) && !window.confirm('套用入門資金配置會覆蓋目前的資金大項設定，確定要繼續嗎？')) {
+      return;
+    }
+
+    setAccountGroups(cloneAllocationGroups(STARTER_ALLOCATION_PRESET));
+  };
   // Check if native auto-backup file exists
   useEffect(() => {
     if (isNative) {
@@ -368,7 +383,7 @@ export function App() {
       return;
     }
     await applyImportedSnapshot({
-      keep_accounts_groups: DEFAULT_ACCOUNT_GROUPS,
+      keep_accounts_groups: cloneAllocationGroups(DEFAULT_ACCOUNT_GROUPS),
       keep_accounts_transactions: INITIAL_TRANSACTIONS,
     });
     alert('已導入範例模板資料！頁面即將重新整理。');
@@ -423,9 +438,18 @@ export function App() {
   }, [accountGroups, transactions, nativeMode]);
 
   // Group Settings internal budget update callback
-  const handleUpdateGroupBudget = (groupId: string, budget: number | undefined) => {
-    // Left for potential state extension, handled by saveAccountGroups at hook level
-  };
+  const currentMonthPrefix = new Date().toISOString().slice(0, 7);
+  const sourceGroup = accountGroups.find((group) => group.isSource);
+  const monthlySourceAmount = sourceGroup
+    ? transactions
+        .filter(
+          (tx) =>
+            tx.accountGroupId === sourceGroup.id &&
+            tx.type === 'income' &&
+            tx.date.startsWith(currentMonthPrefix)
+        )
+        .reduce((sum, tx) => sum + tx.amount, 0)
+    : 0;
 
   // Helpers
   const getCategoryEmoji = (catName: string, groupId: string) => {
@@ -733,6 +757,7 @@ export function App() {
                   <DashboardTab
                     accountGroups={accountGroups}
                     transactions={transactions}
+                        onApplyStarterPreset={handleApplyStarterPreset}
                     onAddTransactionClick={() => {
                       openTransactionModal('basic');
                     }}
@@ -755,12 +780,12 @@ export function App() {
                         isOpen={isEditingGroups}
                         onClose={() => setIsEditingGroups(false)}
                         accountGroups={accountGroups}
+                        referenceMonthlyAmount={monthlySourceAmount}
                         onSaveGroups={saveAccountGroups}
                         onDeleteGroup={deleteAccountGroup}
                         onAddGroup={addAccountGroup}
                         onAddCategory={addCategory}
                         onDeleteCategory={deleteCategory}
-                        onUpdateGroupBudget={handleUpdateGroupBudget}
                       />
                     }
                   />

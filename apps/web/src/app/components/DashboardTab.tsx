@@ -10,6 +10,7 @@ import { TransactionLedgerRow } from './TransactionLedgerRow';
 interface DashboardTabProps {
   accountGroups: AccountGroup[];
   transactions: Transaction[];
+  onApplyStarterPreset: () => void;
   onAddTransactionClick: () => void;
   onEditTransactionClick: (tx: Transaction) => void;
   onDeleteTransaction: (id: string) => void;
@@ -27,6 +28,7 @@ interface DashboardTabProps {
 export const DashboardTab: React.FC<DashboardTabProps> = ({
   accountGroups,
   transactions,
+  onApplyStarterPreset,
   onAddTransactionClick,
   onEditTransactionClick,
   onDeleteTransaction,
@@ -125,6 +127,9 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   };
 
   const sourceGroup = accountGroups.find((g) => g.isSource);
+  const hasUsableAllocationSetup =
+    accountGroups.some((group) => group.isSource) &&
+    accountGroups.some((group) => !group.isSource);
 
   const getGroupMonthlyIncome = (groupId: string) =>
     transactions
@@ -465,6 +470,49 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
 
         {/* Total Bound Income to Allocate Block */}
         {/* Accounts scroll container */}
+        {!hasUsableAllocationSetup && (
+          <div
+            className="glass-card"
+            style={{
+              marginBottom: '12px',
+              padding: '16px',
+              border: '1px solid rgba(99, 102, 241, 0.24)',
+              background: 'linear-gradient(180deg, rgba(99, 102, 241, 0.12), rgba(99, 102, 241, 0.04))',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <AppIcon name="layout-template" size={18} style={{ color: 'var(--primary-color)' }} />
+              <span style={{ fontSize: '0.95rem', fontWeight: 600 }}>先套用入門資金配置</span>
+            </div>
+            <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+              系統會先建立「當月薪資 / 日常開銷 / 投資理財 / 儲蓄資金」的預設比例與分類，之後都可以再直接編輯。
+            </div>
+            <button
+              type="button"
+              onClick={onApplyStarterPreset}
+              style={{
+                width: '100%',
+                padding: '12px',
+                borderRadius: '8px',
+                backgroundColor: 'var(--primary-color)',
+                color: '#fff',
+                fontWeight: 600,
+                fontSize: '0.9rem',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: '8px',
+              }}
+            >
+              <AppIcon name="layout-template" size={18} /> 套用入門資金配置
+            </button>
+          </div>
+        )}
         {!isEditingGroups && (
           <div
             style={{
