@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ResponsiveContainer,
   PieChart,
@@ -11,83 +11,73 @@ import {
   Tooltip,
 } from 'recharts';
 import { IonSelect, IonSelectOption } from '@ionic/react';
-import { Transaction, AccountGroup, ACCOUNT_COLORS } from '@keep-accounts-app/domain';
+import { Transaction, AccountGroup } from '@keep-accounts-app/domain';
+import {
+  isNativePersistenceEnabled,
+  queryNativeStatsAggregates,
+  queryStatsAggregates,
+  StatsAggregationResult,
+} from '@keep-accounts-app/state';
 import { AppIcon } from './AppIcon';
 
 interface StatsTabProps {
   accountGroups: AccountGroup[];
   transactions: Transaction[];
   getCategoryEmoji: (catName: string, groupId: string) => string;
+  preferNativeQueries?: boolean;
 }
 
 export const StatsTab: React.FC<StatsTabProps> = ({
   accountGroups,
   transactions,
   getCategoryEmoji,
+  preferNativeQueries = false,
 }) => {
+  const nativeMode = preferNativeQueries && isNativePersistenceEnabled();
   const [statsGroup, setStatsGroup] = useState<string>('all');
   const [statsSubTab, setStatsSubTab] = useState<'category' | 'trend'>('category');
-
-  const statsTxs = transactions.filter(
-    (tx) => tx.type === 'expense' && (statsGroup === 'all' || tx.accountGroupId === statsGroup)
+  const [statsAggregates, setStatsAggregates] = useState<StatsAggregationResult>(() =>
+    queryStatsAggregates({
+      transactions,
+      accountGroups,
+      statsGroup: 'all',
+    })
   );
-  const statsTotalExpense = statsTxs.reduce((sum, tx) => sum + tx.amount, 0);
 
-  let sortedStats: { name: string; emoji: string; color: string; amount: number }[] = [];
-
-  if (statsGroup === 'all') {
-    const activeExpenseByCategory = statsTxs.reduce(
-      (acc: { [key: string]: { amount: number; emoji: string; color: string } }, tx) => {
-        if (!acc[tx.category]) {
-          let emoji = '🏷️';
-          let color = '#6b7280';
-          const group = accountGroups.find((g) => g.id === tx.accountGroupId);
-          if (group) {
-            const cat = group.categories.find((c) => c.name === tx.category);
-            if (cat) {
-              emoji = cat.emoji;
-              color = cat.color;
-            }
-          }
-          acc[tx.category] = { amount: 0, emoji, color };
+  useEffect(() => {
+    let cancelled = false;
+    const loadAggregates = async () => {
+      if (nativeMode) {
+        const nativeAggregates = await queryNativeStatsAggregates({
+          accountGroups,
+          statsGroup,
+        });
+        if (!cancelled && nativeAggregates) {
+          setStatsAggregates(nativeAggregates);
+          return;
         }
-        acc[tx.category].amount += tx.amount;
-        return acc;
-      },
-      {}
-    );
+      }
 
-    sortedStats = Object.entries(activeExpenseByCategory)
-      .map(([name, data]) => ({ name, ...data }))
-      .sort((a, b) => b.amount - a.amount);
-  } else {
-    const selectedGroupObj = accountGroups.find((g) => g.id === statsGroup);
-    const groupCategories = selectedGroupObj?.categories.filter((c) => c.type === 'expense') || [];
+      if (!cancelled) {
+        setStatsAggregates(
+          queryStatsAggregates({
+            transactions,
+            accountGroups,
+            statsGroup,
+          })
+        );
+      }
+    };
 
-    const groupExpenseMap = statsTxs.reduce((acc: { [key: string]: number }, tx) => {
-      acc[tx.category] = (acc[tx.category] || 0) + tx.amount;
-      return acc;
-    }, {});
+    void loadAggregates();
+    return () => {
+      cancelled = true;
+    };
+  }, [nativeMode, transactions, accountGroups, statsGroup]);
 
-    sortedStats = groupCategories
-      .map((cat) => ({
-        name: cat.name,
-        emoji: cat.emoji,
-        color: cat.color,
-        amount: groupExpenseMap[cat.name] || 0,
-      }))
-      .sort((a, b) => b.amount - a.amount);
-  }
-
-  const dailyMap = statsTxs.reduce((acc: { [key: string]: number }, tx) => {
-    const dateKey = tx.date.substring(0, 10);
-    acc[dateKey] = (acc[dateKey] || 0) + tx.amount;
-    return acc;
-  }, {});
-
-  const trendData = Object.entries(dailyMap)
-    .map(([date, amount]) => ({ date, amount }))
-    .sort((a, b) => a.date.localeCompare(b.date));
+  const statsTotalExpense = statsAggregates.totalExpense;
+  const sortedStats = statsAggregates.categories;
+  const trendData = statsAggregates.trend;
 
   const pieData = sortedStats.filter((item) => item.amount > 0);
 
@@ -185,7 +175,7 @@ export const StatsTab: React.FC<StatsTabProps> = ({
       >
         <div>
           <div style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>總記帳筆數</div>
-          <div style={{ fontSize: '1.2rem', fontWeight: 700 }}>{statsTxs.length} 筆</div>
+          <div style={{ fontSize: '1.2rem', fontWeight: 700 }}>{statsAggregates.totalCount} 筆</div>
         </div>
         <div style={{ borderLeft: '1px solid var(--card-border)' }}></div>
         <div>
@@ -198,8 +188,8 @@ export const StatsTab: React.FC<StatsTabProps> = ({
             }}
           >
             $
-            {statsTxs.length > 0
-              ? Math.round(statsTotalExpense / statsTxs.length).toLocaleString('zh-TW')
+            {statsAggregates.totalCount > 0
+              ? Math.round(statsTotalExpense / statsAggregates.totalCount).toLocaleString('zh-TW')
               : 0}
           </div>
         </div>

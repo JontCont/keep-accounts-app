@@ -7,6 +7,10 @@ import {
   IonSkeletonText,
 } from '@ionic/react';
 import { Transaction, AccountGroup } from '@keep-accounts-app/domain';
+import {
+  queryHistoryPage,
+  queryNativeHistoryPage,
+} from '@keep-accounts-app/state';
 import { AppIcon } from './AppIcon';
 import { TransactionLedgerRow } from './TransactionLedgerRow';
 
@@ -21,6 +25,7 @@ interface HistoryTabProps {
   onEditTransaction: (tx: Transaction) => void;
   onAddTransaction: () => void;
   showFab?: boolean;
+  preferNativeQueries?: boolean;
 }
 
 const HISTORY_PAGE_SIZE = 50;
@@ -37,25 +42,21 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
   onEditTransaction,
   onAddTransaction,
   showFab = true,
+  preferNativeQueries = false,
 }) => {
   const formatAmount = (value: number) => value.toLocaleString('zh-TW');
 
   const [filter, setFilter] = useState<'all' | 'income' | 'expense' | 'installment'>('all');
   const [filterGroup, setFilterGroup] = useState<string>('all');
-  const [loadedCount, setLoadedCount] = useState(HISTORY_PAGE_SIZE);
+  const [visibleFlatTxs, setVisibleFlatTxs] = useState<Transaction[]>([]);
+  const [nextOffset, setNextOffset] = useState(0);
+  const [hasMoreFlatTxs, setHasMoreFlatTxs] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
   const loadingRef = useRef(false);
 
-  const flatTypeFilter = filter === 'installment' ? 'all' : filter;
-  const flatFilteredTxs = transactions
-    .filter((tx) => flatTypeFilter === 'all' || tx.type === flatTypeFilter)
-    .filter((tx) => filterGroup === 'all' || tx.accountGroupId === filterGroup)
-    .sort((a, b) => b.date.localeCompare(a.date));
-
-  const installmentFilteredTxs = transactions
+  const installmentFilteredTxs = visibleFlatTxs
     .filter((tx) => !!tx.installmentId)
-    .filter((tx) => filterGroup === 'all' || tx.accountGroupId === filterGroup)
     .sort((a, b) => b.date.localeCompare(a.date));
 
   type InstallmentGroup = {
@@ -89,17 +90,69 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
     .sort((a, b) => b.latestDate.localeCompare(a.latestDate));
 
   const isInstallmentView = filter === 'installment';
-  const visibleFlatTxs = flatFilteredTxs.slice(0, loadedCount);
-  const hasMoreFlatTxs = !isInstallmentView && loadedCount < flatFilteredTxs.length;
 
   const [groupBy, setGroupBy] = useState<'year' | 'month' | 'day'>('month');
+  const fetchPage = async (offset: number) => {
+    if (preferNativeQueries) {
+      const nativePage = await queryNativeHistoryPage({
+        filterType: filter,
+        filterGroup,
+        offset,
+        pageSize: HISTORY_PAGE_SIZE,
+      });
+      if (nativePage) {
+        return nativePage;
+      }
+    }
+
+    return queryHistoryPage({
+      transactions,
+      filterType: filter,
+      filterGroup,
+      offset,
+      pageSize: HISTORY_PAGE_SIZE,
+    });
+  };
 
   useEffect(() => {
-    setLoadedCount(HISTORY_PAGE_SIZE);
-    setLoadFailed(false);
-    setIsLoadingMore(false);
-    loadingRef.current = false;
-  }, [transactions, filter, filterGroup]);
+    if (!preferNativeQueries) {
+      const firstPage = queryHistoryPage({
+        transactions,
+        filterType: filter,
+        filterGroup,
+        offset: 0,
+        pageSize: HISTORY_PAGE_SIZE,
+      });
+      setVisibleFlatTxs(firstPage.items);
+      setNextOffset(firstPage.nextOffset);
+      setHasMoreFlatTxs(firstPage.hasMore);
+      setLoadFailed(false);
+      setIsLoadingMore(false);
+      loadingRef.current = false;
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadFirstPage = async () => {
+      const firstPage = await fetchPage(0);
+
+      if (!firstPage || cancelled) {
+        return;
+      }
+      setVisibleFlatTxs(firstPage.items);
+      setNextOffset(firstPage.nextOffset);
+      setHasMoreFlatTxs(firstPage.hasMore);
+      setLoadFailed(false);
+      setIsLoadingMore(false);
+      loadingRef.current = false;
+    };
+
+    void loadFirstPage();
+    return () => {
+      cancelled = true;
+    };
+  }, [transactions, filter, filterGroup, preferNativeQueries]);
 
   const getGroupKey = (dateStr: string, mode: 'day' | 'month' | 'year') => {
     const datePart = dateStr.substring(0, 10);
@@ -151,7 +204,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
 
   const loadNextPage = async (event: any) => {
     const complete = () => event?.target?.complete?.();
-    if (isInstallmentView || !hasMoreFlatTxs || loadingRef.current) {
+    if (!hasMoreFlatTxs || loadingRef.current) {
       complete();
       return;
     }
@@ -162,7 +215,21 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
 
     try {
       await new Promise((resolve) => window.setTimeout(resolve, 160));
-      setLoadedCount((prev) => Math.min(prev + HISTORY_PAGE_SIZE, flatFilteredTxs.length));
+      const nextPage = preferNativeQueries
+        ? await fetchPage(nextOffset)
+        : queryHistoryPage({
+            transactions,
+            filterType: filter,
+            filterGroup,
+            offset: nextOffset,
+            pageSize: HISTORY_PAGE_SIZE,
+          });
+      if (!nextPage) {
+        throw new Error('history page unavailable');
+      }
+      setVisibleFlatTxs((prev) => [...prev, ...nextPage.items]);
+      setNextOffset(nextPage.nextOffset);
+      setHasMoreFlatTxs(nextPage.hasMore);
     } catch {
       setLoadFailed(true);
     } finally {
@@ -315,7 +382,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
             );
           })}
 
-          {flatFilteredTxs.length === 0 && (
+          {visibleFlatTxs.length === 0 && (
             <div
               style={{
                 textAlign: 'center',
@@ -370,7 +437,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
             </div>
           )}
 
-          {!hasMoreFlatTxs && flatFilteredTxs.length > 0 && (
+          {!hasMoreFlatTxs && visibleFlatTxs.length > 0 && (
             <div
               data-testid="history-end-of-list"
               style={{

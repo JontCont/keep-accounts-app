@@ -6,7 +6,12 @@ import {
   INITIAL_TRANSACTIONS,
   InstallmentReminderConfig,
 } from '@keep-accounts-app/domain';
-import { useKeepAccounts } from '@keep-accounts-app/state';
+import {
+  isNativePersistenceEnabled,
+  loadAllNativeTransactions,
+  saveKeepAccountsSnapshot,
+  useKeepAccounts,
+} from '@keep-accounts-app/state';
 import { DashboardTab } from './components/DashboardTab';
 import { HistoryTab } from './components/HistoryTab';
 import { StatsTab } from './components/StatsTab';
@@ -208,6 +213,24 @@ export function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isNative = isNativePlatform();
+  const nativeMode = isNativePersistenceEnabled() && isNative;
+
+  const applyImportedSnapshot = async (snapshot: {
+    keep_accounts_groups: typeof accountGroups;
+    keep_accounts_transactions: typeof transactions;
+  }) => {
+    await saveKeepAccountsSnapshot({
+      accountGroups: snapshot.keep_accounts_groups,
+      transactions: snapshot.keep_accounts_transactions,
+    });
+
+    setAccountGroups(snapshot.keep_accounts_groups);
+    if (nativeMode) {
+      setTransactions([]);
+      return;
+    }
+    setTransactions(snapshot.keep_accounts_transactions);
+  };
   // Check if native auto-backup file exists
   useEffect(() => {
     if (isNative) {
@@ -219,20 +242,34 @@ export function App() {
     setAutoBackupEnabled(enabled);
     localStorage.setItem('keep_accounts_auto_backup', enabled ? 'true' : 'false');
     if (enabled) {
-      autoBackupNative({
-        keep_accounts_groups: accountGroups,
-        keep_accounts_transactions: transactions
-      }).catch(err => {
-        console.error('Initial auto-backup failed', err);
-      });
+      if (nativeMode) {
+        void (async () => {
+          const allNativeTxs = (await loadAllNativeTransactions()) ?? transactions;
+          autoBackupNative({
+            keep_accounts_groups: accountGroups,
+            keep_accounts_transactions: allNativeTxs,
+          }).catch((err) => {
+            console.error('Initial auto-backup failed', err);
+          });
+        })();
+      } else {
+        autoBackupNative({
+          keep_accounts_groups: accountGroups,
+          keep_accounts_transactions: transactions,
+        }).catch((err) => {
+          console.error('Initial auto-backup failed', err);
+        });
+      }
     }
   };
 
   const handleExportBackup = async () => {
     try {
+      const exportTransactions =
+        nativeMode ? ((await loadAllNativeTransactions()) ?? transactions) : transactions;
       const data = {
         keep_accounts_groups: accountGroups,
-        keep_accounts_transactions: transactions
+        keep_accounts_transactions: exportTransactions
       };
       
       if (isNative) {
@@ -273,8 +310,7 @@ export function App() {
           throw new Error('備份檔案格式不正確');
         }
         
-        setAccountGroups(decompressed.keep_accounts_groups);
-        setTransactions(decompressed.keep_accounts_transactions);
+        await applyImportedSnapshot(decompressed);
         
         const groupsCount = decompressed.keep_accounts_groups.length;
         const transactionsCount = decompressed.keep_accounts_transactions.length;
@@ -306,8 +342,7 @@ export function App() {
     try {
       const decompressed = await restoreFromAutoBackupNative();
       
-      setAccountGroups(decompressed.keep_accounts_groups);
-      setTransactions(decompressed.keep_accounts_transactions);
+      await applyImportedSnapshot(decompressed);
       
       const groupsCount = decompressed.keep_accounts_groups.length;
       const transactionsCount = decompressed.keep_accounts_transactions.length;
@@ -328,26 +363,28 @@ export function App() {
     }
   };
 
-  const handleImportTemplate = () => {
+  const handleImportTemplate = async () => {
     if (!window.confirm('確定要導入範例模板資料嗎？這將覆蓋您目前的所有帳戶與明細資料！')) {
       return;
     }
-    setAccountGroups(DEFAULT_ACCOUNT_GROUPS);
-    setTransactions(INITIAL_TRANSACTIONS);
+    await applyImportedSnapshot({
+      keep_accounts_groups: DEFAULT_ACCOUNT_GROUPS,
+      keep_accounts_transactions: INITIAL_TRANSACTIONS,
+    });
     alert('已導入範例模板資料！頁面即將重新整理。');
     setTimeout(() => {
       window.location.reload();
     }, 500);
   };
 
-  const handleClearData = () => {
+  const handleClearData = async () => {
     if (!window.confirm('確定要清除當前所有資料嗎？此操作將刪除所有帳戶群組與交易明細，且無法撤銷！')) {
       return;
     }
-    localStorage.removeItem('keep_accounts_groups');
-    localStorage.removeItem('keep_accounts_transactions');
-    setAccountGroups([]);
-    setTransactions([]);
+    await applyImportedSnapshot({
+      keep_accounts_groups: [],
+      keep_accounts_transactions: [],
+    });
     alert('已清除所有資料！頁面即將重新整理。');
     setTimeout(() => {
       window.location.reload();
@@ -364,14 +401,26 @@ export function App() {
   useEffect(() => {
     const isAutoBackupEnabled = localStorage.getItem('keep_accounts_auto_backup') === 'true';
     if (isAutoBackupEnabled && isNativePlatform()) {
-      autoBackupNative({
-        keep_accounts_groups: accountGroups,
-        keep_accounts_transactions: transactions
-      }).catch(err => {
-        console.error('Auto backup failed', err);
-      });
+      if (nativeMode) {
+        void (async () => {
+          const allNativeTxs = (await loadAllNativeTransactions()) ?? transactions;
+          autoBackupNative({
+            keep_accounts_groups: accountGroups,
+            keep_accounts_transactions: allNativeTxs,
+          }).catch((err) => {
+            console.error('Auto backup failed', err);
+          });
+        })();
+      } else {
+        autoBackupNative({
+          keep_accounts_groups: accountGroups,
+          keep_accounts_transactions: transactions,
+        }).catch((err) => {
+          console.error('Auto backup failed', err);
+        });
+      }
     }
-  }, [accountGroups, transactions]);
+  }, [accountGroups, transactions, nativeMode]);
 
   // Group Settings internal budget update callback
   const handleUpdateGroupBudget = (groupId: string, budget: number | undefined) => {
@@ -722,6 +771,7 @@ export function App() {
                 <HistoryTab
                   accountGroups={accountGroups}
                   transactions={transactions}
+                  preferNativeQueries={nativeMode}
                   onDeleteTransaction={deleteTransaction}
                   onDeleteInstallmentGroup={deleteInstallmentGroup}
                   onSettleInstallmentGroup={settleInstallmentGroup}
@@ -743,6 +793,7 @@ export function App() {
                 <StatsTab
                   accountGroups={accountGroups}
                   transactions={transactions}
+                  preferNativeQueries={nativeMode}
                   getCategoryEmoji={getCategoryEmoji}
                 />
               )}

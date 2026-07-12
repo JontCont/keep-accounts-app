@@ -3,6 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "dependencies": {
+    "@capacitor-community/sqlite": "^6.0.2",
     "@capacitor/core": "^6.2.1",
     "@capacitor/filesystem": "^6.0.4",
     "@capacitor/local-notifications": "^6.1.0",
@@ -22,7 +23,9 @@
           "cwd": "apps/web"
         },
         "cache": true,
-        "outputs": ["{projectRoot}/dist"]
+        "outputs": [
+          "{projectRoot}/dist"
+        ]
       },
       "dev": {
         "executor": "nx:run-commands",
@@ -38,7 +41,9 @@
           "cwd": "apps/web"
         },
         "cache": true,
-        "outputs": ["{projectRoot}/test-output/vitest/coverage"]
+        "outputs": [
+          "{projectRoot}/test-output/vitest/coverage"
+        ]
       },
       "build-android": {
         "executor": "nx:run-commands",
@@ -46,7 +51,9 @@
           "command": "npx cap sync android && node -e \"const exec = require('child_process').execSync; const fs = require('fs'); if (process.platform !== 'win32') { try { fs.chmodSync('android/gradlew', 0o755); } catch(e){} } const cmd = process.platform === 'win32' ? 'gradlew.bat assembleDebug' : './gradlew assembleDebug'; exec(cmd, { cwd: 'android', stdio: 'inherit' });\"",
           "cwd": "apps/web"
         },
-        "dependsOn": ["build"]
+        "dependsOn": [
+          "build"
+        ]
       },
       "build-ios": {
         "executor": "nx:run-commands",
@@ -54,7 +61,9 @@
           "command": "npx cap sync ios && node -e \"const exec = require('child_process').execSync; const cmd = process.platform === 'win32' ? 'echo iOS build skipped on Windows' : 'xcodebuild -workspace App.xcworkspace -scheme App -configuration Debug -destination generic/platform=iOS CODE_SIGNING_ALLOWED=NO -derivedDataPath build'; exec(cmd, { cwd: 'ios/App', stdio: 'inherit' });\"",
           "cwd": "apps/web"
         },
-        "dependsOn": ["build"]
+        "dependsOn": [
+          "build"
+        ]
       }
     }
   }
