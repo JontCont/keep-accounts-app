@@ -67,6 +67,7 @@ describe('App', () => {
       { id: '2', name: '投資理財', emoji: 'trending-up', color: '#3b82f6', targetRatio: 30, categories: [] }
     ];
     localStorage.setItem('keep_accounts_groups', JSON.stringify(groups));
+    localStorage.setItem('keep_accounts_onboarding_baseline_asset', '50000');
 
     const { getByText, getAllByPlaceholderText, queryByText } = render(<BrowserRouter><App /></BrowserRouter>);
     
@@ -101,18 +102,17 @@ describe('App', () => {
   });
 
   it('shows first-use setup guidance and prioritizes setup before add transaction', () => {
-    const { getByText, getByPlaceholderText, queryByText } = render(<BrowserRouter><App /></BrowserRouter>);
+    const { getByText, getByPlaceholderText, getAllByText, queryByText } = render(<BrowserRouter><App /></BrowserRouter>);
 
     expect(getByText('首次使用設定引導')).toBeTruthy();
-    expect(getByText('1.')).toBeTruthy();
-    expect(getByText('2.')).toBeTruthy();
-
-    fireEvent.click(getByText('新增記帳明細'));
-    expect(getByText('完成編輯')).toBeTruthy();
-    expect(queryByText('新增收支記帳')).toBeNull();
+    expect(getAllByText('STEP 1').length > 0).toBeTruthy();
+    expect(getAllByText('STEP 2').length > 0).toBeTruthy();
+    expect(getByText('目前進度：步驟 1 / 2')).toBeTruthy();
 
     fireEvent.change(getByPlaceholderText('輸入總資產'), { target: { value: '120000' } });
     fireEvent.click(getByText('儲存'));
+
+    expect(getByText('目前進度：步驟 2 / 2')).toBeTruthy();
     expect(localStorage.getItem('keep_accounts_onboarding_baseline_asset')).toBe('120000');
   });
 
@@ -182,6 +182,33 @@ describe('App', () => {
     expect(getByText('今日支出')).toBeTruthy();
     expect(getAllByText('-$100').length).toBe(2);
     expect(getAllByText('+$500').length).toBe(2);
+  });
+
+  it('shows dashboard detail rows for the selected period', () => {
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const otherDay = now.getDate() === 1 ? '02' : '01';
+    const monthStr = `${year}-${month}-${otherDay}`;
+
+    const mockTxs: Transaction[] = [
+      { id: '1', description: 'today detail', amount: 100, type: 'expense', category: '餐飲食品', date: todayStr, accountGroupId: '1' },
+      { id: '2', description: 'month detail', amount: 200, type: 'expense', category: '餐飲食品', date: monthStr, accountGroupId: '1' },
+    ];
+    localStorage.setItem('keep_accounts_transactions', JSON.stringify(mockTxs));
+
+    const { getByText, queryByText } = render(<BrowserRouter><App /></BrowserRouter>);
+
+    expect(getByText('month detail')).toBeTruthy();
+    expect(getByText('today detail')).toBeTruthy();
+
+    fireEvent.click(getByText('今日'));
+
+    expect(getByText('今日記帳明細')).toBeTruthy();
+    expect(getByText('today detail')).toBeTruthy();
+    expect(queryByText('month detail')).toBeNull();
   });
 
   it('should calculate and display daily allowed consumption and remaining budget when period is today', () => {
@@ -261,6 +288,7 @@ describe('App', () => {
       { id: '2', name: '投資理財', emoji: 'trending-up', color: '#3b82f6', targetRatio: 30, categories: [] }
     ];
     localStorage.setItem('keep_accounts_groups', JSON.stringify(groups));
+    localStorage.setItem('keep_accounts_onboarding_baseline_asset', '50000');
 
     const { getByText, queryAllByTitle } = render(<BrowserRouter><App /></BrowserRouter>);
     
@@ -642,7 +670,7 @@ describe('Credit-card installments', () => {
     fireEvent.click(getAllByText('分期')[0]);
 
     expect(getByText('手機分期')).toBeTruthy();
-    expect(getByText('已繳 3 / 3 期 · 總額 $3007 · 剩餘 $0')).toBeTruthy();
+    expect(getByText('已繳 3 / 3 期 · 總額 $3,007 · 剩餘 $0')).toBeTruthy();
     expect(getByText('刪除整組')).toBeTruthy();
     expect(getByText('第 1 期')).toBeTruthy();
     expect(getAllByText(/\/3/).length).toBeGreaterThan(0);
@@ -804,7 +832,7 @@ describe('Credit-card installments', () => {
     fireEvent.click(getByText('明細'));
     fireEvent.click(getAllByText('分期')[0]);
 
-    expect(getByText('已繳 0 / 5 期 · 總額 $9995 · 剩餘 $9995')).toBeTruthy();
+    expect(getByText('已繳 0 / 5 期 · 總額 $9,995 · 剩餘 $9,995')).toBeTruthy();
   });
 });
 
