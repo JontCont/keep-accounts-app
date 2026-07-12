@@ -27,6 +27,10 @@ import {
 } from './services/backup';
 
 export function App() {
+  const NAV_COLLAPSE_SCROLL_TOP_THRESHOLD = 72;
+  const NAV_COLLAPSE_DELTA_THRESHOLD = 48;
+  const NAV_EXPAND_DELTA_THRESHOLD = 28;
+
   const {
     accountGroups,
     transactions,
@@ -53,21 +57,111 @@ export function App() {
   // FAB scroll behavior state
   const [showFab, setShowFab] = useState(true);
   const lastScrollY = useRef(0);
+  const [navPresentation, setNavPresentation] = useState<'expanded' | 'compact'>('expanded');
+  const downScrollTravel = useRef(0);
+  const upScrollTravel = useRef(0);
+  const [hasFocusedInput, setHasFocusedInput] = useState(false);
+
+  const isHighPriorityInteractionActive =
+    showTxModal || isEditingGroups || showHistoryCreateMenu || hasFocusedInput;
 
   const handleScroll = (e: CustomEvent<any>) => {
-    const currentScrollY = e.detail.scrollTop;
+    const currentScrollY = Math.max(0, e.detail.scrollTop ?? 0);
+    const scrollDelta = currentScrollY - lastScrollY.current;
+
     if (currentScrollY > lastScrollY.current && currentScrollY > 50) {
       setShowFab(false);
     } else if (currentScrollY < lastScrollY.current) {
       setShowFab(true);
     }
+
+    if (scrollDelta > 0) {
+      downScrollTravel.current += scrollDelta;
+      upScrollTravel.current = 0;
+
+      if (
+        !isHighPriorityInteractionActive &&
+        navPresentation === 'expanded' &&
+        currentScrollY > NAV_COLLAPSE_SCROLL_TOP_THRESHOLD &&
+        downScrollTravel.current >= NAV_COLLAPSE_DELTA_THRESHOLD
+      ) {
+        setNavPresentation('compact');
+        downScrollTravel.current = 0;
+      }
+    } else if (scrollDelta < 0) {
+      upScrollTravel.current += Math.abs(scrollDelta);
+      downScrollTravel.current = 0;
+
+      if (navPresentation === 'compact' && upScrollTravel.current >= NAV_EXPAND_DELTA_THRESHOLD) {
+        setNavPresentation('expanded');
+        upScrollTravel.current = 0;
+      }
+    }
+
+    if (currentScrollY <= 8 && navPresentation !== 'expanded') {
+      setNavPresentation('expanded');
+      downScrollTravel.current = 0;
+      upScrollTravel.current = 0;
+    }
+
     lastScrollY.current = currentScrollY;
   };
 
   useEffect(() => {
     setShowFab(true);
     lastScrollY.current = 0;
+    downScrollTravel.current = 0;
+    upScrollTravel.current = 0;
   }, [activeTab]);
+
+  useEffect(() => {
+    if (isHighPriorityInteractionActive && navPresentation !== 'expanded') {
+      setNavPresentation('expanded');
+      downScrollTravel.current = 0;
+      upScrollTravel.current = 0;
+    }
+  }, [isHighPriorityInteractionActive, navPresentation]);
+
+  useEffect(() => {
+    const isInteractiveTarget = (target: EventTarget | null) => {
+      if (!(target instanceof Element)) {
+        return false;
+      }
+
+      return target.matches(
+        [
+          'input',
+          'textarea',
+          'select',
+          'button[contenteditable="true"]',
+          '[contenteditable="true"]',
+          'ion-input',
+          'ion-textarea',
+          'ion-select',
+        ].join(',')
+      );
+    };
+
+    const handleFocusIn = (event: FocusEvent) => {
+      if (isInteractiveTarget(event.target)) {
+        setHasFocusedInput(true);
+      }
+    };
+
+    const handleFocusOut = () => {
+      requestAnimationFrame(() => {
+        setHasFocusedInput(isInteractiveTarget(document.activeElement));
+      });
+    };
+
+    document.addEventListener('focusin', handleFocusIn);
+    document.addEventListener('focusout', handleFocusOut);
+
+    return () => {
+      document.removeEventListener('focusin', handleFocusIn);
+      document.removeEventListener('focusout', handleFocusOut);
+    };
+  }, []);
 
   // Theme state and runtime application
   const storedTheme = localStorage.getItem('keep_accounts_theme') as 'system' | 'light' | 'dark' | null;
@@ -972,7 +1066,11 @@ export function App() {
 
         {/* Bottom Tab Bar Navigation */}
         <nav
-          className="bottom-nav"
+          aria-label="底部導覽"
+          data-testid="bottom-nav"
+          className={`bottom-nav ${
+            navPresentation === 'compact' ? 'bottom-nav--compact' : 'bottom-nav--expanded'
+          }`}
           style={{
             width: 'calc(100% - 32px)',
             maxWidth: '448px',
@@ -980,10 +1078,8 @@ export function App() {
             backdropFilter: 'blur(20px)',
             WebkitBackdropFilter: 'blur(20px)',
             border: '1px solid var(--nav-border)',
-            borderRadius: '24px',
             display: 'flex',
             justifyContent: 'space-around',
-            padding: '8px 6px',
             boxShadow: 'var(--nav-shadow)',
             zIndex: 1000,
             position: 'fixed',
@@ -994,81 +1090,77 @@ export function App() {
         >
           <button
             onClick={() => setActiveTab('dashboard')}
+            className={`bottom-nav-button ${activeTab === 'dashboard' ? 'active' : ''}`}
             style={{
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               background: 'transparent',
               color: activeTab === 'dashboard' ? 'var(--primary-color)' : 'var(--text-tertiary)',
-              padding: '6px 12px',
               fontSize: '0.75rem',
               fontWeight: 500,
-              gap: '4px',
               border: 'none',
               cursor: 'pointer',
             }}
           >
             <AppIcon name="home" size={20} />
-            <span>總覽</span>
+            <span className="bottom-nav-label">總覽</span>
           </button>
           <button
             onClick={() => setActiveTab('history')}
+            className={`bottom-nav-button ${activeTab === 'history' ? 'active' : ''}`}
             style={{
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               background: 'transparent',
               color: activeTab === 'history' ? 'var(--primary-color)' : 'var(--text-tertiary)',
-              padding: '6px 12px',
               fontSize: '0.75rem',
               fontWeight: 500,
-              gap: '4px',
               border: 'none',
               cursor: 'pointer',
             }}
           >
             <AppIcon name="book-open" size={20} />
-            <span>明細</span>
+            <span className="bottom-nav-label">明細</span>
           </button>
 
           <button
             onClick={() => setActiveTab('stats')}
+            className={`bottom-nav-button ${activeTab === 'stats' ? 'active' : ''}`}
             style={{
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               background: 'transparent',
               color: activeTab === 'stats' ? 'var(--primary-color)' : 'var(--text-tertiary)',
-              padding: '6px 12px',
               fontSize: '0.75rem',
               fontWeight: 500,
-              gap: '4px',
               border: 'none',
               cursor: 'pointer',
             }}
           >
             <AppIcon name="bar-chart" size={20} />
-            <span>分析</span>
+            <span className="bottom-nav-label">分析</span>
           </button>
 
           <button
             onClick={() => setActiveTab('settings')}
+            className={`bottom-nav-button ${activeTab === 'settings' ? 'active' : ''}`}
             style={{
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               background: 'transparent',
               color: activeTab === 'settings' ? 'var(--primary-color)' : 'var(--text-tertiary)',
-              padding: '6px 12px',
               fontSize: '0.75rem',
               fontWeight: 500,
-              gap: '4px',
               border: 'none',
               cursor: 'pointer',
             }}
           >
             <AppIcon name="settings" size={20} />
-            <span>設定</span>
+            <span className="bottom-nav-label">設定</span>
           </button>
         </nav>
 

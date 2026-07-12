@@ -6,6 +6,18 @@ import { useKeepAccounts } from '@keep-accounts-app/state';
 import App from './app';
 import { getCurrentMonthExpenseForGroup, Transaction } from '@keep-accounts-app/domain';
 
+const dispatchIonScroll = (container: HTMLElement, scrollTop: number) => {
+  const ionContent = container.querySelector('ion-content');
+  expect(ionContent).toBeTruthy();
+  fireEvent(
+    ionContent as Element,
+    new CustomEvent('ionScroll', {
+      detail: { scrollTop },
+      bubbles: true,
+    })
+  );
+};
+
 vi.mock('@ionic/react', async (importOriginal) => {
   const original = await importOriginal<typeof import('@ionic/react')>();
   const React = await import('react');
@@ -59,6 +71,89 @@ describe('App', () => {
     expect(getAllByText(new RegExp('Keep Accounts', 'gi')).length > 0).toBeTruthy();
   });
 
+  it('auto-compacts bottom navigation on downward scroll and keeps tabs usable in compact mode', () => {
+    const { container, getByTestId } = render(<BrowserRouter><App /></BrowserRouter>);
+
+    const nav = getByTestId('bottom-nav');
+    expect(nav.className).toContain('bottom-nav--expanded');
+
+    act(() => {
+      dispatchIonScroll(container, 24);
+      dispatchIonScroll(container, 96);
+      dispatchIonScroll(container, 168);
+    });
+
+    expect(nav.className).toContain('bottom-nav--compact');
+    expect(within(nav).getByText('總覽')).toBeTruthy();
+    expect(within(nav).getByText('明細')).toBeTruthy();
+    expect(within(nav).getByText('分析')).toBeTruthy();
+    expect(within(nav).getByText('設定')).toBeTruthy();
+
+    const activeTabButton = within(nav).getByText('總覽').closest('button');
+    expect(activeTabButton).toBeTruthy();
+    expect(activeTabButton?.className).toContain('active');
+  });
+
+  it('auto-expands bottom navigation on upward scroll after being compacted', () => {
+    const { container, getByTestId } = render(<BrowserRouter><App /></BrowserRouter>);
+
+    const nav = getByTestId('bottom-nav');
+
+    act(() => {
+      dispatchIonScroll(container, 32);
+      dispatchIonScroll(container, 120);
+      dispatchIonScroll(container, 196);
+    });
+    expect(nav.className).toContain('bottom-nav--compact');
+
+    act(() => {
+      dispatchIonScroll(container, 172);
+      dispatchIonScroll(container, 148);
+      dispatchIonScroll(container, 118);
+    });
+
+    expect(nav.className).toContain('bottom-nav--expanded');
+  });
+
+  it('keeps bottom navigation expanded while modal overlay is active', () => {
+    const { container, getByTestId, getByText } = render(<BrowserRouter><App /></BrowserRouter>);
+
+    const nav = getByTestId('bottom-nav');
+
+    act(() => {
+      dispatchIonScroll(container, 30);
+      dispatchIonScroll(container, 108);
+      dispatchIonScroll(container, 184);
+    });
+    expect(nav.className).toContain('bottom-nav--compact');
+
+    fireEvent.click(getByText('新增記帳明細'));
+    expect(getByText('新增收支記帳')).toBeTruthy();
+    expect(nav.className).toContain('bottom-nav--expanded');
+  });
+
+  it('keeps header title behavior stable while bottom nav presentation changes', () => {
+    const { container, getByText, queryByText } = render(<BrowserRouter><App /></BrowserRouter>);
+
+    expect(getByText('Keep Accounts')).toBeTruthy();
+    expect(getByText('精緻微型記帳系統')).toBeTruthy();
+
+    act(() => {
+      dispatchIonScroll(container, 20);
+      dispatchIonScroll(container, 92);
+      dispatchIonScroll(container, 176);
+      dispatchIonScroll(container, 150);
+      dispatchIonScroll(container, 122);
+    });
+
+    expect(getByText('Keep Accounts')).toBeTruthy();
+    expect(getByText('精緻微型記帳系統')).toBeTruthy();
+
+    fireEvent.click(getByText('明細'));
+    expect(getByText('歷史交易明細')).toBeTruthy();
+    expect(queryByText('精緻微型記帳系統')).toBeNull();
+  });
+
   it('should show over-allocation warning only when target ratios are greater than 100% and still allow saving', () => {
     const groups = [
       { id: '0', name: '當月薪資', emoji: 'briefcase', color: '#22c55e', isSource: true, categories: [] },
@@ -101,19 +196,12 @@ describe('App', () => {
     expect(queryByText('完成編輯')).toBeNull();
   });
 
-  it('shows first-use setup guidance and prioritizes setup before add transaction', () => {
-    const { getByText, getByPlaceholderText, getAllByText, queryByText } = render(<BrowserRouter><App /></BrowserRouter>);
+  it('does not show first-use setup guidance in current dashboard flow', () => {
+    const { queryByText } = render(<BrowserRouter><App /></BrowserRouter>);
 
-    expect(getByText('首次使用設定引導')).toBeTruthy();
-    expect(getAllByText('STEP 1').length > 0).toBeTruthy();
-    expect(getAllByText('STEP 2').length > 0).toBeTruthy();
-    expect(getByText('目前進度：步驟 1 / 2')).toBeTruthy();
-
-    fireEvent.change(getByPlaceholderText('輸入總資產'), { target: { value: '120000' } });
-    fireEvent.click(getByText('儲存'));
-
-    expect(getByText('目前進度：步驟 2 / 2')).toBeTruthy();
-    expect(localStorage.getItem('keep_accounts_onboarding_baseline_asset')).toBe('120000');
+    expect(queryByText('首次使用設定引導')).toBeNull();
+    expect(queryByText(/STEP 1/)).toBeNull();
+    expect(queryByText(/STEP 2/)).toBeNull();
   });
 
   it('hides first-use setup guidance after baseline and major groups are ready', () => {
