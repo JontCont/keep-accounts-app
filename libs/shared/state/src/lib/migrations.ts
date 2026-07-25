@@ -74,17 +74,53 @@ export function migrateAccountGroups(parsed: any[]): AccountGroup[] {
         return defaultCat ? { ...cat, color: defaultCat.color } : cat;
       });
 
-      // Ensure newly introduced default category exists for 投資理財.
+      // Keep 投資理財 categories aligned with current defaults.
       if (defaultGroup.id === '2') {
-        const defaultStockCategory = defaultGroup.categories.find(
+        const defaultStockExpenseCategory = defaultGroup.categories.find(
           (dc) => dc.name === '股票' && dc.type === 'expense'
         );
-        const hasStockCategory = categories.some(
+        const defaultStockIncomeCategory = defaultGroup.categories.find(
+          (dc) => dc.name === '股票' && dc.type === 'income'
+        );
+        const normalizedCategories = categories
+          .map((cat: any) => {
+            const normalizedName =
+              cat.name === '股票收益' && cat.type === 'income' ? '股票' : cat.name;
+            const defaultMatch = defaultGroup.categories.find(
+              (dc) => dc.name === normalizedName && dc.type === cat.type
+            );
+            return defaultMatch
+              ? { ...cat, name: normalizedName, color: defaultMatch.color }
+              : { ...cat, name: normalizedName };
+          })
+          .filter(
+            (cat: any, index: number, arr: any[]) =>
+              arr.findIndex(
+                (existing: any) =>
+                  existing.name === cat.name && existing.type === cat.type
+              ) === index
+          );
+
+        const hasStockExpenseCategory = normalizedCategories.some(
           (cat: any) => cat.name === '股票' && cat.type === 'expense'
         );
+        const hasStockIncomeCategory = normalizedCategories.some(
+          (cat: any) => cat.name === '股票' && cat.type === 'income'
+        );
+        const filteredCategories = normalizedCategories.filter(
+          (cat: any) =>
+            !(
+              (cat.name === '分期' && cat.type === 'expense') ||
+              (cat.name === '投資理財' && cat.type === 'expense')
+            )
+        );
 
-        if (defaultStockCategory && !hasStockCategory) {
-          categories = [...categories, { ...defaultStockCategory }];
+        categories = filteredCategories;
+        if (defaultStockExpenseCategory && !hasStockExpenseCategory) {
+          categories = [...categories, { ...defaultStockExpenseCategory }];
+        }
+        if (defaultStockIncomeCategory && !hasStockIncomeCategory) {
+          categories = [...categories, { ...defaultStockIncomeCategory }];
         }
       }
     }

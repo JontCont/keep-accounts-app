@@ -146,6 +146,29 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   const getGroupAllocated = (targetRatio: number) =>
     Math.round(sourcePool * (targetRatio / 100));
 
+  const getGroupMonthlyUsed = (groupId: string) => {
+    const monthlyGroupTxs = transactions.filter(
+      (tx) => tx.accountGroupId === groupId && tx.date.startsWith(currentMonthStr)
+    );
+
+    // Investment stock buy/sell should consume only net deployed principal.
+    if (groupId === '2') {
+      const stockExpense = monthlyGroupTxs
+        .filter((tx) => tx.category === '股票' && tx.type === 'expense')
+        .reduce((sum, tx) => sum + tx.amount, 0);
+      const stockIncome = monthlyGroupTxs
+        .filter((tx) => tx.category === '股票' && tx.type === 'income')
+        .reduce((sum, tx) => sum + tx.amount, 0);
+      const nonStockExpense = monthlyGroupTxs
+        .filter((tx) => tx.type === 'expense' && tx.category !== '股票')
+        .reduce((sum, tx) => sum + tx.amount, 0);
+
+      return Math.max(0, nonStockExpense + (stockExpense - stockIncome));
+    }
+
+    return getCurrentMonthExpenseForGroup(groupId, transactions);
+  };
+
   const dashboardTxs = transactions
     .filter((tx) =>
       period === 'today'
@@ -527,10 +550,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               const isSrc = !!group.isSource;
               const targetRatio = group.targetRatio || 0;
               const allocated = getGroupAllocated(targetRatio);
-              const monthlyExpense = getCurrentMonthExpenseForGroup(
-                group.id,
-                transactions
-              );
+              const monthlyExpense = getGroupMonthlyUsed(group.id);
               const remaining = allocated - monthlyExpense;
               const usedPct =
                 allocated > 0

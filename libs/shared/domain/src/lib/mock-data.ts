@@ -71,11 +71,10 @@ export const DEFAULT_ACCOUNT_GROUPS: AccountGroup[] = [
     targetRatio: 30,
     categories: [
       { name: '股票', emoji: 'trending-up', color: '#2563eb', type: 'expense' },        // Blue-Dark
+      { name: '股票', emoji: 'trending-up', color: '#65a30d', type: 'income' },         // Lime-Dark
       { name: '股市投資', emoji: 'trending-down', color: '#6366f1', type: 'expense' }, // Indigo
       { name: '基金認購', emoji: 'landmark', color: '#a855f7', type: 'expense' },      // Purple
-      { name: '投資理財', emoji: 'trending-up', color: '#3b82f6', type: 'expense' },   // Blue
       { name: '其他投資', emoji: 'tag', color: '#f97316', type: 'expense' },           // Orange
-      { name: '分期', emoji: 'credit-card', color: '#6366f1', type: 'expense' },       // Indigo
       { name: '投資收益', emoji: 'trending-up', color: '#84cc16', type: 'income' },    // Lime
       { name: '股利發放', emoji: 'dollar-sign', color: '#d97706', type: 'income' },    // Amber-Dark
       { name: '其他投資收入', emoji: 'tag', color: '#14b8a6', type: 'income' }         // Teal

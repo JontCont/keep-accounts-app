@@ -226,6 +226,26 @@ export const computeStockAmount = (sharesInput: string, unitPriceInput: string):
   return total.toFixed(2).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
 };
 
+const trimStockSymbol = (value: string) => value.trim().toUpperCase();
+
+const parseStockTradeDescription = (description: string) => {
+  const matched = description
+    .trim()
+    .match(/^(\S+)\s*(買進|賣出)\s*([\d.]+)\s*股\s*@\s*([\d.]+)/);
+
+  if (!matched) {
+    return null;
+  }
+
+  return {
+    symbol: trimStockSymbol(matched[1]),
+    shares: matched[3],
+    unitPrice: matched[4],
+    realizedGainNote:
+      description.match(/已實現收益[:：]\s*([\d.]+)/)?.[1] ?? '',
+  };
+};
+
 const shiftDateMonthsWithDayClamp = (base: Date, monthDelta: number) => {
   const shifted = new Date(base);
   const originalDay = shifted.getDate();
@@ -323,8 +343,10 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const [remindOnDueDate, setRemindOnDueDate] = useState(false);
   const [notificationTitle, setNotificationTitle] = useState(DEFAULT_NOTIFICATION_TITLE);
   const [notificationBody, setNotificationBody] = useState(DEFAULT_NOTIFICATION_BODY);
+  const [stockSymbol, setStockSymbol] = useState('');
   const [stockShares, setStockShares] = useState('');
   const [stockUnitPrice, setStockUnitPrice] = useState('');
+  const [stockRealizedGain, setStockRealizedGain] = useState('');
   const basicNameInputRef = useRef<any>(null);
   const installmentNameInputRef = useRef<any>(null);
 
@@ -334,15 +356,26 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   // When editing a single period of an existing installment, the amount is a
   // computed split and must not be edited directly.
   const isEditingInstallment = !!editingTx?.installmentId;
+  const isEditingStockTrade =
+    !!editingTx &&
+    !editingTx.installmentId &&
+    editingTx.category === STOCK_CATEGORY_NAME &&
+    (editingTx.type === 'expense' || editingTx.type === 'income');
   const selectableAccountGroups = useMemo(
     () => filterAccountGroupsByTransactionType(accountGroups, type),
     [accountGroups, type]
   );
   const isStockCategory = category === STOCK_CATEGORY_NAME;
-  const showStockCalculator =
+  const showStockBuyCalculator =
     !isEditingInstallment &&
     (!canConfigureInstallment || activeTab === 'basic') &&
-    isStockCategory;
+    isStockCategory &&
+    type === 'expense';
+  const showStockProfitInput =
+    !isEditingInstallment &&
+    (!canConfigureInstallment || activeTab === 'basic') &&
+    isStockCategory &&
+    type === 'income';
 
   // Sync form states with editingTx when modal opens or editingTx changes
   useEffect(() => {
@@ -353,6 +386,23 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       setAccountGroupId(editingTx.accountGroupId);
       setDate(editingTx.date);
       setCategory(editingTx.category);
+
+      if (
+        !editingTx.installmentId &&
+        editingTx.category === STOCK_CATEGORY_NAME &&
+        (editingTx.type === 'expense' || editingTx.type === 'income')
+      ) {
+        const parsedStock = parseStockTradeDescription(editingTx.description);
+        setStockSymbol(parsedStock?.symbol ?? '');
+        setStockShares(parsedStock?.shares ?? '');
+        setStockUnitPrice(parsedStock?.unitPrice ?? '');
+        setStockRealizedGain(parsedStock?.realizedGainNote ?? '');
+      } else {
+        setStockSymbol('');
+        setStockShares('');
+        setStockUnitPrice('');
+        setStockRealizedGain('');
+      }
     } else {
       const now = getLocalISOString();
       setDescription('');
@@ -361,6 +411,10 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       setAccountGroupId(resolveDefaultTransactionGroupId(accountGroups));
       setDate(now);
       setInstallmentStartDate(now);
+      setStockSymbol('');
+      setStockShares('');
+      setStockUnitPrice('');
+      setStockRealizedGain('');
     }
     if (editingTx) {
       setInstallmentStartDate(editingTx.date);
@@ -371,8 +425,6 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     setRemindOnDueDate(false);
     setNotificationTitle(DEFAULT_NOTIFICATION_TITLE);
     setNotificationBody(DEFAULT_NOTIFICATION_BODY);
-    setStockShares('');
-    setStockUnitPrice('');
   }, [editingTx, isOpen, accountGroups, initialTab]);
 
   useEffect(() => {
@@ -428,20 +480,86 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   }, [selectableAccountGroups, accountGroupId, isEditingInstallment]);
 
   useEffect(() => {
-    if (!showStockCalculator) {
-      setStockShares('');
-      setStockUnitPrice('');
+    if (!showStockBuyCalculator && !showStockProfitInput) {
+      if (!isEditingStockTrade) {
+        setStockShares('');
+        setStockUnitPrice('');
+      }
       return;
     }
 
-    const hasStockInputs = stockShares.trim() !== '' || stockUnitPrice.trim() !== '';
-    if (!hasStockInputs) {
+    if (!showStockBuyCalculator && !showStockProfitInput) {
       return;
     }
 
     const computed = computeStockAmount(stockShares, stockUnitPrice);
     setAmount(computed);
-  }, [showStockCalculator, stockShares, stockUnitPrice]);
+  }, [
+    showStockBuyCalculator,
+    showStockProfitInput,
+    stockShares,
+    stockUnitPrice,
+    isEditingStockTrade,
+  ]);
+
+  useEffect(() => {
+    if (!showStockProfitInput) {
+      if (!isEditingStockTrade) {
+        setStockRealizedGain('');
+      }
+    }
+  }, [showStockProfitInput, isEditingStockTrade]);
+
+  useEffect(() => {
+    const normalizedSymbol = trimStockSymbol(stockSymbol);
+    if (!normalizedSymbol || isEditingInstallment) {
+      return;
+    }
+
+    if (showStockBuyCalculator) {
+      const shares = stockShares.trim();
+      const unitPrice = stockUnitPrice.trim();
+      if (shares && unitPrice) {
+        setDescription(`${normalizedSymbol} 買進 ${shares} 股 @${unitPrice}`);
+      } else {
+        setDescription(`${normalizedSymbol} 買進`);
+      }
+      return;
+    }
+
+    if (showStockProfitInput) {
+      const shares = stockShares.trim();
+      const unitPrice = stockUnitPrice.trim();
+      const gainNote = stockRealizedGain.trim();
+      if (shares && unitPrice) {
+        setDescription(
+          gainNote
+            ? `${normalizedSymbol} 賣出 ${shares} 股 @${unitPrice}（已實現收益: ${gainNote}）`
+            : `${normalizedSymbol} 賣出 ${shares} 股 @${unitPrice}`
+        );
+      } else if (shares) {
+        setDescription(
+          gainNote
+            ? `${normalizedSymbol} 賣出 ${shares} 股（已實現收益: ${gainNote}）`
+            : `${normalizedSymbol} 賣出 ${shares} 股`
+        );
+      } else {
+        setDescription(
+          gainNote
+            ? `${normalizedSymbol} 賣出（已實現收益: ${gainNote}）`
+            : `${normalizedSymbol} 賣出`
+        );
+      }
+    }
+  }, [
+    showStockBuyCalculator,
+    showStockProfitInput,
+    stockSymbol,
+    stockShares,
+    stockUnitPrice,
+    stockRealizedGain,
+    isEditingInstallment,
+  ]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -840,18 +958,44 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             inputmode="decimal"
             placeholder="輸入金額"
             value={amount}
-            readonly={showStockCalculator}
+            readonly={showStockBuyCalculator || showStockProfitInput}
             onIonInput={(e) => setAmount(e.detail.value ?? '')}
             required
           />
-          {showStockCalculator && (
+          {showStockBuyCalculator && (
             <span style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)' }}>
               由股數與單價自動計算
             </span>
           )}
+          {showStockProfitInput && (
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)' }}>
+              金額由股數與單價計算；「已實現收益」僅作備註
+            </span>
+          )}
         </div>
 
-        {showStockCalculator && (
+        {(showStockBuyCalculator || showStockProfitInput) && (
+          <div>
+            <label
+              style={{
+                display: 'block',
+                fontSize: '0.85rem',
+                color: 'var(--text-secondary)',
+                marginBottom: '8px',
+              }}
+            >
+              股票代號
+            </label>
+            <IonInput
+              type="text"
+              placeholder="例如: 2330"
+              value={stockSymbol}
+              onIonInput={(e) => setStockSymbol(e.detail.value ?? '')}
+            />
+          </div>
+        )}
+
+        {showStockBuyCalculator && (
           <div
             style={{
               display: 'grid',
@@ -896,6 +1040,76 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 placeholder="例如: 58.4"
                 value={stockUnitPrice}
                 onIonInput={(e) => setStockUnitPrice(e.detail.value ?? '')}
+              />
+            </div>
+          </div>
+        )}
+
+        {showStockProfitInput && (
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: '12px',
+            }}
+          >
+            <div>
+              <label
+                style={{
+                  display: 'block',
+                  fontSize: '0.85rem',
+                  color: 'var(--text-secondary)',
+                  marginBottom: '8px',
+                }}
+              >
+                賣出股數
+              </label>
+              <IonInput
+                type="number"
+                inputmode="decimal"
+                placeholder="例如: 100"
+                value={stockShares}
+                onIonInput={(e) => setStockShares(e.detail.value ?? '')}
+              />
+            </div>
+
+            <div>
+              <label
+                style={{
+                  display: 'block',
+                  fontSize: '0.85rem',
+                  color: 'var(--text-secondary)',
+                  marginBottom: '8px',
+                }}
+              >
+                賣出單價
+              </label>
+              <IonInput
+                type="number"
+                inputmode="decimal"
+                placeholder="例如: 12"
+                value={stockUnitPrice}
+                onIonInput={(e) => setStockUnitPrice(e.detail.value ?? '')}
+              />
+            </div>
+
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label
+                style={{
+                  display: 'block',
+                  fontSize: '0.85rem',
+                  color: 'var(--text-secondary)',
+                  marginBottom: '8px',
+                }}
+              >
+              已實現收益 ($)
+              </label>
+              <IonInput
+                type="number"
+                inputmode="decimal"
+                placeholder="例如: 200"
+                value={stockRealizedGain}
+                onIonInput={(e) => setStockRealizedGain(e.detail.value ?? '')}
               />
             </div>
           </div>

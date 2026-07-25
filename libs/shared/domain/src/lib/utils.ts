@@ -29,6 +29,14 @@ export const getCurrentMonthExpenseForGroup = (
     .reduce((sum, tx) => sum + tx.amount, 0);
 };
 
+/**
+ * Round a monetary value to the app's currency precision (whole units) at a
+ * calculation boundary, consistent with existing Math.round usage across the
+ * app (e.g. allocation totals). Used to keep persisted ledger amounts free of
+ * floating-point drift.
+ */
+export const roundCurrency = (value: number): number => Math.round(value);
+
 export const getLocalISOString = (d: Date = new Date()): string => {
   const pad = (n: number) => String(n).padStart(2, '0');
   const offset = -d.getTimezoneOffset();

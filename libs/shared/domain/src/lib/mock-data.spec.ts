@@ -14,4 +14,25 @@ describe('STARTER_ALLOCATION_PRESET', () => {
     expect(targetSum).toBe(100);
     expect(nonSourceGroups).toHaveLength(3);
   });
+
+  it('does not include deprecated categories in the investment group', () => {
+    const investmentGroup = STARTER_ALLOCATION_PRESET.find((group) => group.id === '2');
+
+    expect(investmentGroup).toBeDefined();
+    expect(
+      investmentGroup?.categories.some(
+        (category) => category.name === '分期' && category.type === 'expense'
+      )
+    ).toBe(false);
+    expect(
+      investmentGroup?.categories.some(
+        (category) => category.name === '投資理財' && category.type === 'expense'
+      )
+    ).toBe(false);
+    expect(
+      investmentGroup?.categories.some(
+        (category) => category.name === '股票' && category.type === 'income'
+      )
+    ).toBe(true);
+  });
 });
