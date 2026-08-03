@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, FC, FormEvent, CSSProperties } from 'react';
 import {
   IonSelect,
   IonSelectOption,
@@ -9,26 +9,9 @@ import {
   ACCOUNT_EMOJIS,
   ACCOUNT_COLORS,
   DEFAULT_ACCOUNT_GROUPS,
+  ICON_NAMES_ZH,
 } from '@keep-accounts-app/domain';
 import { AppIcon } from './AppIcon';
-
-const ICON_NAMES_ZH: Record<string, string> = {
-  'coffee': '餐飲食品',
-  'car': '交通出行',
-  'film': '休閒娛樂',
-  'shopping-cart': '購物消費',
-  'home': '居住物業',
-  'zap': '水電燃料',
-  'tag': '其他標籤',
-  'briefcase': '薪資工作',
-  'gift': '人情禮物',
-  'landmark': '銀行金融',
-  'credit-card': '信用金融',
-  'shield': '保險防護',
-  'trending-up': '投資理財',
-  'piggy-bank': '儲蓄保險',
-  'wallet': '現金錢包',
-};
 
 interface CustomSelectProps {
   value: string;
@@ -38,7 +21,7 @@ interface CustomSelectProps {
   showLabel?: boolean;
 }
 
-const CustomSelect: React.FC<CustomSelectProps> = ({ value, options, onChange, placeholder, showLabel = true }) => {
+const CustomSelect: FC<CustomSelectProps> = ({ value, options, onChange, placeholder, showLabel = true }) => {
   const [isOpen, setIsOpen] = useState(false);
   const selectedOption = options.find(o => o.value === value);
 
@@ -187,7 +170,7 @@ interface GroupSettingsModalProps {
   ) => void;
 }
 
-export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
+export const GroupSettingsModal: FC<GroupSettingsModalProps> = ({
   isOpen,
   onClose,
   accountGroups,
@@ -234,7 +217,7 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
     }
   };
 
-  const handleAddGroupSubmit = (e: React.FormEvent) => {
+  const handleAddGroupSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!newGroupName.trim()) return;
     onAddGroup(newGroupName, newGroupEmoji, newGroupColor, newGroupBudget);
@@ -939,7 +922,7 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
                       {
                         flex: 1,
                         fontSize: '1rem',
-                      } as React.CSSProperties
+                      } as CSSProperties
                     }
                   />
                 </div>
@@ -1049,7 +1032,7 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
                 {
                   flex: 1,
                   fontSize: '1rem',
-                } as React.CSSProperties
+                } as CSSProperties
               }
               required
             />
@@ -1068,7 +1051,7 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
               style={
                 {
                   fontSize: '1rem',
-                } as React.CSSProperties
+                } as CSSProperties
               }
             />
           </div>

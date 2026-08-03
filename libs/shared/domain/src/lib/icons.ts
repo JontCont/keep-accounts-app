@@ -42,3 +42,24 @@ export const ICON_ALIAS_MAP: Record<string, string> = {
  * List of available icons supported across the application.
  */
 export const AVAILABLE_ICONS: string[] = Object.keys(ICON_ALIAS_MAP);
+
+/**
+ * Traditional Chinese display names for UI icon labels.
+ */
+export const ICON_NAMES_ZH: Record<string, string> = {
+  'coffee': '餐飲食品',
+  'car': '交通出行',
+  'film': '休閒娛樂',
+  'shopping-cart': '購物消費',
+  'home': '居住物業',
+  'zap': '水電燃料',
+  'tag': '其他標籤',
+  'briefcase': '薪資工作',
+  'gift': '人情禮物',
+  'landmark': '銀行金融',
+  'credit-card': '信用金融',
+  'shield': '保險防護',
+  'trending-up': '投資理財',
+  'piggy-bank': '儲蓄保險',
+  'wallet': '現金錢包',
+};
