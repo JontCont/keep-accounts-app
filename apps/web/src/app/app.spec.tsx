@@ -23,6 +23,7 @@ vi.mock('@ionic/react', async (importOriginal) => {
   const React = await import('react');
   return {
     ...original,
+    IonApp: ({ children }: any) => React.createElement('div', { 'ion-app': '' }, children),
     IonModal: ({ children, isOpen }: any) => {
       if (!isOpen) return null;
       return React.createElement('div', { 'data-testid': 'ion-modal' }, children);
