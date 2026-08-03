@@ -1,4 +1,4 @@
-import React from 'react';
+import type { FC } from 'react';
 import { AccountGroup, InstallmentReminderConfig, Transaction } from '@keep-accounts-app/domain';
 import { TransactionModal } from './TransactionModal';
 
@@ -24,7 +24,7 @@ interface TransactionEntryPageProps {
   ) => void;
 }
 
-export const TransactionEntryPage: React.FC<TransactionEntryPageProps> = ({
+export const TransactionEntryPage: FC<TransactionEntryPageProps> = ({
   isOpen,
   editingTx,
   accountGroups,

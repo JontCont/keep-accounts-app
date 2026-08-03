@@ -1,4 +1,3 @@
-import React from 'react';
 import { render } from '@testing-library/react';
 import { AppIcon } from './AppIcon';
 import { describe, it, expect } from 'vitest';

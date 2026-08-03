@@ -1,4 +1,4 @@
-import React from 'react';
+import type { FC } from 'react';
 import { Transaction } from '@keep-accounts-app/domain';
 import { AppIcon } from './AppIcon';
 
@@ -11,7 +11,7 @@ interface TransactionLedgerRowProps {
   dataTestId?: string;
 }
 
-export const TransactionLedgerRow: React.FC<TransactionLedgerRowProps> = ({
+export const TransactionLedgerRow: FC<TransactionLedgerRowProps> = ({
   tx,
   getCategoryEmoji,
   getGroupName,

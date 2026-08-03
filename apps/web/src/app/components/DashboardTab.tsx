@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState, FC, ReactNode } from 'react';
 import {
   Transaction,
   AccountGroup,
@@ -22,10 +22,10 @@ interface DashboardTabProps {
   getGroupKey: (dateStr: string, mode: 'day' | 'month' | 'year') => string;
   formatGroupHeader: (key: string, mode: 'day' | 'month' | 'year') => string;
   getGroupTotals: (groupTxs: Transaction[]) => { income: number; expense: number };
-  groupSettingsPanel: React.ReactNode;
+  groupSettingsPanel: ReactNode;
 }
 
-export const DashboardTab: React.FC<DashboardTabProps> = ({
+export const DashboardTab: FC<DashboardTabProps> = ({
   accountGroups,
   transactions,
   onApplyStarterPreset,
