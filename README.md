@@ -2,7 +2,7 @@
 
 [English](#keep-accounts-app) | [繁體中文](#記帳應用程式-keep-accounts-app)
 
-A modern personal finance, budgeting, and bookkeeping application built as a modular **Nx monorepo**. It includes a feature-rich React-based web dashboard (adaptable to mobile devices via Capacitor), a Swift command-line helper, and a robust end-to-end integration test suite using Playwright.
+A modern personal finance, budgeting, and bookkeeping application built as a modular **Nx monorepo**. It includes a feature-rich React-based web dashboard (adaptable to mobile devices via Capacitor), and a robust end-to-end integration test suite using Playwright.
 
 This project employs **Spectra Spec-Driven Development (SDD)**, a methodology where features and architecture changes are fully spec'd and reviewed before coding begins.
 
@@ -37,10 +37,7 @@ A highly responsive React 19 web application built on Vite, TypeScript, and Ioni
   - Implements **Auto-Backup** to native Documents storage (`keep_accounts_backup.zip`) and allows restoring from auto-backups.
   - Maintains a detailed import history log with file details, record counts, and status checks.
 
-### 2. Swift CLI Helper (`apps/swift-cli`)
-A Swift command-line helper structure used to package the iOS application (creating the IPA artifact) and automatically generate testing files/build artifacts in the CI/CD pipeline.
-
-### 3. E2E Testing Suite (`apps/web-e2e`)
+### 2. E2E Testing Suite (`apps/web-e2e`)
 End-to-end integration testing suite using **Playwright** to simulate user behavior, check state integrity, and ensure zero-regression on UI layouts.
 
 ---
@@ -53,8 +50,7 @@ The workspace is structured as an Nx monorepo, cleanly dividing applications and
 keep-accounts-app/
 ├── apps/
 │   ├── web/                     # React 19 / Vite / TypeScript web app (Capacitor enabled)
-│   ├── web-e2e/                 # Playwright end-to-end integration tests
-│   └── swift-cli/               # Swift CLI tool to package iOS app & generate CI artifacts
+│   └── web-e2e/                 # Playwright end-to-end integration tests
 ├── libs/
 │   └── shared/
 │       ├── domain/              # Shared models, entities, defaults, and helper functions
@@ -171,7 +167,7 @@ This project is licensed under the [MIT License](LICENSE).
 
 [English](#keep-accounts-app) | [繁體中文](#記帳應用程式-keep-accounts-app)
 
-這是一個以 **Nx monorepo** 建置的現代化個人理財、預算規劃與記帳應用程式。本專案包含一個基於 React 的美觀網頁控制面板（亦可透過 Capacitor 包裝為行動端 App）、一個 Swift 命令行界面 (CLI) 工具，以及使用 Playwright 的端到端 (E2E) 整合測試。
+這是一個以 **Nx monorepo** 建置的現代化個人理財、預算規劃與記帳應用程式。本專案包含一個基於 React 的美觀網頁控制面板（亦可透過 Capacitor 包裝為行動端 App），以及使用 Playwright 的端到端 (E2E) 整合測試。
 
 本專案採用 **Spectra 規格驅動開發 (SDD)** 流程，在進行實作前，會先針對功能規格與變更提案進行建模與設計。
 
@@ -206,10 +202,7 @@ This project is licensed under the [MIT License](LICENSE).
   - 提供**自動備份**機制，可將資料備份至原生 Documents 目錄（`keep_accounts_backup.zip`），並支援從自動備份中一鍵還原。
   - 提供備份匯入歷史紀錄日誌，詳細記錄匯入時間、檔案大小、群組與交易數量，並進行成功與否的狀態校驗。
 
-### 2. Swift CLI 輔助工具 (`apps/swift-cli`)
-基於 Swift 的命令列工具，主要用於打包 iOS 應用程式（產生 IPA 安裝包），並透過 CI/CD 流程自動產出相關測試檔案與建置成品。
-
-### 3. E2E 測試套件 (`apps/web-e2e`)
+### 2. E2E 測試套件 (`apps/web-e2e`)
 使用 **Playwright** 驅動的端到端整合測試套件，用以模擬使用者操作流程、驗證狀態一致性，確保 UI 與核心邏輯無迴歸 (zero-regression)。
 
 ---
@@ -222,8 +215,7 @@ This project is licensed under the [MIT License](LICENSE).
 keep-accounts-app/
 ├── apps/
 │   ├── web/                     # React 19 / Vite / TypeScript 網頁與混合 App
-│   ├── web-e2e/                 # Playwright 端到端 (E2E) 測試套件
-│   └── swift-cli/               # Swift CLI 用於打包 iOS 應用程式與產生 CI/CD 測試檔案
+│   └── web-e2e/                 # Playwright 端到端 (E2E) 測試套件
 ├── libs/
 │   └── shared/
 │       ├── domain/              # 共用實體模型、預設常數及工具函式
