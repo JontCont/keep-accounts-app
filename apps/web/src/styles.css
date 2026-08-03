@@ -454,4 +454,40 @@ ion-modal.modal-overlay {
   --border-radius: 0 !important;
 }
 
+/* Transaction Ledger Row type-based CSS rules */
+.tx-ledger-badge {
+  font-size: 1.4rem;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--input-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.tx-ledger-badge[data-tx-type="income"] {
+  background: var(--income-bg);
+}
+
+.tx-ledger-badge[data-tx-type="expense"] {
+  background: var(--expense-bg);
+}
+
+.tx-ledger-amount {
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--text-secondary);
+}
+
+.tx-ledger-amount[data-tx-type="income"] {
+  color: var(--income-color);
+}
+
+.tx-ledger-amount[data-tx-type="expense"] {
+  color: var(--expense-color);
+}
+
+
 

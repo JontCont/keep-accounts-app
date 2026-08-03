@@ -22,19 +22,7 @@ export const TransactionLedgerRow: FC<TransactionLedgerRowProps> = ({
   const datePart = tx.date.substring(0, 10);
   const timePart = tx.date.includes('T') ? tx.date.substring(11, 16) : '';
   const isInstallment = !!tx.installmentId;
-  const amountColor =
-    tx.type === 'income'
-      ? 'var(--income-color)'
-      : tx.type === 'expense'
-        ? 'var(--expense-color)'
-        : 'var(--text-secondary)';
   const amountPrefix = tx.type === 'income' ? '+' : tx.type === 'expense' ? '-' : '±';
-  const badgeBackground =
-    tx.type === 'income'
-      ? 'var(--income-bg)'
-      : tx.type === 'expense'
-        ? 'var(--expense-bg)'
-        : 'var(--input-bg)';
 
   return (
     <div
@@ -49,19 +37,7 @@ export const TransactionLedgerRow: FC<TransactionLedgerRowProps> = ({
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', overflow: 'hidden' }}>
-        <div
-          style={{
-            fontSize: '1.4rem',
-            width: '40px',
-            height: '40px',
-            borderRadius: '50%',
-            background: badgeBackground,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-          }}
-        >
+        <div className="tx-ledger-badge" data-tx-type={tx.type}>
           <AppIcon name={getCategoryEmoji(tx.category, tx.accountGroupId)} size={22} />
         </div>
         <div style={{ overflow: 'hidden' }}>
@@ -110,13 +86,7 @@ export const TransactionLedgerRow: FC<TransactionLedgerRowProps> = ({
           flexShrink: 0,
         }}
       >
-        <span
-          style={{
-            fontWeight: 600,
-            fontSize: '0.95rem',
-            color: amountColor,
-          }}
-        >
+        <span className="tx-ledger-amount" data-tx-type={tx.type}>
           {amountPrefix}${tx.amount.toLocaleString('zh-TW')}
         </span>
 
