@@ -2,7 +2,7 @@ import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate';
-import { AccountGroup, Transaction } from '../app';
+import { AccountGroup, Transaction, STORAGE_KEYS } from '@keep-accounts-app/domain';
 
 export interface ImportRecord {
   id: string;
@@ -71,7 +71,7 @@ export const decompressBackup = (zipBytes: Uint8Array): BackupData => {
 
 // 4. Import History Logging helpers
 export const getImportHistory = (): ImportRecord[] => {
-  const history = localStorage.getItem('keep_accounts_import_history');
+  const history = localStorage.getItem(STORAGE_KEYS.SYSTEM.IMPORT_HISTORY);
   return history ? JSON.parse(history) : [];
 };
 
@@ -95,7 +95,7 @@ export const logImport = (
     errorMessage,
   };
   history.unshift(newEntry);
-  localStorage.setItem('keep_accounts_import_history', JSON.stringify(history));
+  localStorage.setItem(STORAGE_KEYS.SYSTEM.IMPORT_HISTORY, JSON.stringify(history));
   return newEntry;
 };
 

@@ -1,5 +1,5 @@
 import { Capacitor } from '@capacitor/core';
-import { AccountGroup, Transaction } from '@keep-accounts-app/domain';
+import { AccountGroup, Transaction, STORAGE_KEYS } from '@keep-accounts-app/domain';
 import type {
   HistoryPageResult,
   StatsAggregationResult,
@@ -12,8 +12,8 @@ export interface KeepAccountsSnapshot {
   transactions: Transaction[];
 }
 
-const GROUPS_KEY = 'keep_accounts_groups';
-const TRANSACTIONS_KEY = 'keep_accounts_transactions';
+const GROUPS_KEY = STORAGE_KEYS.ACCOUNTS.GROUPS;
+const TRANSACTIONS_KEY = STORAGE_KEYS.ACCOUNTS.TRANSACTIONS;
 const SQLITE_MIGRATION_MARKER = 'keep_accounts_sqlite_v2_migrated';
 
 const readLocalSnapshot = (): KeepAccountsSnapshot => {

@@ -6,6 +6,7 @@ import {
   getDefaultCategoriesForNewGroup,
   getLocalISOString,
   expandInstallment,
+  STORAGE_KEYS,
 } from '@keep-accounts-app/domain';
 import { migrateAccountGroups } from './migrations';
 import {
@@ -30,7 +31,7 @@ export function useKeepAccounts() {
   const RECENT_CACHE_LIMIT = 200;
   const hasHydratedPersistenceRef = useRef(true);
   const [accountGroups, setAccountGroups] = useState<AccountGroup[]>(() => {
-    const saved = localStorage.getItem('keep_accounts_groups');
+    const saved = localStorage.getItem(STORAGE_KEYS.ACCOUNTS.GROUPS);
     if (saved) {
       try {
         return migrateAccountGroups(JSON.parse(saved));
@@ -46,7 +47,7 @@ export function useKeepAccounts() {
   });
 
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
-    const saved = localStorage.getItem('keep_accounts_transactions');
+    const saved = localStorage.getItem(STORAGE_KEYS.ACCOUNTS.TRANSACTIONS);
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -96,9 +97,9 @@ export function useKeepAccounts() {
       return;
     }
 
-    localStorage.setItem('keep_accounts_groups', JSON.stringify(accountGroups));
+    localStorage.setItem(STORAGE_KEYS.ACCOUNTS.GROUPS, JSON.stringify(accountGroups));
     if (!nativeMode) {
-      localStorage.setItem('keep_accounts_transactions', JSON.stringify(transactions));
+      localStorage.setItem(STORAGE_KEYS.ACCOUNTS.TRANSACTIONS, JSON.stringify(transactions));
       void saveKeepAccountsSnapshot({
         accountGroups,
         transactions,
