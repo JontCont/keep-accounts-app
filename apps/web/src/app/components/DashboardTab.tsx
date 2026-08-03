@@ -630,14 +630,16 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                       marginTop: '12px',
                       color: isSrc
                         ? 'var(--income-color)'
-                        : bal >= 0
+                        : remaining >= 0
                         ? 'var(--text-primary)'
                         : 'var(--expense-color)',
                     }}
                   >
                     {isSrc
                       ? `+$${sourcePool.toLocaleString('zh-TW')}`
-                      : `$${bal.toLocaleString('zh-TW')}`}
+                      : remaining < 0
+                      ? `-$${Math.abs(remaining).toLocaleString('zh-TW')}`
+                      : `$${remaining.toLocaleString('zh-TW')}`}
                   </div>
 
                   {isSrc ? (
@@ -672,8 +674,10 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                           分配額 {targetRatio}% (${allocated.toLocaleString('zh-TW')})
                         </span>
                         <span style={{ whiteSpace: 'nowrap' }}>
-                          已用 ${monthlyExpense.toLocaleString('zh-TW')}／餘 $
-                          {remaining.toLocaleString('zh-TW')}
+                          已用 ${monthlyExpense.toLocaleString('zh-TW')}／餘{' '}
+                          {remaining < 0
+                            ? `-$${Math.abs(remaining).toLocaleString('zh-TW')}`
+                            : `$${remaining.toLocaleString('zh-TW')}`}
                         </span>
                       </div>
                       <div

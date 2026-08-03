@@ -323,6 +323,34 @@ describe('App', () => {
     expect(getAllByText('+$500').length).toBe(2);
   });
 
+  it('displays current month remaining balance on account group cards and excludes past month expenses', () => {
+    const now = new Date();
+    const currentMonthPrefix = now.toISOString().substring(0, 7);
+    const pastMonthDate = '2025-01-15T10:00:00+08:00';
+    const currentMonthDate = `${currentMonthPrefix}-05T10:00:00+08:00`;
+
+    const groups = [
+      { id: '0', name: '當月薪資', emoji: 'briefcase', color: '#22c55e', isSource: true, categories: [] },
+      { id: '1', name: '日常開銷', emoji: 'credit-card', color: '#6366f1', targetRatio: 30, categories: [] },
+    ];
+    localStorage.setItem('keep_accounts_groups', JSON.stringify(groups));
+
+    const mockTxs: Transaction[] = [
+      { id: 'inc-1', description: '本月薪資', amount: 100000, type: 'income', category: '薪資收入', date: currentMonthDate, accountGroupId: '0' },
+      { id: 'exp-past', description: '去年舊支出', amount: 50000, type: 'expense', category: '餐飲食品', date: pastMonthDate, accountGroupId: '1' },
+      { id: 'exp-curr', description: '本月支出', amount: 4814, type: 'expense', category: '餐飲食品', date: currentMonthDate, accountGroupId: '1' },
+    ];
+    localStorage.setItem('keep_accounts_transactions', JSON.stringify(mockTxs));
+
+    const { getByText } = render(<BrowserRouter><App /></BrowserRouter>);
+
+    // Total monthly bound income is 100,000. Target for 日常開銷 is 30% -> $30,000.
+    // Current month expense is $4,814.
+    // Remaining balance should be $30,000 - $4,814 = $25,186 (past month $50,000 expense is excluded).
+    expect(getByText('$25,186')).toBeTruthy();
+    expect(getByText(/已用 \$4,814／餘 \$25,186/)).toBeTruthy();
+  });
+
   it('shows dashboard detail rows for the selected period', () => {
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
