@@ -2,7 +2,7 @@ name: Mobile Builds CI
 
 on:
   push:
-    branches: [ master ]
+    branches: [master]
 
 jobs:
   # Stage 1: Build & verify once. This job gates all packaging jobs below.
@@ -89,12 +89,17 @@ jobs:
           ./gradlew assembleDebug
         working-directory: apps/web/android
 
-      - name: Upload Android Debug APK
+      - name: Name Android APK
+        env:
+          APK_FILE: ${{ needs.build.outputs.version }}.apk
+        run: mv apps/web/android/app/build/outputs/apk/debug/app-debug.apk "$APK_FILE"
+
+      - name: Upload Android APK for publishing
         uses: actions/upload-artifact@v4
         with:
-          name: app-${{ needs.build.outputs.version }}.apk
-          path: apps/web/android/app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 10
+          name: android-apk
+          path: ${{ needs.build.outputs.version }}.apk
+          retention-days: 1
 
   # Stage 2b: Package iOS from the shared web build.
   package-ios:
@@ -150,14 +155,56 @@ jobs:
         working-directory: apps/web/ios/App
 
       - name: Package iOS IPA
+        env:
+          IPA_FILE: ${{ needs.build.outputs.version }}.ipa
         run: |
           mkdir Payload
           cp -r apps/web/ios/App/build/Build/Products/Debug-iphoneos/App.app Payload/
-          zip -r App.ipa Payload
+          zip -r "$IPA_FILE" Payload
 
-      - name: Upload iOS IPA Artifact
+      - name: Upload iOS IPA for publishing
         uses: actions/upload-artifact@v4
         with:
-          name: App-${{ needs.build.outputs.version }}.ipa
-          path: App.ipa
-          retention-days: 10
+          name: ios-ipa
+          path: ${{ needs.build.outputs.version }}.ipa
+          retention-days: 1
+
+  # Stage 3: Publish the platform packages as direct release downloads.
+  publish-mobile-build:
+    needs: [build, package-android, package-ios]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download Android APK
+        uses: actions/download-artifact@v4
+        with:
+          name: android-apk
+          path: release-assets
+
+      - name: Download iOS IPA
+        uses: actions/download-artifact@v4
+        with:
+          name: ios-ipa
+          path: release-assets
+
+      - name: Publish mobile build release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ needs.build.outputs.version }}
+          name: Mobile build ${{ needs.build.outputs.version }}
+          prerelease: true
+          files: |
+            release-assets/${{ needs.build.outputs.version }}.apk
+            release-assets/${{ needs.build.outputs.version }}.ipa
+
+      - name: Remove expired mobile build releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cutoff="$(date -u --date='10 days ago' +%Y-%m-%dT%H:%M:%SZ)"
+          gh release list --limit 1000 --json tagName,createdAt,isPrerelease \
+            --jq ".[] | select(.isPrerelease and (.tagName | startswith(\"build-\")) and (.createdAt < \"$cutoff\")) | .tagName" |
+            while IFS= read -r tag; do
+              [ -n "$tag" ] && gh release delete "$tag" --cleanup-tag --yes
+            done
