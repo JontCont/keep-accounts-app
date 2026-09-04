@@ -240,29 +240,17 @@ button {
   transform: translateX(-50%);
   border-radius: 24px;
   padding: 8px 6px;
-  transition: padding 0.2s ease, border-radius 0.2s ease, box-shadow 0.2s ease, width 0.2s ease;
-}
-
-.bottom-nav--compact {
-  border-radius: 18px;
-  padding: 4px;
-  width: max-content !important;
-  max-width: calc(100% - 24px);
-  justify-content: center !important;
-  gap: 6px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 250, 252, 0.86));
-  border-color: rgba(148, 163, 184, 0.2) !important;
-  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.12), 0 4px 10px rgba(15, 23, 42, 0.08) !important;
+  min-height: 64px;
 }
 
 .bottom-nav-button {
   position: relative;
-  gap: 4px;
+  justify-content: center;
   padding: 6px 12px;
   border-radius: 14px;
-  min-height: 44px;
+  min-height: 48px;
   min-width: 64px;
-  transition: padding 0.2s ease, gap 0.2s ease, color 0.2s ease, background-color 0.2s ease;
+  transition: color 0.2s ease, background-color 0.2s ease;
 }
 
 .bottom-nav-button.active {
@@ -278,51 +266,6 @@ button {
   width: 14px;
   height: 3px;
   border-radius: 99px;
-}
-
-.bottom-nav-label {
-  line-height: 1;
-  max-height: 1rem;
-  opacity: 1;
-  transform: translateY(0);
-  transform-origin: top center;
-  transition: max-height 0.2s ease, opacity 0.18s ease, transform 0.18s ease;
-}
-
-.bottom-nav--compact .bottom-nav-button {
-  gap: 0;
-  padding: 8px 10px;
-  min-width: 46px;
-  min-height: 42px;
-  border-radius: 12px;
-  color: var(--text-secondary) !important;
-}
-
-.bottom-nav--compact .bottom-nav-button svg {
-  width: 18px;
-  height: 18px;
-}
-
-.bottom-nav--compact .bottom-nav-label {
-  max-height: 0;
-  opacity: 0;
-  transform: translateY(-6px);
-  pointer-events: none;
-}
-
-.bottom-nav--compact .bottom-nav-button.active {
-  color: var(--primary-color) !important;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: inset 0 0 0 1px rgba(99, 102, 241, 0.08), 0 2px 7px rgba(15, 23, 42, 0.1);
-}
-
-.bottom-nav--compact .bottom-nav-button.active::after {
-  top: auto;
-  bottom: 3px;
-  width: 10px;
-  height: 3px;
-  background: currentColor;
-  opacity: 0.8;
 }
 
 /* Ionic Select & Action Sheet Glassmorphism Theme Styling */
@@ -474,6 +417,254 @@ ion-modal.modal-overlay {
 .transaction-entry-actions {
   flex: 0 0 auto;
   padding-bottom: calc(16px + env(safe-area-inset-bottom));
+}
+
+.transaction-entry-card--modal {
+  min-height: 0;
+}
+
+.transaction-entry-stepper {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 2px 0 16px;
+  padding: 0;
+  list-style: none;
+}
+
+.transaction-entry-stepper::before,
+.transaction-entry-stepper::after {
+  content: '';
+  position: absolute;
+  top: 15px;
+  left: 25%;
+  width: 50%;
+  height: 3px;
+  border-radius: 999px;
+}
+
+.transaction-entry-stepper::before {
+  background: var(--progress-track-bg);
+}
+
+.transaction-entry-stepper::after {
+  width: 0;
+  background: var(--income-color);
+  transition: width 180ms ease;
+}
+
+.transaction-entry-stepper--details::after {
+  width: 50%;
+}
+
+.transaction-entry-step {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  color: var(--text-tertiary);
+  font-size: 0.75rem;
+  line-height: 1.2;
+}
+
+.transaction-entry-step__number {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid var(--input-border);
+  border-radius: 50%;
+  background: var(--progress-track-bg);
+  color: var(--text-tertiary);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.transaction-entry-step__label {
+  text-align: center;
+}
+
+.transaction-entry-control-label {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.transaction-entry-type-switcher {
+  display: grid;
+  gap: 8px;
+}
+
+.transaction-entry-type-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.transaction-entry-type-option {
+  display: grid;
+  min-height: 64px;
+  place-content: center;
+  justify-items: center;
+  gap: 5px;
+  padding: 8px 4px;
+  border: 1px solid var(--input-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--card-bg);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.15;
+  transition: var(--transition-smooth);
+}
+
+.transaction-entry-type-option:hover:not(:disabled) {
+  border-color: var(--text-tertiary);
+  background: var(--input-bg-focus);
+}
+
+.transaction-entry-type-option[aria-pressed="true"] {
+  font-weight: 700;
+}
+
+.transaction-entry-type-option--expense[aria-pressed="true"] {
+  border-color: var(--expense-color);
+  background: rgba(244, 63, 94, 0.1);
+  color: var(--expense-color);
+}
+
+.transaction-entry-type-option--income[aria-pressed="true"] {
+  border-color: var(--income-color);
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--income-color);
+}
+
+.transaction-entry-type-option--transfer[aria-pressed="true"] {
+  border-color: var(--text-secondary);
+  background: var(--input-bg-focus);
+  color: var(--text-primary);
+}
+
+.transaction-entry-type-option:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.transaction-entry-type-option:focus-visible,
+.transaction-entry-setup-mode button:focus-visible {
+  outline: 3px solid var(--primary-glow);
+  outline-offset: 2px;
+}
+
+.transaction-entry-payment-mode {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 10px;
+}
+
+.transaction-entry-setup-mode {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3px !important;
+  min-width: 0;
+  padding: 3px !important;
+  border: 1px solid var(--input-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--input-bg) !important;
+}
+
+.transaction-entry-setup-mode button {
+  min-height: 38px;
+  padding: 5px;
+  border: 1px solid transparent;
+  border-radius: 6px !important;
+  background: transparent !important;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.transaction-entry-setup-mode button[aria-pressed="true"] {
+  background: var(--primary-color) !important;
+  color: #fff;
+}
+
+@media (max-width: 360px) {
+  .transaction-entry-type-options {
+    gap: 5px;
+  }
+
+  .transaction-entry-type-option {
+    min-height: 58px;
+    padding-inline: 2px;
+    font-size: 0.72rem;
+  }
+
+  .transaction-entry-payment-mode {
+    gap: 6px;
+  }
+
+  .transaction-entry-payment-mode .transaction-entry-control-label {
+    font-size: 0.75rem;
+  }
+
+  .transaction-entry-setup-mode button {
+    padding-inline: 2px;
+    font-size: 0.72rem;
+  }
+
+  .transaction-entry-stepper {
+    margin-bottom: 14px;
+  }
+
+  .transaction-entry-stepper::before,
+  .transaction-entry-stepper::after {
+    top: 13px;
+  }
+
+  .transaction-entry-step__number {
+    width: 28px;
+    height: 28px;
+  }
+}
+
+.transaction-entry-step.is-current {
+  color: var(--primary-color);
+  font-weight: 600;
+}
+
+.transaction-entry-step.is-current .transaction-entry-step__number {
+  border-color: var(--primary-color);
+  background: var(--primary-color);
+  color: #fff;
+  box-shadow: 0 0 12px var(--primary-glow);
+}
+
+.transaction-entry-step.is-complete {
+  color: var(--income-color);
+  font-weight: 600;
+}
+
+.transaction-entry-step.is-complete .transaction-entry-step__number {
+  border-color: var(--income-color);
+  background: var(--income-color);
+  color: #fff;
+}
+
+.transaction-entry-step.is-pending {
+  color: var(--text-tertiary);
+}
+
+.transaction-entry-step.is-pending .transaction-entry-step__number {
+  background: var(--progress-track-bg);
 }
 
 /* Transaction Ledger Row type-based CSS rules */

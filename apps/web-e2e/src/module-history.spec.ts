@@ -40,22 +40,28 @@ test.describe('History module', () => {
     await expect(datetimeButton).toBeVisible();
     await datetimeButton.click();
 
-    const dateDialog = page.getByRole('dialog');
+    const dateDialog = page.getByRole('dialog').last();
     await expect(dateDialog).toBeVisible();
-    await expect(
-      dateDialog.locator('ion-datetime .calendar-day:not([disabled]):not(.calendar-day-adjacent-day)').first()
-    ).toBeVisible();
+    await expect(page.getByRole('button', { name: /Today/ })).toBeVisible();
     await captureCheckpoint(page, testInfo, 'history-mobile-date-picker');
     await page.keyboard.press('Escape');
 
-    await page.getByRole('button', { name: '分期', exact: true }).click();
+    const installmentTab = page.getByRole('button', { name: '分期', exact: true });
+    await installmentTab.click();
+    await expect(installmentTab).toHaveAttribute('aria-pressed', 'true');
+    const fields = page.locator('.transaction-entry-fields');
+    expect(await fields.evaluate((element) => element.scrollTop)).toBe(0);
+    const installmentStepper = page.getByLabel('新增記帳步驟');
+    await expect(installmentStepper.getByText('交易設定', { exact: true })).toBeVisible();
+    await captureCheckpoint(page, testInfo, 'history-mobile-transaction-setup');
+    await page.getByRole('button', { name: '下一步' }).click();
+    await expect(installmentStepper.getByText('詳細資料', { exact: true })).toBeVisible();
     const installmentName = page.locator('ion-input[placeholder="例如: 手機分期、家電分期"]');
     await installmentName.locator('input').focus();
     await setIonInputValue(page, '例如: 手機分期、家電分期', 'Mobile installment');
     await setIonInputValue(page, '輸入分期總額', '1200');
     await setIonInputValue(page, '例如: 12', '3');
 
-    const fields = page.locator('.transaction-entry-fields');
     await expect(fields).toBeVisible();
     const canScroll = await fields.evaluate((element) => {
       element.scrollTop = element.scrollHeight;
@@ -72,6 +78,6 @@ test.describe('History module', () => {
     await captureCheckpoint(page, testInfo, 'history-mobile-installment-entry');
 
     await page.getByRole('button', { name: '儲存' }).click();
-    await expect(page.getByText('Mobile installment')).toBeVisible();
+    await expect(page.getByTestId('history-flat-row').filter({ hasText: 'Mobile installment' }).first()).toBeVisible();
   });
 });

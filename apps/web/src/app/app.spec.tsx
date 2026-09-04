@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, fireEvent, renderHook, act, within, waitFor } from '@testing-library/react';
+import { render, fireEvent, renderHook, act, screen, within, waitFor } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { useKeepAccounts } from '@keep-accounts-app/state';
 
@@ -80,9 +80,9 @@ describe('App', () => {
     ];
     localStorage.setItem('keep_accounts_transactions', JSON.stringify(mockTxs));
 
-    const { getByText, getByTitle, getAllByText } = render(<BrowserRouter><App /></BrowserRouter>);
+    const { getByTitle, getAllByText } = render(<BrowserRouter><App /></BrowserRouter>);
 
-    fireEvent.click(getByText('明細'));
+    fireEvent.click(screen.getByRole('button', { name: '明細' }));
     const installmentRow = getAllByText('手機分期')[0].closest('.glass-card') as HTMLElement;
     expect(installmentRow.textContent).toContain('分期');
     expect(within(installmentRow).queryByTitle('編輯')).toBeNull();
@@ -96,11 +96,12 @@ describe('App', () => {
     expect(getAllByText(new RegExp('Keep Accounts', 'gi')).length > 0).toBeTruthy();
   });
 
-  it('auto-compacts bottom navigation on downward scroll and keeps tabs usable in compact mode', () => {
+  it('keeps bottom navigation icon-only and fixed while scrolling', () => {
     const { container, getByTestId } = render(<BrowserRouter><App /></BrowserRouter>);
 
     const nav = getByTestId('bottom-nav');
-    expect(nav.className).toContain('bottom-nav--expanded');
+    const initialClassName = nav.className;
+    expect(initialClassName).toBe('bottom-nav');
 
     act(() => {
       dispatchIonScroll(container, 24);
@@ -108,57 +109,38 @@ describe('App', () => {
       dispatchIonScroll(container, 168);
     });
 
-    expect(nav.className).toContain('bottom-nav--compact');
-    expect(within(nav).getByText('總覽')).toBeTruthy();
-    expect(within(nav).getByText('明細')).toBeTruthy();
-    expect(within(nav).getByText('分析')).toBeTruthy();
-    expect(within(nav).getByText('設定')).toBeTruthy();
+    expect(nav.className).toBe(initialClassName);
+    expect(within(nav).queryByText('總覽')).toBeNull();
+    expect(within(nav).queryByText('明細')).toBeNull();
+    expect(within(nav).queryByText('分析')).toBeNull();
+    expect(within(nav).queryByText('設定')).toBeNull();
 
-    const activeTabButton = within(nav).getByText('總覽').closest('button');
-    expect(activeTabButton).toBeTruthy();
-    expect(activeTabButton?.className).toContain('active');
-  });
-
-  it('auto-expands bottom navigation on upward scroll after being compacted', () => {
-    const { container, getByTestId } = render(<BrowserRouter><App /></BrowserRouter>);
-
-    const nav = getByTestId('bottom-nav');
+    const dashboardButton = within(nav).getByRole('button', { name: '總覽' });
+    expect(dashboardButton.getAttribute('aria-current')).toBe('page');
+    expect(within(nav).getByRole('button', { name: '明細' }).getAttribute('aria-current')).toBeNull();
+    expect(within(nav).getByRole('button', { name: '分析' }).getAttribute('aria-current')).toBeNull();
+    expect(within(nav).getByRole('button', { name: '設定' }).getAttribute('aria-current')).toBeNull();
 
     act(() => {
-      dispatchIonScroll(container, 32);
-      dispatchIonScroll(container, 120);
-      dispatchIonScroll(container, 196);
-    });
-    expect(nav.className).toContain('bottom-nav--compact');
-
-    act(() => {
-      dispatchIonScroll(container, 172);
-      dispatchIonScroll(container, 148);
       dispatchIonScroll(container, 118);
+      dispatchIonScroll(container, 56);
     });
 
-    expect(nav.className).toContain('bottom-nav--expanded');
+    expect(nav.className).toBe(initialClassName);
   });
 
   it('hides bottom navigation while transaction entry page is active', () => {
-    const { container, getByTestId, getByText } = render(<BrowserRouter><App /></BrowserRouter>);
+    const { getByTestId, getByText } = render(<BrowserRouter><App /></BrowserRouter>);
 
     const nav = getByTestId('bottom-nav');
 
-    act(() => {
-      dispatchIonScroll(container, 30);
-      dispatchIonScroll(container, 108);
-      dispatchIonScroll(container, 184);
-    });
-    expect(nav.className).toContain('bottom-nav--compact');
-
     fireEvent.click(getByText('新增記帳明細'));
     expect(getByText('新增收支記帳')).toBeTruthy();
-    expect(nav.className).toContain('bottom-nav--expanded');
+    expect(nav.className).toBe('bottom-nav');
     expect((nav as HTMLElement).style.visibility).toBe('hidden');
   });
 
-  it('keeps header title behavior stable while bottom nav presentation changes', () => {
+  it('keeps header title behavior stable while content scrolls', () => {
     const { container, getByText, queryByText } = render(<BrowserRouter><App /></BrowserRouter>);
 
     expect(getByText('Keep Accounts')).toBeTruthy();
@@ -175,7 +157,7 @@ describe('App', () => {
     expect(getByText('Keep Accounts')).toBeTruthy();
     expect(getByText('精緻微型記帳系統')).toBeTruthy();
 
-    fireEvent.click(getByText('明細'));
+    fireEvent.click(screen.getByRole('button', { name: '明細' }));
     expect(getByText('歷史交易明細')).toBeTruthy();
     expect(queryByText('精緻微型記帳系統')).toBeNull();
   });
@@ -256,7 +238,7 @@ describe('App', () => {
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
     const { getByText, getByRole } = render(<BrowserRouter><App /></BrowserRouter>);
 
-    fireEvent.click(getByText('設定'));
+    fireEvent.click(screen.getByRole('button', { name: '設定' }));
     fireEvent.click(getByRole('button', { name: /導入範例模板資料/ }));
 
     const storedGroups = JSON.parse(localStorage.getItem('keep_accounts_groups') || '[]');
@@ -486,7 +468,7 @@ describe('App', () => {
   it('opens the transaction entry page when choosing the general option from the history create menu', () => {
     const { getByText, getByTitle } = render(<BrowserRouter><App /></BrowserRouter>);
 
-    fireEvent.click(getByText('明細'));
+    fireEvent.click(screen.getByRole('button', { name: '明細' }));
     fireEvent.click(getByTitle('新增記帳'));
 
     fireEvent.click(getByText('一般記帳'));
@@ -497,10 +479,11 @@ describe('App', () => {
   it('opens installment mode when choosing the installment option from the history create menu', () => {
     const { getByText, getByTitle } = render(<BrowserRouter><App /></BrowserRouter>);
 
-    fireEvent.click(getByText('明細'));
+    fireEvent.click(screen.getByRole('button', { name: '明細' }));
     fireEvent.click(getByTitle('新增記帳'));
 
     fireEvent.click(getByText('分期記帳'));
+    fireEvent.click(screen.getByRole('button', { name: '下一步' }));
 
     expect(getByText('分期總額 ($)')).toBeTruthy();
   });
@@ -514,7 +497,7 @@ describe('App', () => {
     const { getByText, getByTitle, container } = render(<BrowserRouter><App /></BrowserRouter>);
     
     // Switch to History tab
-    const historyTabBtn = getByText('明細');
+    const historyTabBtn = screen.getByRole('button', { name: '明細' });
     fireEvent.click(historyTabBtn);
     
     // We should see the mock transaction description in the list
@@ -537,24 +520,24 @@ describe('App', () => {
   });
 
   it('returns to dashboard when backing out from a dashboard-origin transaction entry page', () => {
-    const { getByText, getByTitle } = render(<BrowserRouter><App /></BrowserRouter>);
+    const { getByText } = render(<BrowserRouter><App /></BrowserRouter>);
 
     fireEvent.click(getByText('新增記帳明細'));
     expect(getByText('新增收支記帳')).toBeTruthy();
 
-    fireEvent.click(getByTitle('返回上一頁'));
+    fireEvent.click(screen.getByRole('button', { name: '返回' }));
     expect(getByText('Keep Accounts')).toBeTruthy();
   });
 
   it('returns to history when backing out from a history-origin transaction entry page', () => {
     const { getByText, getByTitle } = render(<BrowserRouter><App /></BrowserRouter>);
 
-    fireEvent.click(getByText('明細'));
+    fireEvent.click(screen.getByRole('button', { name: '明細' }));
     fireEvent.click(getByTitle('新增記帳'));
     fireEvent.click(getByText('一般記帳'));
     expect(getByText('新增收支記帳')).toBeTruthy();
 
-    fireEvent.click(getByTitle('返回上一頁'));
+    fireEvent.click(screen.getByRole('button', { name: '返回' }));
     expect(getByText('歷史交易明細')).toBeTruthy();
   });
 });
@@ -817,7 +800,7 @@ describe('Credit-card installments', () => {
     expect(getByText('$49,000')).toBeTruthy();
 
     // History still lists all three periods, including the future-dated ones.
-    fireEvent.click(getByText('明細'));
+    fireEvent.click(screen.getByRole('button', { name: '明細' }));
     expect(getAllByText('分期消費').length).toBe(3);
   });
 
@@ -825,9 +808,10 @@ describe('Credit-card installments', () => {
     const { getByText, getByTitle, queryByText } = render(<BrowserRouter><App /></BrowserRouter>);
 
     // Open the history create menu and enter installment mode directly
-    fireEvent.click(getByText('明細'));
+    fireEvent.click(screen.getByRole('button', { name: '明細' }));
     fireEvent.click(getByTitle('新增記帳'));
     fireEvent.click(getByText('分期記帳'));
+    fireEvent.click(screen.getByRole('button', { name: '下一步' }));
 
     expect(getByText('分期總額 ($)')).toBeTruthy();
 
@@ -856,7 +840,7 @@ describe('Credit-card installments', () => {
 
     const { getByText, getAllByText } = render(<BrowserRouter><App /></BrowserRouter>);
 
-    fireEvent.click(getByText('明細'));
+    fireEvent.click(screen.getByRole('button', { name: '明細' }));
     fireEvent.click(getAllByText('分期')[0]);
 
     expect(getByText('手機分期')).toBeTruthy();
@@ -975,7 +959,7 @@ describe('Credit-card installments', () => {
 
     const { getByText, getAllByText, getAllByTitle, container } = render(<BrowserRouter><App /></BrowserRouter>);
 
-    fireEvent.click(getByText('明細'));
+    fireEvent.click(screen.getByRole('button', { name: '明細' }));
     fireEvent.click(getAllByText('分期')[0]);
 
     fireEvent.click(getAllByTitle('編輯單期')[1]);
@@ -1019,7 +1003,7 @@ describe('Credit-card installments', () => {
     });
 
     const { getByText, getAllByText } = render(<BrowserRouter><App /></BrowserRouter>);
-    fireEvent.click(getByText('明細'));
+    fireEvent.click(screen.getByRole('button', { name: '明細' }));
     fireEvent.click(getAllByText('分期')[0]);
 
     expect(getByText('已繳 0 / 5 期 · 總額 $9,995 · 剩餘 $9,995')).toBeTruthy();

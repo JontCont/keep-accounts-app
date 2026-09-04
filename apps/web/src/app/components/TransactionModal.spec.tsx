@@ -101,7 +101,7 @@ describe('TransactionModal', () => {
     expect(computeStockAmount('10', '0')).toBe('');
   });
 
-  it('shows installment start-month controls', () => {
+  it('shows installment start-month controls after combined setup', () => {
     const accountGroups = [
       {
         id: '1',
@@ -127,11 +127,193 @@ describe('TransactionModal', () => {
       </BrowserRouter>
     );
 
+    expect(getByText('選擇資金帳戶大項')).toBeTruthy();
     fireEvent.click(getByText('分期'));
+    expect(getByText('下一步')).toBeTruthy();
+    fireEvent.click(getByText('下一步'));
+    expect(getByText('詳細資料')).toBeTruthy();
     expect(getByText('開始扣款月份')).toBeTruthy();
     expect(getByText('下一期')).toBeTruthy();
     expect(getByText('前一個月')).toBeTruthy();
     expect(getByText('前三個月')).toBeTruthy();
+  });
+
+  it('shows basic details only after combined setup without saving', () => {
+    const accountGroups = [
+      {
+        id: '1',
+        name: '日常開銷',
+        emoji: 'credit-card',
+        color: '#6366f1',
+        targetRatio: 100,
+        categories: [
+          { name: '購物消費', emoji: 'shopping-cart', color: '#10b981', type: 'expense' },
+        ],
+      },
+    ];
+    const onSave = vi.fn();
+
+    const { getByRole, getByText, queryByPlaceholderText } = render(
+      <BrowserRouter>
+        <TransactionModal
+          isOpen={true}
+          onClose={vi.fn()}
+          editingTx={null}
+          accountGroups={accountGroups as any}
+          onSave={onSave}
+        />
+      </BrowserRouter>
+    );
+
+    expect(getByRole('list', { name: '新增記帳步驟' })).toBeTruthy();
+    expect(getByText('交易設定')).toBeTruthy();
+    expect(getByText('交易類型')).toBeTruthy();
+    expect(getByText('選擇資金帳戶大項')).toBeTruthy();
+    expect(getByText('選擇分類')).toBeTruthy();
+    expect(getByText('交易日期與時間')).toBeTruthy();
+    expect(queryByPlaceholderText('例如: 買咖啡、午餐、薪水')).toBeNull();
+
+    fireEvent.click(getByRole('button', { name: '下一步' }));
+
+    expect(getByText('詳細資料')).toBeTruthy();
+    expect(queryByPlaceholderText('例如: 買咖啡、午餐、薪水')).toBeTruthy();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('replaces the setup next button instead of reusing it as submit', () => {
+    const accountGroups = [
+      {
+        id: '1',
+        name: '日常開銷',
+        emoji: 'credit-card',
+        color: '#6366f1',
+        targetRatio: 100,
+        categories: [
+          { name: '購物消費', emoji: 'shopping-cart', color: '#10b981', type: 'expense' },
+        ],
+      },
+    ];
+
+    const { getByRole } = render(
+      <BrowserRouter>
+        <TransactionModal
+          isOpen={true}
+          onClose={vi.fn()}
+          editingTx={null}
+          accountGroups={accountGroups as any}
+          onSave={vi.fn()}
+        />
+      </BrowserRouter>
+    );
+
+    const nextButton = getByRole('button', { name: '下一步' });
+    expect(nextButton.getAttribute('type')).toBe('button');
+
+    fireEvent.click(nextButton);
+
+    const saveButton = getByRole('button', { name: '儲存' });
+    expect(saveButton.getAttribute('type')).toBe('submit');
+    expect(saveButton).not.toBe(nextButton);
+  });
+
+  it('separates labeled transaction type and payment mode controls in setup', () => {
+    const accountGroups = [
+      {
+        id: '1',
+        name: '日常開銷',
+        emoji: 'credit-card',
+        color: '#6366f1',
+        targetRatio: 100,
+        categories: [
+          { name: '購物消費', emoji: 'shopping-cart', color: '#10b981', type: 'expense' },
+        ],
+      },
+      {
+        id: '2',
+        name: '當月收入',
+        emoji: 'wallet',
+        color: '#10b981',
+        targetRatio: 100,
+        categories: [
+          { name: '薪資', emoji: 'briefcase', color: '#10b981', type: 'income' },
+        ],
+      },
+    ];
+
+    const { container, getByRole, getByText, queryByText } = render(
+      <BrowserRouter>
+        <TransactionModal
+          isOpen={true}
+          onClose={vi.fn()}
+          editingTx={null}
+          accountGroups={accountGroups as any}
+          onSave={vi.fn()}
+        />
+      </BrowserRouter>
+    );
+
+    expect(getByText('交易類型')).toBeTruthy();
+    expect(getByText('付款方式')).toBeTruthy();
+    expect(container.querySelectorAll('.transaction-entry-type-option')).toHaveLength(3);
+    expect(getByRole('button', { name: '支出' }).getAttribute('aria-pressed')).toBe('true');
+    expect(container.querySelector('.transaction-entry-card')?.className).not.toContain(
+      'transaction-entry-card--content-fit'
+    );
+
+    fireEvent.click(getByRole('button', { name: '收入' }));
+
+    expect(getByRole('button', { name: '收入' }).getAttribute('aria-pressed')).toBe('true');
+    expect(queryByText('付款方式')).toBeNull();
+    expect(container.querySelector('.transaction-entry-card')?.className).toContain(
+      'transaction-entry-card--content-fit'
+    );
+  });
+
+  it('keeps new installment details when returning to setup', () => {
+    const accountGroups = [
+      {
+        id: '1',
+        name: '日常開銷',
+        emoji: 'credit-card',
+        color: '#6366f1',
+        targetRatio: 100,
+        categories: [
+          { name: '購物消費', emoji: 'shopping-cart', color: '#10b981', type: 'expense' },
+        ],
+      },
+    ];
+    const onSave = vi.fn();
+
+    const { getByText, getByPlaceholderText, queryByPlaceholderText } = render(
+      <BrowserRouter>
+        <TransactionModal
+          isOpen={true}
+          onClose={vi.fn()}
+          editingTx={null}
+          accountGroups={accountGroups as any}
+          onSave={onSave}
+        />
+      </BrowserRouter>
+    );
+
+    fireEvent.click(getByText('分期'));
+    expect(getByText('選擇資金帳戶大項')).toBeTruthy();
+    expect(getByText('選擇分類')).toBeTruthy();
+    expect(queryByPlaceholderText('例如: 手機分期、家電分期')).toBeNull();
+
+    fireEvent.click(getByText('下一步'));
+    const nameInput = getByPlaceholderText('例如: 手機分期、家電分期');
+    fireEvent(
+      nameInput,
+      new CustomEvent('ionInput', { bubbles: true, detail: { value: '手機分期' } })
+    );
+
+    fireEvent.click(getByText('上一步'));
+    expect(onSave).not.toHaveBeenCalled();
+    expect(queryByPlaceholderText('例如: 手機分期、家電分期')).toBeNull();
+
+    fireEvent.click(getByText('下一步'));
+    expect((getByPlaceholderText('例如: 手機分期、家電分期') as any).value).toBe('手機分期');
   });
 
   it('associates the date trigger with the datetime and uses a scrollable page form layout', () => {
@@ -148,7 +330,7 @@ describe('TransactionModal', () => {
       },
     ];
 
-    const { container } = render(
+    const { container, getByRole } = render(
       <BrowserRouter>
         <TransactionModal
           isOpen={true}

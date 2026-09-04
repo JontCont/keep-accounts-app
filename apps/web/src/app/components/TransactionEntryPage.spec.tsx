@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
-import { render } from '@testing-library/react';
+import { fireEvent, render } from '@testing-library/react';
 import { TransactionEntryPage } from './TransactionEntryPage';
 
 vi.mock('@ionic/react', async (importOriginal) => {
@@ -29,8 +29,8 @@ describe('TransactionEntryPage', () => {
     },
   ];
 
-  it('renders create mode with empty defaults and no embedded title', () => {
-    const { queryByText, container } = render(
+  it('renders create mode as a modal transaction setup step', () => {
+    const { getByRole, getByTestId, getByText, queryByPlaceholderText, container } = render(
       <BrowserRouter>
         <TransactionEntryPage
           isOpen={true}
@@ -42,7 +42,16 @@ describe('TransactionEntryPage', () => {
       </BrowserRouter>
     );
 
-    expect(queryByText('新增收支記帳')).toBeNull();
+    expect(getByTestId('ion-modal')).toBeTruthy();
+    expect(getByText('新增收支記帳')).toBeTruthy();
+    expect(getByText('交易設定', { exact: true })).toBeTruthy();
+    expect(getByText('交易類型', { exact: true })).toBeTruthy();
+    expect(getByText('選擇資金帳戶大項')).toBeTruthy();
+    expect(queryByPlaceholderText('例如: 買咖啡、午餐、薪水')).toBeNull();
+    expect(queryByPlaceholderText('輸入金額')).toBeNull();
+
+    fireEvent.click(getByRole('button', { name: '下一步' }));
+    expect(getByText('詳細資料', { exact: true })).toBeTruthy();
 
     const descInput = container.querySelector('ion-input[placeholder*="例如"]') as any;
     expect(descInput).toBeTruthy();

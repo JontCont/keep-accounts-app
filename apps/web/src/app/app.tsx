@@ -41,10 +41,6 @@ export function App() {
       initialTab: 'basic' | 'installment';
     } | null;
 
-  const NAV_COLLAPSE_SCROLL_TOP_THRESHOLD = 72;
-  const NAV_COLLAPSE_DELTA_THRESHOLD = 48;
-  const NAV_EXPAND_DELTA_THRESHOLD = 28;
-
   const {
     accountGroups,
     transactions,
@@ -70,53 +66,16 @@ export function App() {
   // FAB scroll behavior state
   const [showFab, setShowFab] = useState(true);
   const lastScrollY = useRef(0);
-  const [navPresentation, setNavPresentation] = useState<'expanded' | 'compact'>('expanded');
-  const downScrollTravel = useRef(0);
-  const upScrollTravel = useRef(0);
-  const [hasFocusedInput, setHasFocusedInput] = useState(false);
 
   const isTransactionEntryActive = transactionEntryContext !== null;
 
-  const isHighPriorityInteractionActive =
-    isTransactionEntryActive || isEditingGroups || showHistoryCreateMenu || hasFocusedInput;
-
   const handleScroll = (e: CustomEvent<any>) => {
     const currentScrollY = Math.max(0, e.detail.scrollTop ?? 0);
-    const scrollDelta = currentScrollY - lastScrollY.current;
 
     if (currentScrollY > lastScrollY.current && currentScrollY > 50) {
       setShowFab(false);
     } else if (currentScrollY < lastScrollY.current) {
       setShowFab(true);
-    }
-
-    if (scrollDelta > 0) {
-      downScrollTravel.current += scrollDelta;
-      upScrollTravel.current = 0;
-
-      if (
-        !isHighPriorityInteractionActive &&
-        navPresentation === 'expanded' &&
-        currentScrollY > NAV_COLLAPSE_SCROLL_TOP_THRESHOLD &&
-        downScrollTravel.current >= NAV_COLLAPSE_DELTA_THRESHOLD
-      ) {
-        setNavPresentation('compact');
-        downScrollTravel.current = 0;
-      }
-    } else if (scrollDelta < 0) {
-      upScrollTravel.current += Math.abs(scrollDelta);
-      downScrollTravel.current = 0;
-
-      if (navPresentation === 'compact' && upScrollTravel.current >= NAV_EXPAND_DELTA_THRESHOLD) {
-        setNavPresentation('expanded');
-        upScrollTravel.current = 0;
-      }
-    }
-
-    if (currentScrollY <= 8 && navPresentation !== 'expanded') {
-      setNavPresentation('expanded');
-      downScrollTravel.current = 0;
-      upScrollTravel.current = 0;
     }
 
     lastScrollY.current = currentScrollY;
@@ -125,58 +84,7 @@ export function App() {
   useEffect(() => {
     setShowFab(true);
     lastScrollY.current = 0;
-    downScrollTravel.current = 0;
-    upScrollTravel.current = 0;
   }, [activeTab]);
-
-  useEffect(() => {
-    if (isHighPriorityInteractionActive && navPresentation !== 'expanded') {
-      setNavPresentation('expanded');
-      downScrollTravel.current = 0;
-      upScrollTravel.current = 0;
-    }
-  }, [isHighPriorityInteractionActive, navPresentation]);
-
-  useEffect(() => {
-    const isInteractiveTarget = (target: EventTarget | null) => {
-      if (!(target instanceof Element)) {
-        return false;
-      }
-
-      return target.matches(
-        [
-          'input',
-          'textarea',
-          'select',
-          'button[contenteditable="true"]',
-          '[contenteditable="true"]',
-          'ion-input',
-          'ion-textarea',
-          'ion-select',
-        ].join(',')
-      );
-    };
-
-    const handleFocusIn = (event: FocusEvent) => {
-      if (isInteractiveTarget(event.target)) {
-        setHasFocusedInput(true);
-      }
-    };
-
-    const handleFocusOut = () => {
-      requestAnimationFrame(() => {
-        setHasFocusedInput(isInteractiveTarget(document.activeElement));
-      });
-    };
-
-    document.addEventListener('focusin', handleFocusIn);
-    document.addEventListener('focusout', handleFocusOut);
-
-    return () => {
-      document.removeEventListener('focusin', handleFocusIn);
-      document.removeEventListener('focusout', handleFocusOut);
-    };
-  }, []);
 
   // Theme state and runtime application
   const storedTheme = localStorage.getItem('keep_accounts_theme') as 'system' | 'light' | 'dark' | null;
@@ -619,6 +527,7 @@ export function App() {
         <IonContent fullscreen scrollEvents={true} onIonScroll={handleScroll}>
           <div className="app-container">
             {/* Header */}
+            {!isTransactionEntryActive && (
             <header
               style={{
                 marginBottom: '20px',
@@ -629,7 +538,7 @@ export function App() {
             >
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  {!isTransactionEntryActive && activeTab === 'dashboard' && (
+                  {activeTab === 'dashboard' && (
                     <img
                       src="/keep-accounts-logo.svg"
                       alt="Keep Accounts logo"
@@ -652,42 +561,19 @@ export function App() {
                       transition: 'font-size 0.2s ease',
                     }}
                   >
-                    {isTransactionEntryActive && transactionEntryContext?.mode === 'create' && '新增收支記帳'}
-                    {isTransactionEntryActive && transactionEntryContext?.mode === 'edit' && '修改收支記帳'}
-                    {!isTransactionEntryActive && activeTab === 'dashboard' && 'Keep Accounts'}
-                    {!isTransactionEntryActive && activeTab === 'history' && '歷史交易明細'}
-                    {!isTransactionEntryActive && activeTab === 'stats' && '支出統計分析'}
-                    {!isTransactionEntryActive && activeTab === 'settings' && '系統設定'}
+                    {activeTab === 'dashboard' && 'Keep Accounts'}
+                    {activeTab === 'history' && '歷史交易明細'}
+                    {activeTab === 'stats' && '支出統計分析'}
+                    {activeTab === 'settings' && '系統設定'}
                   </h1>
                 </div>
-                {!isTransactionEntryActive && activeTab === 'dashboard' && (
+                {activeTab === 'dashboard' && (
                   <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0 }}>
                     精緻微型記帳系統
                   </p>
                 )}
               </div>
-              {isTransactionEntryActive ? (
-                <button
-                  type="button"
-                  onClick={closeTransactionEntry}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    background: 'var(--input-bg)',
-                    border: '1px solid var(--input-border)',
-                    borderRadius: '999px',
-                    padding: '8px 12px',
-                    color: 'var(--text-secondary)',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                  }}
-                  title="返回上一頁"
-                >
-                  <AppIcon name="chevron-down" size={14} style={{ transform: 'rotate(90deg)' }} />
-                  返回
-                </button>
-              ) : activeTab === 'dashboard' ? (
+              {activeTab === 'dashboard' ? (
                 <div style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', textAlign: 'right' }}>
                   <div>{new Date().toLocaleDateString('zh-TW', { weekday: 'long' })}</div>
                   <div style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>
@@ -695,7 +581,7 @@ export function App() {
                   </div>
                 </div>
               ) : null}
-              {!isTransactionEntryActive && activeTab === 'history' && (
+              {activeTab === 'history' && (
                 <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                   <button
                     onClick={() => setShowHistoryCreateMenu((current) => !current)}
@@ -795,6 +681,7 @@ export function App() {
                 </div>
               )}
             </header>
+            )}
 
             {/* Main Content Area */}
             <main style={{ flex: 1, paddingBottom: '120px' }}>
@@ -1200,9 +1087,7 @@ export function App() {
         <nav
           aria-label="底部導覽"
           data-testid="bottom-nav"
-          className={`bottom-nav ${
-            navPresentation === 'compact' ? 'bottom-nav--compact' : 'bottom-nav--expanded'
-          }`}
+          className="bottom-nav"
           style={{
             width: 'calc(100% - 32px)',
             maxWidth: '448px',
@@ -1224,6 +1109,8 @@ export function App() {
           <button
             onClick={() => setActiveTab('dashboard')}
             className={`bottom-nav-button ${activeTab === 'dashboard' ? 'active' : ''}`}
+            aria-label="總覽"
+            aria-current={activeTab === 'dashboard' ? 'page' : undefined}
             style={{
               display: 'flex',
               flexDirection: 'column',
@@ -1237,11 +1124,12 @@ export function App() {
             }}
           >
             <AppIcon name="home" size={20} />
-            <span className="bottom-nav-label">總覽</span>
           </button>
           <button
             onClick={() => setActiveTab('history')}
             className={`bottom-nav-button ${activeTab === 'history' ? 'active' : ''}`}
+            aria-label="明細"
+            aria-current={activeTab === 'history' ? 'page' : undefined}
             style={{
               display: 'flex',
               flexDirection: 'column',
@@ -1255,12 +1143,13 @@ export function App() {
             }}
           >
             <AppIcon name="book-open" size={20} />
-            <span className="bottom-nav-label">明細</span>
           </button>
 
           <button
             onClick={() => setActiveTab('stats')}
             className={`bottom-nav-button ${activeTab === 'stats' ? 'active' : ''}`}
+            aria-label="分析"
+            aria-current={activeTab === 'stats' ? 'page' : undefined}
             style={{
               display: 'flex',
               flexDirection: 'column',
@@ -1274,12 +1163,13 @@ export function App() {
             }}
           >
             <AppIcon name="bar-chart" size={20} />
-            <span className="bottom-nav-label">分析</span>
           </button>
 
           <button
             onClick={() => setActiveTab('settings')}
             className={`bottom-nav-button ${activeTab === 'settings' ? 'active' : ''}`}
+            aria-label="設定"
+            aria-current={activeTab === 'settings' ? 'page' : undefined}
             style={{
               display: 'flex',
               flexDirection: 'column',
@@ -1293,7 +1183,6 @@ export function App() {
             }}
           >
             <AppIcon name="settings" size={20} />
-            <span className="bottom-nav-label">設定</span>
           </button>
         </nav>
 

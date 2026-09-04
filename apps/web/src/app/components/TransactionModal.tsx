@@ -19,25 +19,39 @@ interface CustomSelectProps {
   options: { value: string; label: string; icon: string }[];
   onChange: (value: string) => void;
   placeholder?: string;
+  compact?: boolean;
 }
 
-const CustomSelect: React.FC<CustomSelectProps> = ({ value, options, onChange, placeholder }) => {
+const CustomSelect: React.FC<CustomSelectProps> = ({
+  value,
+  options,
+  onChange,
+  placeholder,
+  compact = false,
+}) => {
   const [isOpen, setIsOpen] = useState(false);
   const selectedOption = options.find(o => o.value === value);
+
+  const toggleMenu = () => {
+    if (!isOpen && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    setIsOpen((current) => !current);
+  };
 
   return (
     <div style={{ position: 'relative', width: '100%' }}>
       <div
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={toggleMenu}
         style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          padding: '10px 0',
+          padding: compact ? '6px 0' : '10px 0',
           borderBottom: '1px solid var(--input-border)',
           color: 'var(--text-primary)',
           cursor: 'pointer',
-          minHeight: '40px',
+          minHeight: compact ? '34px' : '40px',
           fontSize: '1rem',
           fontFamily: 'var(--font-family)',
           transition: 'var(--transition-smooth)',
@@ -338,6 +352,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
   // Installment (分期) configuration state
   const [activeTab, setActiveTab] = useState<'basic' | 'installment'>('basic');
+  const [transactionStep, setTransactionStep] = useState<'setup' | 'details'>('setup');
   const [installmentPeriods, setInstallmentPeriods] = useState('');
   const [installmentStartDate, setInstallmentStartDate] = useState(getLocalISOString());
   const [remindOnDueDate, setRemindOnDueDate] = useState(false);
@@ -349,10 +364,24 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const [stockRealizedGain, setStockRealizedGain] = useState('');
   const basicNameInputRef = useRef<any>(null);
   const installmentNameInputRef = useRef<any>(null);
+  const transactionFieldsRef = useRef<HTMLDivElement>(null);
 
   const reminderSupported = isNotificationSupported();
   // Installment configuration only applies to new expense entries.
   const canConfigureInstallment = !editingTx && type === 'expense';
+  const isNewTransaction = !editingTx;
+  const isTransactionSetup = isNewTransaction && transactionStep === 'setup';
+  const isTransactionDetails = isNewTransaction && transactionStep === 'details';
+  const shouldUseContentFitModal =
+    presentation === 'modal' && isTransactionSetup && !canConfigureInstallment;
+  const isInstallmentDetails =
+    isTransactionDetails && canConfigureInstallment && activeTab === 'installment';
+  const shouldShowBasicDetails = !canConfigureInstallment || activeTab === 'basic';
+  const scrollTransactionFieldsToTop = () => {
+    if (transactionFieldsRef.current) {
+      transactionFieldsRef.current.scrollTop = 0;
+    }
+  };
   // When editing a single period of an existing installment, the amount is a
   // computed split and must not be edited directly.
   const isEditingInstallment = !!editingTx?.installmentId;
@@ -421,6 +450,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     }
     // Reset installment config each time the modal opens.
     setActiveTab(editingTx ? 'basic' : initialTab);
+    setTransactionStep(editingTx ? 'details' : 'setup');
     setInstallmentPeriods('');
     setRemindOnDueDate(false);
     setNotificationTitle(DEFAULT_NOTIFICATION_TITLE);
@@ -434,10 +464,10 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   }, [incomeLocked, editingTx, type]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || (isNewTransaction && !isTransactionDetails)) return;
 
     const timer = window.setTimeout(() => {
-      const targetInput = canConfigureInstallment && activeTab === 'installment'
+      const targetInput = isInstallmentDetails
         ? installmentNameInputRef.current
         : basicNameInputRef.current;
 
@@ -445,7 +475,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [isOpen, activeTab, canConfigureInstallment]);
+  }, [isOpen, isNewTransaction, isTransactionDetails, isInstallmentDetails]);
 
   // Dynamically set category when group, type, or groups change
   useEffect(() => {
@@ -615,13 +645,17 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
   const card = (
     <div
-      className={`glass-card transaction-entry-card${presentation === 'page' ? ' transaction-entry-card--page' : ''}`}
+      className={`glass-card transaction-entry-card${presentation === 'page' ? ' transaction-entry-card--page' : ' transaction-entry-card--modal'}${shouldUseContentFitModal ? ' transaction-entry-card--content-fit' : ''}`}
       style={{
         width: '100%',
         maxWidth: presentation === 'modal' ? '400px' : '520px',
-        maxHeight: presentation === 'modal' ? '85vh' : undefined,
+        height:
+          presentation === 'modal' && !shouldUseContentFitModal
+            ? 'min(640px, calc(100dvh - 32px))'
+            : undefined,
+        maxHeight: presentation === 'modal' ? 'calc(100dvh - 32px)' : undefined,
         overflow: 'hidden',
-        padding: '24px',
+        padding: presentation === 'modal' ? '16px' : '24px',
         borderRadius: 'var(--border-radius-lg)',
         border: '1px solid var(--card-border)',
         background: 'var(--modal-card-bg)',
@@ -637,7 +671,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             fontWeight: 700,
             textAlign: 'center',
             margin: 0,
-            marginBottom: '16px',
+            marginBottom: '8px',
           }}
         >
           {editingTx ? '修改收支記帳' : '新增收支記帳'}
@@ -669,6 +703,28 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         </div>
       )}
 
+      {isNewTransaction && (
+        <ol
+          aria-label="新增記帳步驟"
+          className={`transaction-entry-stepper transaction-entry-stepper--${transactionStep}`}
+        >
+          <li
+            className={`transaction-entry-step ${isTransactionSetup ? 'is-current' : 'is-complete'}`}
+            aria-current={isTransactionSetup ? 'step' : undefined}
+          >
+            <span className="transaction-entry-step__number" aria-hidden="true">1</span>
+            <span className="transaction-entry-step__label">交易設定</span>
+          </li>
+          <li
+            className={`transaction-entry-step ${isTransactionDetails ? 'is-current' : 'is-pending'}`}
+            aria-current={isTransactionDetails ? 'step' : undefined}
+          >
+            <span className="transaction-entry-step__number" aria-hidden="true">2</span>
+            <span className="transaction-entry-step__label">詳細資料</span>
+          </li>
+        </ol>
+      )}
+
       <form
         onSubmit={handleSubmit}
         className="transaction-entry-form"
@@ -679,85 +735,66 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
           overflow: 'hidden',
         }}
       >
-        {/* Type Switcher (Fixed at top) */}
-        <div style={{ paddingBottom: '12px', borderBottom: '1px solid var(--card-border)', marginBottom: '12px' }}>
-          <label
-            style={{
-              display: 'block',
-              fontSize: '0.85rem',
-              color: 'var(--text-secondary)',
-              marginBottom: '8px',
-            }}
+        {(!isNewTransaction || isTransactionSetup) && (
+        <>
+        {/* Transaction type */}
+        <div className="transaction-entry-type-switcher">
+          <span
+            id="transaction-type-label"
+            className="transaction-entry-control-label"
           >
             交易類型
-          </label>
+          </span>
           <div
-            style={{
-              display: 'flex',
-              gap: '8px',
-              background: 'var(--input-bg)',
-              padding: '4px',
-              borderRadius: 'var(--border-radius-md)',
-            }}
+            className="transaction-entry-type-options"
+            role="group"
+            aria-labelledby="transaction-type-label"
           >
             <button
               type="button"
+              className="transaction-entry-type-option transaction-entry-type-option--expense"
               onClick={() => {
                 if (!isEditingInstallment) {
                   setType('expense');
                 }
               }}
-              style={{
-                flex: 1,
-                padding: '10px',
-                borderRadius: 'var(--border-radius-sm)',
-                fontWeight: 600,
-                background:
-                  type === 'expense' ? 'var(--expense-color)' : 'transparent',
-                color: type === 'expense' ? '#fff' : 'var(--text-secondary)',
-              }}
+              aria-pressed={type === 'expense'}
             >
-              支出 💸
+              <span aria-hidden="true">
+                <AppIcon name="arrow-down-left" size={18} />
+              </span>
+              <span>支出</span>
             </button>
             <button
               type="button"
+              className="transaction-entry-type-option transaction-entry-type-option--income"
               onClick={() => {
                 if (!isEditingInstallment && !(incomeLocked && !editingTx)) {
                   setType('income');
                 }
               }}
               disabled={incomeLocked && !editingTx}
-              style={{
-                flex: 1,
-                padding: '10px',
-                borderRadius: 'var(--border-radius-sm)',
-                fontWeight: 600,
-                background:
-                  type === 'income' ? 'var(--income-color)' : 'transparent',
-                color: type === 'income' ? '#fff' : 'var(--text-secondary)',
-                opacity: incomeLocked && !editingTx ? 0.55 : 1,
-                cursor: incomeLocked && !editingTx ? 'not-allowed' : 'pointer',
-              }}
+              aria-pressed={type === 'income'}
             >
-              收入 💰
+              <span aria-hidden="true">
+                <AppIcon name="arrow-up-right" size={18} />
+              </span>
+              <span>收入</span>
             </button>
             <button
               type="button"
+              className="transaction-entry-type-option transaction-entry-type-option--transfer"
               onClick={() => {
                 if (!isEditingInstallment) {
                   setType('transfer');
                 }
               }}
-              style={{
-                flex: 1,
-                padding: '10px',
-                borderRadius: 'var(--border-radius-sm)',
-                fontWeight: 600,
-                background: type === 'transfer' ? 'var(--text-tertiary)' : 'transparent',
-                color: type === 'transfer' ? '#fff' : 'var(--text-secondary)',
-              }}
+              aria-pressed={type === 'transfer'}
             >
-              不計損益 ↔
+              <span aria-hidden="true">
+                <AppIcon name="arrow-left-right" size={18} />
+              </span>
+              <span>不計損益</span>
             </button>
           </div>
           {incomeLocked && !editingTx && (
@@ -772,58 +809,62 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             </div>
           )}
         </div>
+        </>
+        )}
 
-        {/* Tab bar: 基本 / 分期 (new expense entries only) */}
-        {canConfigureInstallment && (
-          <div
-            style={{
-              display: 'flex',
-              gap: '4px',
-              marginBottom: '12px',
-              background: 'var(--input-bg)',
-              padding: '4px',
-              borderRadius: 'var(--border-radius-md)',
-            }}
-          >
-            {([
-              { key: 'basic', label: '基本' },
-              { key: 'installment', label: '分期' },
-            ] as const).map((tab) => (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => setActiveTab(tab.key)}
-                style={{
-                  flex: 1,
-                  padding: '8px',
-                  borderRadius: 'var(--border-radius-sm)',
-                  fontWeight: 600,
-                  fontSize: '0.85rem',
-                  background:
-                    activeTab === tab.key ? 'var(--primary-color)' : 'transparent',
-                  color: activeTab === tab.key ? '#fff' : 'var(--text-secondary)',
-                }}
-              >
-                {tab.label}
-              </button>
-            ))}
+        {/* Payment mode (new expense entries only) */}
+        {canConfigureInstallment && isTransactionSetup && (
+          <div className="transaction-entry-payment-mode">
+            <span
+              id="transaction-payment-mode-label"
+              className="transaction-entry-control-label"
+            >
+              付款方式
+            </span>
+            <div
+              className="transaction-entry-setup-mode"
+              role="group"
+              aria-labelledby="transaction-payment-mode-label"
+            >
+              {([
+                { key: 'basic', label: '基本' },
+                { key: 'installment', label: '分期' },
+              ] as const).map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => {
+                    if (tab.key === activeTab) {
+                      return;
+                    }
+
+                    setActiveTab(tab.key);
+                    scrollTransactionFieldsToTop();
+                  }}
+                  aria-pressed={activeTab === tab.key}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
         {/* Scrollable form fields wrapper */}
         <div
+          ref={transactionFieldsRef}
           className="transaction-entry-fields"
           style={{
             flex: 1,
             overflowY: 'auto',
             display: 'flex',
             flexDirection: 'column',
-            gap: '16px',
+            gap: '8px',
             paddingRight: '4px',
             paddingBottom: '16px',
           }}
         >
-        {(!canConfigureInstallment || activeTab === 'basic') && (
+        {(!isNewTransaction || isTransactionSetup) && (
         <>
         {/* Account Group selection */}
         <div>
@@ -859,6 +900,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 icon: group.emoji,
               }))}
               placeholder="選擇資金帳戶"
+              compact={isNewTransaction}
             />
           )}
         </div>
@@ -914,10 +956,16 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 icon: cat.emoji,
               }))}
               placeholder="選擇分類"
+              compact={isNewTransaction}
             />
           )}
         </div>
 
+        </>
+        )}
+
+        {(!isNewTransaction || isTransactionDetails) && shouldShowBasicDetails && (
+        <>
         {/* Description */}
         <div>
           <label
@@ -1116,7 +1164,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             </div>
           </div>
         )}
+        </>
+        )}
 
+        {(!isNewTransaction || isTransactionSetup) && (
+        <>
         {/* Date & Time */}
         <div>
           <label
@@ -1165,7 +1217,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         )}
 
         {/* 分期 (Installment) tab */}
-        {canConfigureInstallment && activeTab === 'installment' && (
+        {isInstallmentDetails && (
           <>
             <div>
               {/* Name (mirrors the basic 名稱 field) */}
@@ -1488,14 +1540,21 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
           style={{
             display: 'flex',
             gap: '10px',
-            paddingTop: '16px',
+            paddingTop: '8px',
             borderTop: '1px solid var(--card-border)',
             background: 'var(--modal-card-bg)',
           }}
         >
           <button
             type="button"
-            onClick={onClose}
+            onClick={
+              isNewTransaction && isTransactionDetails
+                ? () => {
+                    scrollTransactionFieldsToTop();
+                    setTransactionStep('setup');
+                  }
+                : onClose
+            }
             style={{
               flex: 1,
               padding: '12px',
@@ -1506,22 +1565,45 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               fontWeight: 600,
             }}
           >
-            返回
+            {isNewTransaction && isTransactionDetails ? '上一步' : '返回'}
           </button>
-          <button
-            type="submit"
-            style={{
-              flex: 2,
-              padding: '12px',
-              borderRadius: 'var(--border-radius-sm)',
-              background: 'linear-gradient(90deg, #6366f1, #4f46e5)',
-              color: '#fff',
-              fontWeight: 600,
-              boxShadow: '0 4px 15px var(--primary-glow)',
-            }}
-          >
-            儲存
-          </button>
+          {isNewTransaction && !isTransactionDetails ? (
+            <button
+              key="transaction-next-step"
+              type="button"
+              onClick={() => {
+                scrollTransactionFieldsToTop();
+                setTransactionStep('details');
+              }}
+              style={{
+                flex: 2,
+                padding: '12px',
+                borderRadius: 'var(--border-radius-sm)',
+                background: 'linear-gradient(90deg, #6366f1, #4f46e5)',
+                color: '#fff',
+                fontWeight: 600,
+                boxShadow: '0 4px 15px var(--primary-glow)',
+              }}
+            >
+              下一步
+            </button>
+          ) : (
+            <button
+              key="transaction-save"
+              type="submit"
+              style={{
+                flex: 2,
+                padding: '12px',
+                borderRadius: 'var(--border-radius-sm)',
+                background: 'linear-gradient(90deg, #6366f1, #4f46e5)',
+                color: '#fff',
+                fontWeight: 600,
+                boxShadow: '0 4px 15px var(--primary-glow)',
+              }}
+            >
+              儲存
+            </button>
+          )}
         </div>
       </form>
     </div>

@@ -43,8 +43,6 @@ export const TransactionEntryPage: FC<TransactionEntryPageProps> = ({
       initialTab={initialTab}
       incomeLocked={incomeLocked}
       incomeLockMessage={incomeLockMessage}
-      presentation="page"
-      showHeaderTitle={false}
       onSave={onSave}
     />
   );
