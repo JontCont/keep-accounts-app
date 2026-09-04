@@ -615,11 +615,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
   const card = (
     <div
-      className="glass-card"
+      className={`glass-card transaction-entry-card${presentation === 'page' ? ' transaction-entry-card--page' : ''}`}
       style={{
         width: '100%',
         maxWidth: presentation === 'modal' ? '400px' : '520px',
-        maxHeight: presentation === 'modal' ? '85vh' : 'none',
+        maxHeight: presentation === 'modal' ? '85vh' : undefined,
         overflow: 'hidden',
         padding: '24px',
         borderRadius: 'var(--border-radius-lg)',
@@ -671,6 +671,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
       <form
         onSubmit={handleSubmit}
+        className="transaction-entry-form"
         style={{
           display: 'flex',
           flexDirection: 'column',
@@ -811,6 +812,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
         {/* Scrollable form fields wrapper */}
         <div
+          className="transaction-entry-fields"
           style={{
             flex: 1,
             overflowY: 'auto',
@@ -1482,6 +1484,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
         {/* Submit Buttons */}
         <div
+          className="transaction-entry-actions"
           style={{
             display: 'flex',
             gap: '10px',

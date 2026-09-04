@@ -49,5 +49,6 @@ vitest.config.*.timestamp*
 test-output
 .spectra/
 openspec/.vector-search.db*
+/.playwright-mcp/
 
 template/*

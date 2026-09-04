@@ -454,6 +454,28 @@ ion-modal.modal-overlay {
   --border-radius: 0 !important;
 }
 
+/* Keep page-based transaction entry inside the visual viewport. */
+.transaction-entry-card--page {
+  height: calc(100vh - 176px);
+  height: calc(100dvh - 176px);
+  min-height: 0;
+}
+
+.transaction-entry-form,
+.transaction-entry-fields {
+  min-height: 0;
+}
+
+.transaction-entry-fields {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.transaction-entry-actions {
+  flex: 0 0 auto;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom));
+}
+
 /* Transaction Ledger Row type-based CSS rules */
 .tx-ledger-badge {
   font-size: 1.4rem;

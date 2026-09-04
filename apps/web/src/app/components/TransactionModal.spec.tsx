@@ -17,10 +17,20 @@ vi.mock('@ionic/react', async (importOriginal) => {
   const React = await import('react');
   return {
     ...original,
-    IonModal: ({ children, isOpen }: any) => {
-      if (!isOpen) return null;
+    IonModal: ({ children, isOpen, keepContentsMounted }: any) => {
+      if (!isOpen && !keepContentsMounted) return null;
       return React.createElement('div', { 'data-testid': 'ion-modal' }, children);
     },
+    IonDatetimeButton: ({ datetime }: any) =>
+      React.createElement('button', {
+        'data-testid': 'datetime-button',
+        'data-datetime': datetime,
+      }),
+    IonDatetime: ({ id }: any) =>
+      React.createElement('div', {
+        'data-testid': 'datetime',
+        'data-datetime-id': id,
+      }),
   };
 });
 
@@ -122,6 +132,41 @@ describe('TransactionModal', () => {
     expect(getByText('下一期')).toBeTruthy();
     expect(getByText('前一個月')).toBeTruthy();
     expect(getByText('前三個月')).toBeTruthy();
+  });
+
+  it('associates the date trigger with the datetime and uses a scrollable page form layout', () => {
+    const accountGroups = [
+      {
+        id: '1',
+        name: '日常開銷',
+        emoji: 'credit-card',
+        color: '#6366f1',
+        targetRatio: 100,
+        categories: [
+          { name: '餐飲食品', emoji: 'coffee', color: '#f59e0b', type: 'expense' },
+        ],
+      },
+    ];
+
+    const { container } = render(
+      <BrowserRouter>
+        <TransactionModal
+          isOpen={true}
+          onClose={vi.fn()}
+          editingTx={null}
+          accountGroups={accountGroups as any}
+          presentation="page"
+          onSave={vi.fn()}
+        />
+      </BrowserRouter>
+    );
+
+    expect(container.querySelector('[data-testid="datetime-button"]')?.getAttribute('data-datetime')).toBe('tx-datetime');
+    expect(container.querySelector('[data-testid="datetime"]')?.getAttribute('data-datetime-id')).toBe('tx-datetime');
+    expect(container.querySelector('.transaction-entry-card--page')).toBeTruthy();
+    expect(container.querySelector('.transaction-entry-form')).toBeTruthy();
+    expect(container.querySelector('.transaction-entry-fields')).toBeTruthy();
+    expect(container.querySelector('.transaction-entry-actions')).toBeTruthy();
   });
 
   it('constrains installment period edit mode to amount and date updates', () => {
