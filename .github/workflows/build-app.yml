@@ -2,7 +2,7 @@ name: Mobile Builds CI
 
 on:
   push:
-    branches: [master]
+    branches: [develop, master]
 
 jobs:
   # Stage 1: Build & verify once. This job gates all packaging jobs below.
@@ -169,13 +169,19 @@ jobs:
           path: ${{ needs.build.outputs.version }}.ipa
           retention-days: 1
 
-  # Stage 3: Publish the platform packages as direct release downloads.
+  # Stage 3: Only publish master builds as GitHub Release downloads.
   publish-mobile-build:
+    if: github.ref == 'refs/heads/master'
     needs: [build, package-android, package-ios]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - name: Checkout release history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Download Android APK
         uses: actions/download-artifact@v4
         with:
@@ -188,12 +194,37 @@ jobs:
           name: ios-ipa
           path: release-assets
 
+      - name: Generate release changelog
+        env:
+          RELEASE_VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          previous_tag="$(git tag --merged "$GITHUB_SHA" --list 'build-*' --sort=-creatordate | head -n 1)"
+          if [ -z "$previous_tag" ]; then
+            previous_tag="$(git tag --merged "$GITHUB_SHA" --list 'v[0-9]*' --sort=-creatordate | head -n 1)"
+          fi
+
+          {
+            echo "## Mobile build ${RELEASE_VERSION}"
+            echo
+            if [ -n "$previous_tag" ]; then
+              echo "Changes since [${previous_tag}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare/${previous_tag}...${GITHUB_SHA}):"
+              echo
+              git log --no-merges --reverse --format='%H%x09%s' "${previous_tag}..${GITHUB_SHA}" |
+                while IFS=$'\t' read -r commit subject; do
+                  printf '%s\n' "- ${subject} ([${commit:0:7}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${commit}))"
+                done
+            else
+              echo "Initial automated build."
+            fi
+          } > release-assets/CHANGELOG.md
+
       - name: Publish mobile build release assets
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ needs.build.outputs.version }}
-          name: Mobile build ${{ needs.build.outputs.version }}
+          name: v${{ needs.build.outputs.version }} - 記帳 App
           prerelease: true
+          body_path: release-assets/CHANGELOG.md
           files: |
             release-assets/${{ needs.build.outputs.version }}.apk
             release-assets/${{ needs.build.outputs.version }}.ipa
