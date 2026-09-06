@@ -1,5 +1,8 @@
 name: Mobile Builds CI
 
+env:
+  APP_VERSION: 0.1.0
+
 on:
   push:
     branches: [develop, master]
@@ -198,13 +201,22 @@ jobs:
         env:
           RELEASE_VERSION: ${{ needs.build.outputs.version }}
         run: |
-          previous_tag="$(git tag --merged "$GITHUB_SHA" --list 'build-*' --sort=-creatordate | head -n 1)"
+          previous_tag=""
+          while IFS= read -r candidate_tag; do
+            if [ "$(git rev-list -n 1 "$candidate_tag")" != "$GITHUB_SHA" ]; then
+              previous_tag="$candidate_tag"
+              break
+            fi
+          done < <(git tag --merged "$GITHUB_SHA" --list 'build-*' --sort=-creatordate)
+
           if [ -z "$previous_tag" ]; then
             previous_tag="$(git tag --merged "$GITHUB_SHA" --list 'v[0-9]*' --sort=-creatordate | head -n 1)"
           fi
 
           {
-            echo "## Mobile build ${RELEASE_VERSION}"
+            echo "## 記帳 App v${APP_VERSION}"
+            echo
+            echo "Build: ${RELEASE_VERSION}"
             echo
             if [ -n "$previous_tag" ]; then
               echo "Changes since [${previous_tag}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare/${previous_tag}...${GITHUB_SHA}):"
@@ -222,7 +234,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ needs.build.outputs.version }}
-          name: v${{ needs.build.outputs.version }} - 記帳 App
+          name: v${{ env.APP_VERSION }} - 記帳 App
           prerelease: true
           body_path: release-assets/CHANGELOG.md
           files: |
