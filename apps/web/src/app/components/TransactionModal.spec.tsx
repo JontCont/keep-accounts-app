@@ -153,7 +153,7 @@ describe('TransactionModal', () => {
     ];
     const onSave = vi.fn();
 
-    const { getByRole, getByText, queryByPlaceholderText } = render(
+    const { getByRole, getByTestId, getByText, queryByPlaceholderText } = render(
       <BrowserRouter>
         <TransactionModal
           isOpen={true}
@@ -177,6 +177,8 @@ describe('TransactionModal', () => {
 
     expect(getByText('詳細資料')).toBeTruthy();
     expect(queryByPlaceholderText('例如: 買咖啡、午餐、薪水')).toBeTruthy();
+    expect(getByText('交易日期與時間')).toBeTruthy();
+    expect(getByTestId('datetime-button').getAttribute('data-datetime')).toBe('tx-datetime');
     expect(onSave).not.toHaveBeenCalled();
   });
 
@@ -330,7 +332,7 @@ describe('TransactionModal', () => {
       },
     ];
 
-    const { container, getByRole } = render(
+    const { container } = render(
       <BrowserRouter>
         <TransactionModal
           isOpen={true}
