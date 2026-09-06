@@ -1,4 +1,4 @@
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin, type Plugin } from '@capacitor/core';
 import { AccountGroup, Transaction, STORAGE_KEYS } from '@keep-accounts-app/domain';
 import type {
   HistoryPageResult,
@@ -6,6 +6,7 @@ import type {
   StatsCategoryBucket,
   StatsTrendPoint,
 } from './query-store';
+import type { KeepAccountsWidgetSummary } from './widget-summary';
 
 export interface KeepAccountsSnapshot {
   accountGroups: AccountGroup[];
@@ -15,6 +16,12 @@ export interface KeepAccountsSnapshot {
 const GROUPS_KEY = STORAGE_KEYS.ACCOUNTS.GROUPS;
 const TRANSACTIONS_KEY = STORAGE_KEYS.ACCOUNTS.TRANSACTIONS;
 const SQLITE_MIGRATION_MARKER = 'keep_accounts_sqlite_v2_migrated';
+
+interface KeepAccountsWidgetPlugin extends Plugin {
+  updateSummary(summary: KeepAccountsWidgetSummary): Promise<void>;
+}
+
+const KeepAccountsWidget = registerPlugin<KeepAccountsWidgetPlugin>('KeepAccountsWidget');
 
 const readLocalSnapshot = (): KeepAccountsSnapshot => {
   const rawGroups = localStorage.getItem(GROUPS_KEY);
@@ -326,6 +333,7 @@ const writeSqliteSnapshot = async (snapshot: KeepAccountsSnapshot): Promise<bool
   await writeSqliteGroups(snapshot.accountGroups);
   await writeSqliteTransactions(snapshot.transactions);
   localStorage.setItem(SQLITE_MIGRATION_MARKER, 'true');
+  await syncNativeWidgetSummary();
   return true;
 };
 
@@ -333,6 +341,7 @@ export const loadKeepAccountsSnapshot = async (): Promise<KeepAccountsSnapshot> 
   try {
     const sqliteSnapshot = await readSqliteSnapshot();
     if (sqliteSnapshot) {
+      await syncNativeWidgetSummary();
       return sqliteSnapshot;
     }
   } catch (error) {
@@ -349,6 +358,7 @@ export const loadKeepAccountsSnapshot = async (): Promise<KeepAccountsSnapshot> 
     console.error('SQLite migration write failed, keep localStorage as source', error);
   }
 
+  await syncNativeWidgetSummary();
   return localSnapshot;
 };
 
@@ -575,6 +585,48 @@ export const queryNativeRecentTransactions = async (
   return ((result?.values ?? []) as Array<any>).map(mapTransactionRow);
 };
 
+
+export const queryNativeWidgetSummary = async (
+  referenceDate: Date = new Date()
+): Promise<KeepAccountsWidgetSummary | null> => {
+  const db = await getSqliteDb();
+  if (!db) return null;
+
+  const today = referenceDate.toISOString().slice(0, 10);
+  const currentMonth = today.slice(0, 7);
+  const result = await db.query(
+    `SELECT
+       COALESCE(SUM(CASE WHEN type = 'income' AND substr(date, 1, 10) <= ? THEN amount ELSE 0 END), 0) AS total_income,
+       COALESCE(SUM(CASE WHEN type = 'expense' AND substr(date, 1, 10) <= ? THEN amount ELSE 0 END), 0) AS total_expense,
+       COALESCE(SUM(CASE WHEN type = 'income' AND substr(date, 1, 7) = ? THEN amount ELSE 0 END), 0) AS monthly_income,
+       COALESCE(SUM(CASE WHEN type = 'expense' AND substr(date, 1, 7) = ? THEN amount ELSE 0 END), 0) AS monthly_expense
+     FROM keep_accounts_transactions`,
+    [today, today, currentMonth, currentMonth]
+  );
+  const row = (result?.values?.[0] ?? {}) as Record<string, unknown>;
+  const totalIncome = Number(row.total_income ?? 0);
+  const totalExpense = Number(row.total_expense ?? 0);
+
+  return {
+    totalBalance: totalIncome - totalExpense,
+    monthlyIncome: Number(row.monthly_income ?? 0),
+    monthlyExpense: Number(row.monthly_expense ?? 0),
+    updatedAt: referenceDate.toISOString(),
+  };
+};
+
+export const syncNativeWidgetSummary = async (): Promise<void> => {
+  if (Capacitor.getPlatform() !== 'ios') return;
+
+  try {
+    const summary = await queryNativeWidgetSummary();
+    if (summary) {
+      await KeepAccountsWidget.updateSummary(summary);
+    }
+  } catch (error) {
+    console.error('iOS Widget summary sync failed', error);
+  }
+};
 export const saveNativeAccountGroups = async (
   groups: AccountGroup[]
 ): Promise<boolean> => {
@@ -610,6 +662,7 @@ export const insertNativeTransactions = async (
     );
   }
 
+  await syncNativeWidgetSummary();
   return true;
 };
 
@@ -638,6 +691,7 @@ export const updateNativeTransaction = async (
     ]
   );
 
+  await syncNativeWidgetSummary();
   return true;
 };
 
@@ -678,6 +732,7 @@ export const deleteNativeTransactionById = async (id: string): Promise<boolean> 
   const db = await getSqliteDb();
   if (!db) return false;
   await db.run(`DELETE FROM keep_accounts_transactions WHERE id = ?`, [id]);
+  await syncNativeWidgetSummary();
   return true;
 };
 
@@ -689,6 +744,7 @@ export const deleteNativeInstallmentGroupById = async (
   await db.run(`DELETE FROM keep_accounts_transactions WHERE installment_id = ?`, [
     installmentId,
   ]);
+  await syncNativeWidgetSummary();
   return true;
 };
 
@@ -722,6 +778,7 @@ export const replaceNativeInstallmentGroup = async (
     );
   }
 
+  await syncNativeWidgetSummary();
   return true;
 };
 
@@ -740,6 +797,7 @@ export const reassignNativeTransactionsGroup = async ({
      WHERE account_group_id = ?`,
     [toGroupId, fromGroupId]
   );
+  await syncNativeWidgetSummary();
   return true;
 };
 
