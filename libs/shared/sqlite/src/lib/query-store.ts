@@ -1,4 +1,21 @@
-import { AccountGroup, Transaction } from '@keep-accounts-app/domain';
+import {
+  AccountGroup,
+  calculateFinancialAccountSummaries,
+  FinancialAccount,
+  FinancialAccountSummary,
+  Transaction,
+} from '@keep-accounts-app/domain';
+
+export interface FinancialAccountSummaryQuery {
+  financialAccounts: FinancialAccount[];
+  transactions: Transaction[];
+}
+
+export const queryFinancialAccountSummaries = ({
+  financialAccounts,
+  transactions,
+}: FinancialAccountSummaryQuery): FinancialAccountSummary[] =>
+  calculateFinancialAccountSummaries(financialAccounts, transactions);
 
 export interface HistoryPageQuery {
   transactions: Transaction[];

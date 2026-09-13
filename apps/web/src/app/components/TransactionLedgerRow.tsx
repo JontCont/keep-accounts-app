@@ -1,11 +1,12 @@
 import type { FC } from 'react';
-import { Transaction } from '@keep-accounts-app/domain';
+import { FinancialAccount, Transaction } from '@keep-accounts-app/domain';
 import { AppIcon } from './AppIcon';
 
 interface TransactionLedgerRowProps {
   tx: Transaction;
   getCategoryEmoji: (catName: string, groupId: string) => string;
   getGroupName: (groupId: string) => string;
+  financialAccounts?: FinancialAccount[];
   onEditTransaction?: (tx: Transaction) => void;
   onDeleteTransaction?: (id: string) => void;
   dataTestId?: string;
@@ -15,6 +16,7 @@ export const TransactionLedgerRow: FC<TransactionLedgerRowProps> = ({
   tx,
   getCategoryEmoji,
   getGroupName,
+  financialAccounts = [],
   onEditTransaction,
   onDeleteTransaction,
   dataTestId,
@@ -23,6 +25,13 @@ export const TransactionLedgerRow: FC<TransactionLedgerRowProps> = ({
   const timePart = tx.date.includes('T') ? tx.date.substring(11, 16) : '';
   const isInstallment = !!tx.installmentId;
   const amountPrefix = tx.type === 'income' ? '+' : tx.type === 'expense' ? '-' : '±';
+  const accountNameById = new Map(financialAccounts.map((account) => [account.id, account.name]));
+  const accountLabel =
+    tx.type === 'transfer'
+      ? `${accountNameById.get(tx.transferSourceFinancialAccountId ?? '') ?? '未指定帳戶'} → ${
+          accountNameById.get(tx.transferDestinationFinancialAccountId ?? '') ?? '未指定帳戶'
+        }`
+      : accountNameById.get(tx.financialAccountId ?? '') ?? '未指定帳戶';
 
   return (
     <div
@@ -62,6 +71,17 @@ export const TransactionLedgerRow: FC<TransactionLedgerRowProps> = ({
             }}
           >
             {tx.category} • {getGroupName(tx.accountGroupId)}
+          </div>
+          <div
+            style={{
+              fontSize: '0.75rem',
+              color: 'var(--text-tertiary)',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            金融帳戶：{accountLabel}
           </div>
           <div
             style={{

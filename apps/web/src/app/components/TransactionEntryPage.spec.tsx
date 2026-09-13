@@ -46,7 +46,7 @@ describe('TransactionEntryPage', () => {
     expect(getByText('新增收支記帳')).toBeTruthy();
     expect(getByText('交易設定', { exact: true })).toBeTruthy();
     expect(getByText('交易類型', { exact: true })).toBeTruthy();
-    expect(getByText('選擇資金帳戶大項')).toBeTruthy();
+    expect(getByText('分配群組')).toBeTruthy();
     expect(queryByPlaceholderText('例如: 買咖啡、午餐、薪水')).toBeNull();
     expect(queryByPlaceholderText('輸入金額')).toBeNull();
 

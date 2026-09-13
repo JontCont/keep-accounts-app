@@ -2,7 +2,12 @@ import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate';
-import { AccountGroup, Transaction, STORAGE_KEYS } from '@keep-accounts-app/domain';
+import {
+  AccountGroup,
+  FinancialAccount,
+  Transaction,
+  STORAGE_KEYS,
+} from '@keep-accounts-app/domain';
 
 export interface ImportRecord {
   id: string;
@@ -44,6 +49,7 @@ export const base64ToUint8Array = (base64: string): Uint8Array => {
 export interface BackupData {
   keep_accounts_groups: AccountGroup[];
   keep_accounts_transactions: Transaction[];
+  keep_accounts_financial_accounts?: FinancialAccount[];
 }
 
 export const compressBackup = (data: BackupData): Uint8Array => {

@@ -1,21 +1,35 @@
 import { Capacitor, registerPlugin, type Plugin } from '@capacitor/core';
-import { AccountGroup, Transaction, STORAGE_KEYS } from '@keep-accounts-app/domain';
+import {
+  AccountGroup,
+  FinancialAccount,
+  Transaction,
+  STORAGE_KEYS,
+} from '@keep-accounts-app/domain';
 import type {
   HistoryPageResult,
   StatsAggregationResult,
   StatsCategoryBucket,
   StatsTrendPoint,
 } from './query-store';
+import { queryFinancialAccountSummaries } from './query-store';
 import type { KeepAccountsWidgetSummary } from './widget-summary';
 
 export interface KeepAccountsSnapshot {
   accountGroups: AccountGroup[];
   transactions: Transaction[];
+  financialAccounts: FinancialAccount[];
 }
+
+export type KeepAccountsSnapshotInput = Omit<KeepAccountsSnapshot, 'financialAccounts'> & {
+  financialAccounts?: FinancialAccount[];
+};
 
 const GROUPS_KEY = STORAGE_KEYS.ACCOUNTS.GROUPS;
 const TRANSACTIONS_KEY = STORAGE_KEYS.ACCOUNTS.TRANSACTIONS;
+const FINANCIAL_ACCOUNTS_KEY = STORAGE_KEYS.ACCOUNTS.FINANCIAL_ACCOUNTS;
 const SQLITE_MIGRATION_MARKER = 'keep_accounts_sqlite_v2_migrated';
+const TRANSACTION_SELECT_COLUMNS =
+  'id, description, amount, type, category, date, account_group_id, installment_id, installment_period, installment_count, financial_account_id, transfer_source_financial_account_id, transfer_destination_financial_account_id';
 
 interface KeepAccountsWidgetPlugin extends Plugin {
   updateSummary(summary: KeepAccountsWidgetSummary): Promise<void>;
@@ -26,9 +40,11 @@ const KeepAccountsWidget = registerPlugin<KeepAccountsWidgetPlugin>('KeepAccount
 const readLocalSnapshot = (): KeepAccountsSnapshot => {
   const rawGroups = localStorage.getItem(GROUPS_KEY);
   const rawTransactions = localStorage.getItem(TRANSACTIONS_KEY);
+  const rawFinancialAccounts = localStorage.getItem(FINANCIAL_ACCOUNTS_KEY);
 
   let accountGroups: AccountGroup[] = [];
   let transactions: Transaction[] = [];
+  let financialAccounts: FinancialAccount[] = [];
 
   if (rawGroups) {
     try {
@@ -46,12 +62,25 @@ const readLocalSnapshot = (): KeepAccountsSnapshot => {
     }
   }
 
-  return { accountGroups, transactions };
+  if (rawFinancialAccounts) {
+    try {
+      const parsed = JSON.parse(rawFinancialAccounts);
+      financialAccounts = Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      console.error(error);
+    }
+  }
+
+  return { accountGroups, transactions, financialAccounts };
 };
 
-const writeLocalSnapshot = (snapshot: KeepAccountsSnapshot) => {
+const writeLocalSnapshot = (snapshot: KeepAccountsSnapshotInput) => {
   localStorage.setItem(GROUPS_KEY, JSON.stringify(snapshot.accountGroups));
   localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify(snapshot.transactions));
+  localStorage.setItem(
+    FINANCIAL_ACCOUNTS_KEY,
+    JSON.stringify(snapshot.financialAccounts ?? [])
+  );
 };
 
 const safeParseArray = <T>(value: string | null): T[] => {
@@ -114,9 +143,57 @@ const getSqliteDb = async () => {
           account_group_id TEXT NOT NULL,
           installment_id TEXT,
           installment_period INTEGER,
-          installment_count INTEGER
+          installment_count INTEGER,
+          financial_account_id TEXT,
+          transfer_source_financial_account_id TEXT,
+          transfer_destination_financial_account_id TEXT
         );
       `);
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS keep_accounts_financial_accounts (
+          id TEXT PRIMARY KEY NOT NULL,
+          name TEXT NOT NULL,
+          type TEXT NOT NULL,
+          opening_amount REAL NOT NULL,
+          is_archived INTEGER NOT NULL DEFAULT 0,
+          statement_closing_day INTEGER,
+          payment_due_day INTEGER,
+          opening_adjustments_json TEXT NOT NULL DEFAULT '[]'
+        );
+      `);
+      const financialAccountColumns = await db.query(
+        'PRAGMA table_info(keep_accounts_financial_accounts)'
+      );
+      const existingFinancialAccountColumns = new Set(
+        ((financialAccountColumns?.values ?? []) as Array<{ name: string }>).map(
+          (column) => column.name
+        )
+      );
+      for (const column of ['statement_closing_day', 'payment_due_day', 'opening_adjustments_json']) {
+        if (!existingFinancialAccountColumns.has(column)) {
+          const columnDefinition = column === 'opening_adjustments_json'
+            ? "TEXT NOT NULL DEFAULT '[]'"
+            : 'INTEGER';
+          await db.execute(`ALTER TABLE keep_accounts_financial_accounts ADD COLUMN ${column} ${columnDefinition}`);
+        }
+      }
+      const transactionColumns = await db.query(
+        'PRAGMA table_info(keep_accounts_transactions)'
+      );
+      const existingTransactionColumns = new Set(
+        ((transactionColumns?.values ?? []) as Array<{ name: string }>).map(
+          (column) => column.name
+        )
+      );
+      for (const column of [
+        'financial_account_id',
+        'transfer_source_financial_account_id',
+        'transfer_destination_financial_account_id',
+      ]) {
+        if (!existingTransactionColumns.has(column)) {
+          await db.execute(`ALTER TABLE keep_accounts_transactions ADD COLUMN ${column} TEXT`);
+        }
+      }
       await db.execute(`
         CREATE INDEX IF NOT EXISTS idx_transactions_date
         ON keep_accounts_transactions(date DESC);
@@ -146,8 +223,8 @@ const readSqliteKvSnapshot = async (): Promise<KeepAccountsSnapshot | null> => {
   if (!db) return null;
 
   const result = await db.query(
-    'SELECT key, value FROM keep_accounts_kv WHERE key IN (?, ?)',
-    [GROUPS_KEY, TRANSACTIONS_KEY]
+    'SELECT key, value FROM keep_accounts_kv WHERE key IN (?, ?, ?)',
+    [GROUPS_KEY, TRANSACTIONS_KEY, FINANCIAL_ACCOUNTS_KEY]
   );
   const rows = (result?.values ?? []) as { key: string; value: string }[];
   if (rows.length === 0) {
@@ -161,8 +238,11 @@ const readSqliteKvSnapshot = async (): Promise<KeepAccountsSnapshot | null> => {
   const transactions = rowMap.get(TRANSACTIONS_KEY)
     ? (JSON.parse(rowMap.get(TRANSACTIONS_KEY) as string) as Transaction[])
     : [];
+  const financialAccounts = rowMap.get(FINANCIAL_ACCOUNTS_KEY)
+    ? (JSON.parse(rowMap.get(FINANCIAL_ACCOUNTS_KEY) as string) as FinancialAccount[])
+    : [];
 
-  return { accountGroups, transactions };
+  return { accountGroups, transactions, financialAccounts };
 };
 
 const writeSqliteGroups = async (groups: AccountGroup[]) => {
@@ -198,8 +278,8 @@ const writeSqliteTransactions = async (transactions: Transaction[]) => {
   for (const tx of transactions) {
     await db.run(
       `INSERT INTO keep_accounts_transactions
-      (id, description, amount, type, category, date, account_group_id, installment_id, installment_period, installment_count)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (id, description, amount, type, category, date, account_group_id, installment_id, installment_period, installment_count, financial_account_id, transfer_source_financial_account_id, transfer_destination_financial_account_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
       [
         tx.id,
         tx.description,
@@ -211,6 +291,33 @@ const writeSqliteTransactions = async (transactions: Transaction[]) => {
         tx.installmentId ?? null,
         tx.installmentPeriod ?? null,
         tx.installmentCount ?? null,
+        tx.financialAccountId ?? null,
+        tx.transferSourceFinancialAccountId ?? null,
+        tx.transferDestinationFinancialAccountId ?? null,
+      ]
+    );
+  }
+};
+
+const writeSqliteFinancialAccounts = async (accounts: FinancialAccount[]) => {
+  const db = await getSqliteDb();
+  if (!db) return;
+
+  await db.execute('DELETE FROM keep_accounts_financial_accounts;');
+  for (const account of accounts) {
+    await db.run(
+      `INSERT INTO keep_accounts_financial_accounts
+      (id, name, type, opening_amount, is_archived, statement_closing_day, payment_due_day, opening_adjustments_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        account.id,
+        account.name,
+        account.type,
+        account.openingAmount,
+        0,
+        account.statementClosingDay ?? null,
+        account.paymentDueDay ?? null,
+        JSON.stringify(account.openingAmountAdjustments ?? []),
       ]
     );
   }
@@ -225,9 +332,13 @@ const readSqliteStructuredSnapshot = async (): Promise<KeepAccountsSnapshot | nu
      FROM keep_accounts_groups`
   );
   const txResult = await db.query(
-    `SELECT id, description, amount, type, category, date, account_group_id, installment_id, installment_period, installment_count
+    `SELECT id, description, amount, type, category, date, account_group_id, installment_id, installment_period, installment_count, financial_account_id, transfer_source_financial_account_id, transfer_destination_financial_account_id
      FROM keep_accounts_transactions
      ORDER BY date DESC`
+  );
+  const financialAccountResult = await db.query(
+    `SELECT id, name, type, opening_amount, is_archived, statement_closing_day, payment_due_day, opening_adjustments_json
+     FROM keep_accounts_financial_accounts`
   );
 
   const groupRows = (groupResult?.values ?? []) as Array<{
@@ -252,9 +363,22 @@ const readSqliteStructuredSnapshot = async (): Promise<KeepAccountsSnapshot | nu
     installment_id: string | null;
     installment_period: number | null;
     installment_count: number | null;
+    financial_account_id: string | null;
+    transfer_source_financial_account_id: string | null;
+    transfer_destination_financial_account_id: string | null;
+  }>;
+  const financialAccountRows = (financialAccountResult?.values ?? []) as Array<{
+    id: string;
+    name: string;
+    type: FinancialAccount['type'];
+    opening_amount: number;
+    is_archived: number;
+    statement_closing_day: number | null;
+    payment_due_day: number | null;
+    opening_adjustments_json: string;
   }>;
 
-  if (groupRows.length === 0 && txRows.length === 0) {
+  if (groupRows.length === 0 && txRows.length === 0 && financialAccountRows.length === 0) {
     return null;
   }
 
@@ -281,11 +405,26 @@ const readSqliteStructuredSnapshot = async (): Promise<KeepAccountsSnapshot | nu
     installmentId: row.installment_id ?? undefined,
     installmentPeriod: row.installment_period ?? undefined,
     installmentCount: row.installment_count ?? undefined,
+    financialAccountId: row.financial_account_id ?? undefined,
+    transferSourceFinancialAccountId: row.transfer_source_financial_account_id ?? undefined,
+    transferDestinationFinancialAccountId:
+      row.transfer_destination_financial_account_id ?? undefined,
+  }));
+
+  const financialAccounts: FinancialAccount[] = financialAccountRows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    type: row.type,
+    openingAmount: Number(row.opening_amount),
+    statementClosingDay: row.statement_closing_day ?? undefined,
+    paymentDueDay: row.payment_due_day ?? undefined,
+    openingAmountAdjustments: safeParseArray(row.opening_adjustments_json),
   }));
 
   return {
     accountGroups,
     transactions,
+    financialAccounts,
   };
 };
 
@@ -301,6 +440,7 @@ const migrateSqliteLegacyKvToStructured = async () => {
 
   await writeSqliteGroups(kvSnapshot.accountGroups);
   await writeSqliteTransactions(kvSnapshot.transactions);
+  await writeSqliteFinancialAccounts(kvSnapshot.financialAccounts);
   localStorage.setItem(SQLITE_MIGRATION_MARKER, 'true');
 };
 
@@ -313,12 +453,13 @@ const readSqliteSnapshot = async (): Promise<KeepAccountsSnapshot | null> => {
   return readSqliteKvSnapshot();
 };
 
-const writeSqliteSnapshot = async (snapshot: KeepAccountsSnapshot): Promise<boolean> => {
+const writeSqliteSnapshot = async (snapshot: KeepAccountsSnapshotInput): Promise<boolean> => {
   const db = await getSqliteDb();
   if (!db) return false;
 
   const groupsValue = JSON.stringify(snapshot.accountGroups);
   const transactionsValue = JSON.stringify(snapshot.transactions);
+  const financialAccountsValue = JSON.stringify(snapshot.financialAccounts ?? []);
 
   await db.run(
     `INSERT INTO keep_accounts_kv (key, value) VALUES (?, ?)
@@ -330,8 +471,14 @@ const writeSqliteSnapshot = async (snapshot: KeepAccountsSnapshot): Promise<bool
      ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
     [TRANSACTIONS_KEY, transactionsValue]
   );
+  await db.run(
+    `INSERT INTO keep_accounts_kv (key, value) VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
+    [FINANCIAL_ACCOUNTS_KEY, financialAccountsValue]
+  );
   await writeSqliteGroups(snapshot.accountGroups);
   await writeSqliteTransactions(snapshot.transactions);
+  await writeSqliteFinancialAccounts(snapshot.financialAccounts ?? []);
   localStorage.setItem(SQLITE_MIGRATION_MARKER, 'true');
   await syncNativeWidgetSummary();
   return true;
@@ -351,7 +498,11 @@ export const loadKeepAccountsSnapshot = async (): Promise<KeepAccountsSnapshot> 
   const localSnapshot = readLocalSnapshot();
 
   try {
-    if (localSnapshot.accountGroups.length > 0 || localSnapshot.transactions.length > 0) {
+    if (
+      localSnapshot.accountGroups.length > 0 ||
+      localSnapshot.transactions.length > 0 ||
+      localSnapshot.financialAccounts.length > 0
+    ) {
       await writeSqliteSnapshot(localSnapshot);
     }
   } catch (error) {
@@ -363,7 +514,7 @@ export const loadKeepAccountsSnapshot = async (): Promise<KeepAccountsSnapshot> 
 };
 
 export const saveKeepAccountsSnapshot = async (
-  snapshot: KeepAccountsSnapshot
+  snapshot: KeepAccountsSnapshotInput
 ): Promise<void> => {
   let sqliteSaved = false;
 
@@ -423,7 +574,7 @@ export const queryNativeHistoryPage = async ({
   const total = Number((countResult?.values?.[0] as any)?.total ?? 0);
 
   const rowsResult = await db.query(
-    `SELECT id, description, amount, type, category, date, account_group_id, installment_id, installment_period, installment_count
+    `SELECT ${TRANSACTION_SELECT_COLUMNS}
      FROM keep_accounts_transactions
      ${where}
      ORDER BY date DESC
@@ -431,24 +582,7 @@ export const queryNativeHistoryPage = async ({
     [...params, safePageSize, safeOffset]
   );
   const rows = (rowsResult?.values ?? []) as Array<any>;
-  const items: Transaction[] = rows.map((row) => ({
-    id: row.id,
-    description: row.description,
-    amount: Number(row.amount),
-    type: row.type,
-    category: row.category,
-    date: row.date,
-    accountGroupId: row.account_group_id,
-    installmentId: row.installment_id ?? undefined,
-    installmentPeriod:
-      row.installment_period === null || row.installment_period === undefined
-        ? undefined
-        : Number(row.installment_period),
-    installmentCount:
-      row.installment_count === null || row.installment_count === undefined
-        ? undefined
-        : Number(row.installment_count),
-  }));
+  const items: Transaction[] = rows.map(mapTransactionRow);
 
   const nextOffset = safeOffset + items.length;
   return {
@@ -565,6 +699,10 @@ const mapTransactionRow = (row: any): Transaction => ({
     row.installment_count === null || row.installment_count === undefined
       ? undefined
       : Number(row.installment_count),
+  financialAccountId: row.financial_account_id ?? undefined,
+  transferSourceFinancialAccountId: row.transfer_source_financial_account_id ?? undefined,
+  transferDestinationFinancialAccountId:
+    row.transfer_destination_financial_account_id ?? undefined,
 });
 
 export const queryNativeRecentTransactions = async (
@@ -575,7 +713,7 @@ export const queryNativeRecentTransactions = async (
 
   const safeLimit = Math.max(1, limit);
   const result = await db.query(
-    `SELECT id, description, amount, type, category, date, account_group_id, installment_id, installment_period, installment_count
+    `SELECT ${TRANSACTION_SELECT_COLUMNS}
      FROM keep_accounts_transactions
      ORDER BY date DESC
      LIMIT ?`,
@@ -636,6 +774,35 @@ export const saveNativeAccountGroups = async (
   return true;
 };
 
+export const queryNativeFinancialAccounts = async (): Promise<FinancialAccount[] | null> => {
+  const db = await getSqliteDb();
+  if (!db) return null;
+
+  const result = await db.query(
+    `SELECT id, name, type, opening_amount, is_archived, statement_closing_day, payment_due_day, opening_adjustments_json
+     FROM keep_accounts_financial_accounts
+     ORDER BY name ASC`
+  );
+  return ((result?.values ?? []) as Array<any>).map((row) => ({
+    id: row.id,
+    name: row.name,
+    type: row.type,
+    openingAmount: Number(row.opening_amount),
+    statementClosingDay: row.statement_closing_day ?? undefined,
+    paymentDueDay: row.payment_due_day ?? undefined,
+    openingAmountAdjustments: safeParseArray(row.opening_adjustments_json),
+  }));
+};
+
+export const saveNativeFinancialAccounts = async (
+  accounts: FinancialAccount[]
+): Promise<boolean> => {
+  const db = await getSqliteDb();
+  if (!db) return false;
+  await writeSqliteFinancialAccounts(accounts);
+  return true;
+};
+
 export const insertNativeTransactions = async (
   transactions: Transaction[]
 ): Promise<boolean> => {
@@ -645,8 +812,8 @@ export const insertNativeTransactions = async (
   for (const tx of transactions) {
     await db.run(
       `INSERT INTO keep_accounts_transactions
-      (id, description, amount, type, category, date, account_group_id, installment_id, installment_period, installment_count)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (${TRANSACTION_SELECT_COLUMNS})
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         tx.id,
         tx.description,
@@ -658,6 +825,9 @@ export const insertNativeTransactions = async (
         tx.installmentId ?? null,
         tx.installmentPeriod ?? null,
         tx.installmentCount ?? null,
+        tx.financialAccountId ?? null,
+        tx.transferSourceFinancialAccountId ?? null,
+        tx.transferDestinationFinancialAccountId ?? null,
       ]
     );
   }
@@ -675,7 +845,9 @@ export const updateNativeTransaction = async (
   await db.run(
     `UPDATE keep_accounts_transactions
      SET description = ?, amount = ?, type = ?, category = ?, date = ?, account_group_id = ?,
-         installment_id = ?, installment_period = ?, installment_count = ?
+       installment_id = ?, installment_period = ?, installment_count = ?,
+       financial_account_id = ?, transfer_source_financial_account_id = ?,
+       transfer_destination_financial_account_id = ?
      WHERE id = ?`,
     [
       tx.description,
@@ -687,6 +859,9 @@ export const updateNativeTransaction = async (
       tx.installmentId ?? null,
       tx.installmentPeriod ?? null,
       tx.installmentCount ?? null,
+      tx.financialAccountId ?? null,
+      tx.transferSourceFinancialAccountId ?? null,
+      tx.transferDestinationFinancialAccountId ?? null,
       tx.id,
     ]
   );
@@ -702,7 +877,7 @@ export const queryNativeTransactionById = async (
   if (!db) return null;
 
   const result = await db.query(
-    `SELECT id, description, amount, type, category, date, account_group_id, installment_id, installment_period, installment_count
+    `SELECT ${TRANSACTION_SELECT_COLUMNS}
      FROM keep_accounts_transactions
      WHERE id = ?
      LIMIT 1`,
@@ -719,7 +894,7 @@ export const queryNativeInstallmentTransactions = async (
   if (!db) return null;
 
   const result = await db.query(
-    `SELECT id, description, amount, type, category, date, account_group_id, installment_id, installment_period, installment_count
+    `SELECT ${TRANSACTION_SELECT_COLUMNS}
      FROM keep_accounts_transactions
      WHERE installment_id = ?
      ORDER BY installment_period ASC, date ASC`,
@@ -761,8 +936,8 @@ export const replaceNativeInstallmentGroup = async (
   for (const tx of transactions) {
     await db.run(
       `INSERT INTO keep_accounts_transactions
-      (id, description, amount, type, category, date, account_group_id, installment_id, installment_period, installment_count)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (${TRANSACTION_SELECT_COLUMNS})
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         tx.id,
         tx.description,
@@ -774,6 +949,9 @@ export const replaceNativeInstallmentGroup = async (
         tx.installmentId ?? null,
         tx.installmentPeriod ?? null,
         tx.installmentCount ?? null,
+        tx.financialAccountId ?? null,
+        tx.transferSourceFinancialAccountId ?? null,
+        tx.transferDestinationFinancialAccountId ?? null,
       ]
     );
   }
@@ -827,10 +1005,18 @@ export const loadAllNativeTransactions = async (): Promise<Transaction[] | null>
   if (!db) return null;
 
   const result = await db.query(
-    `SELECT id, description, amount, type, category, date, account_group_id, installment_id, installment_period, installment_count
+    `SELECT ${TRANSACTION_SELECT_COLUMNS}
      FROM keep_accounts_transactions
      ORDER BY date DESC`
   );
 
   return ((result?.values ?? []) as Array<any>).map(mapTransactionRow);
+};
+
+export const queryNativeFinancialAccountSummaries = async (
+  financialAccounts: FinancialAccount[]
+) => {
+  const transactions = await loadAllNativeTransactions();
+  if (!transactions) return null;
+  return queryFinancialAccountSummaries({ financialAccounts, transactions });
 };

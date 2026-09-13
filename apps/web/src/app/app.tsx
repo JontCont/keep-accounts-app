@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { IonApp, IonContent, IonPage } from '@ionic/react';
 import {
   Transaction,
+  FinancialAccount,
+  FinancialAccountType,
   DEFAULT_ACCOUNT_GROUPS,
   INITIAL_TRANSACTIONS,
   STARTER_ALLOCATION_PRESET,
@@ -14,9 +16,10 @@ import {
   useKeepAccounts,
 } from '@keep-accounts-app/state';
 import { DashboardTab } from './components/DashboardTab';
-import { HistoryTab } from './components/HistoryTab';
-import { StatsTab } from './components/StatsTab';
+import { ActivityTab } from './components/ActivityTab';
 import { GroupSettingsModal } from './components/GroupSettingsModal';
+import { FinancialAccountSettingsModal } from './components/FinancialAccountSettingsModal';
+import { FinancialAccountDetailsModal } from './components/FinancialAccountDetailsModal';
 import { TransactionEntryPage } from './components/TransactionEntryPage';
 import { AppIcon } from './components/AppIcon';
 import { scheduleInstallmentReminders } from './services/notifications';
@@ -33,12 +36,14 @@ import {
 } from './services/backup';
 
 export function App() {
-    type MainTab = 'dashboard' | 'history' | 'stats' | 'settings';
+    type MainTab = 'dashboard' | 'activity' | 'financialAccounts' | 'settings';
     type TransactionEntryOrigin = 'dashboard' | 'history';
     type TransactionEntryContext = {
       mode: 'create' | 'edit';
       origin: TransactionEntryOrigin;
       initialTab: 'basic' | 'installment';
+      initialType?: 'income' | 'expense';
+      initialFinancialAccountId?: string;
     } | null;
 
   const {
@@ -55,10 +60,19 @@ export function App() {
     deleteCategory,
     setAccountGroups,
     setTransactions,
+    financialAccounts,
+    setFinancialAccounts,
+    financialAccountSummaries,
+    saveFinancialAccount,
+    deleteFinancialAccount,
   } = useKeepAccounts();
 
   const [activeTab, setActiveTab] = useState<MainTab>('dashboard');
   const [isEditingGroups, setIsEditingGroups] = useState(false);
+  const [isEditingFinancialAccounts, setIsEditingFinancialAccounts] = useState(false);
+  const [financialAccountFormType, setFinancialAccountFormType] = useState<FinancialAccountType>('bank');
+  const [financialAccountToEdit, setFinancialAccountToEdit] = useState<FinancialAccount | null>(null);
+  const [financialAccountDetails, setFinancialAccountDetails] = useState<FinancialAccount | null>(null);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
   const [transactionEntryContext, setTransactionEntryContext] = useState<TransactionEntryContext>(null);
   const [showHistoryCreateMenu, setShowHistoryCreateMenu] = useState(false);
@@ -136,13 +150,16 @@ export function App() {
   const applyImportedSnapshot = async (snapshot: {
     keep_accounts_groups: typeof accountGroups;
     keep_accounts_transactions: typeof transactions;
+    keep_accounts_financial_accounts?: FinancialAccount[];
   }) => {
     await saveKeepAccountsSnapshot({
       accountGroups: snapshot.keep_accounts_groups,
       transactions: snapshot.keep_accounts_transactions,
+      financialAccounts: snapshot.keep_accounts_financial_accounts ?? [],
     });
 
     setAccountGroups(snapshot.keep_accounts_groups);
+    setFinancialAccounts(snapshot.keep_accounts_financial_accounts ?? []);
     if (nativeMode) {
       setTransactions([]);
       return;
@@ -180,6 +197,7 @@ export function App() {
           autoBackupNative({
             keep_accounts_groups: accountGroups,
             keep_accounts_transactions: allNativeTxs,
+            keep_accounts_financial_accounts: financialAccounts,
           }).catch((err) => {
             console.error('Initial auto-backup failed', err);
           });
@@ -188,6 +206,7 @@ export function App() {
         autoBackupNative({
           keep_accounts_groups: accountGroups,
           keep_accounts_transactions: transactions,
+          keep_accounts_financial_accounts: financialAccounts,
         }).catch((err) => {
           console.error('Initial auto-backup failed', err);
         });
@@ -201,7 +220,8 @@ export function App() {
         nativeMode ? ((await loadAllNativeTransactions()) ?? transactions) : transactions;
       const data = {
         keep_accounts_groups: accountGroups,
-        keep_accounts_transactions: exportTransactions
+        keep_accounts_transactions: exportTransactions,
+        keep_accounts_financial_accounts: financialAccounts,
       };
       
       if (isNative) {
@@ -302,6 +322,7 @@ export function App() {
     await applyImportedSnapshot({
       keep_accounts_groups: cloneAllocationGroups(DEFAULT_ACCOUNT_GROUPS),
       keep_accounts_transactions: INITIAL_TRANSACTIONS,
+      keep_accounts_financial_accounts: [],
     });
     alert('已導入範例模板資料！頁面即將重新整理。');
     setTimeout(() => {
@@ -316,6 +337,7 @@ export function App() {
     await applyImportedSnapshot({
       keep_accounts_groups: [],
       keep_accounts_transactions: [],
+      keep_accounts_financial_accounts: [],
     });
     alert('已清除所有資料！頁面即將重新整理。');
     setTimeout(() => {
@@ -325,10 +347,17 @@ export function App() {
 
   const openTransactionEntry = (
     origin: TransactionEntryOrigin,
-    initialTab: 'basic' | 'installment' = 'basic'
+    initialTab: 'basic' | 'installment' = 'basic',
+    prefill?: { type: 'income' | 'expense'; financialAccountId: string }
   ) => {
     setEditingTx(null);
-    setTransactionEntryContext({ mode: 'create', origin, initialTab });
+    setTransactionEntryContext({
+      mode: 'create',
+      origin,
+      initialTab,
+      initialType: prefill?.type,
+      initialFinancialAccountId: prefill?.financialAccountId,
+    });
   };
 
   const openTransactionEditEntry = (tx: Transaction, origin: TransactionEntryOrigin) => {
@@ -337,7 +366,9 @@ export function App() {
   };
 
   const closeTransactionEntry = () => {
-    const fallbackTab: MainTab = transactionEntryContext?.origin ?? 'dashboard';
+    const fallbackTab: MainTab = transactionEntryContext?.origin === 'dashboard'
+      ? 'dashboard'
+      : 'activity';
     setActiveTab(fallbackTab);
     setTransactionEntryContext(null);
     setEditingTx(null);
@@ -354,6 +385,7 @@ export function App() {
           autoBackupNative({
             keep_accounts_groups: accountGroups,
             keep_accounts_transactions: allNativeTxs,
+            keep_accounts_financial_accounts: financialAccounts,
           }).catch((err) => {
             console.error('Auto backup failed', err);
           });
@@ -362,12 +394,13 @@ export function App() {
         autoBackupNative({
           keep_accounts_groups: accountGroups,
           keep_accounts_transactions: transactions,
+          keep_accounts_financial_accounts: financialAccounts,
         }).catch((err) => {
           console.error('Auto backup failed', err);
         });
       }
     }
-  }, [accountGroups, transactions, nativeMode]);
+  }, [accountGroups, transactions, financialAccounts, nativeMode]);
 
   // Group Settings internal budget update callback
   const currentMonthPrefix = new Date().toISOString().slice(0, 7);
@@ -447,7 +480,10 @@ export function App() {
     installment?: {
       periods: number;
       reminder: InstallmentReminderConfig;
-    } | null
+    } | null,
+    financialAccountId?: string,
+    transferSourceFinancialAccountId?: string,
+    transferDestinationFinancialAccountId?: string,
   ) => {
     const success = saveTransaction(
       description,
@@ -457,7 +493,10 @@ export function App() {
       date,
       accountGroupId,
       editingTx ? editingTx.id : null,
-      installment?.periods
+      installment?.periods,
+      financialAccountId,
+      transferSourceFinancialAccountId,
+      transferDestinationFinancialAccountId
     );
     if (success) {
       // Schedule native payment reminders (no-op on web, silent if permission
@@ -562,8 +601,8 @@ export function App() {
                     }}
                   >
                     {activeTab === 'dashboard' && 'Keep Accounts'}
-                    {activeTab === 'history' && '歷史交易明細'}
-                    {activeTab === 'stats' && '支出統計分析'}
+                    {activeTab === 'activity' && '明細分析'}
+                    {activeTab === 'financialAccounts' && '金融帳戶'}
                     {activeTab === 'settings' && '系統設定'}
                   </h1>
                 </div>
@@ -581,7 +620,7 @@ export function App() {
                   </div>
                 </div>
               ) : null}
-              {activeTab === 'history' && (
+              {activeTab === 'activity' && (
                 <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                   <button
                     onClick={() => setShowHistoryCreateMenu((current) => !current)}
@@ -691,7 +730,11 @@ export function App() {
                   onClose={closeTransactionEntry}
                   editingTx={editingTx}
                   accountGroups={accountGroups}
+                  financialAccounts={financialAccounts}
                   initialTab={transactionEntryContext.initialTab}
+                  initialType={transactionEntryContext.initialType}
+                  initialFinancialAccountId={transactionEntryContext.initialFinancialAccountId}
+                  onCreateFinancialAccount={() => setIsEditingFinancialAccounts(true)}
                   onSave={handleSaveTransaction}
                 />
               )}
@@ -700,6 +743,8 @@ export function App() {
                 <>
                   <DashboardTab
                     accountGroups={accountGroups}
+                    financialAccounts={financialAccounts}
+                    financialAccountSummaries={financialAccountSummaries}
                     transactions={transactions}
                         onApplyStarterPreset={handleApplyStarterPreset}
                     onAddTransactionClick={() => {
@@ -734,9 +779,37 @@ export function App() {
                 </>
               )}
 
-              {!isTransactionEntryActive && activeTab === 'history' && (
-                <HistoryTab
+              {!isTransactionEntryActive && activeTab === 'financialAccounts' && (
+                <FinancialAccountSettingsModal
+                  isOpen={true}
+                  presentation="page"
+                  showCloseButton={false}
+                  allowEditing={false}
+                  onOpenManager={(type) => {
+                    setFinancialAccountToEdit(null);
+                    setFinancialAccountFormType(type ?? 'bank');
+                    setIsEditingFinancialAccounts(true);
+                  }}
+                  onEditAccount={(account) => {
+                    setFinancialAccountToEdit(account);
+                    setFinancialAccountFormType(account.type);
+                    setIsEditingFinancialAccounts(true);
+                  }}
+                  onViewDetails={setFinancialAccountDetails}
+                  showAccountActions
+                  accounts={financialAccounts}
+                  summaries={financialAccountSummaries}
+                  transactions={transactions}
+                  onClose={() => setActiveTab('dashboard')}
+                  onSaveAccount={saveFinancialAccount}
+                  onDeleteAccount={deleteFinancialAccount}
+                />
+              )}
+
+              {!isTransactionEntryActive && activeTab === 'activity' && (
+                <ActivityTab
                   accountGroups={accountGroups}
+                  financialAccounts={financialAccounts}
                   transactions={transactions}
                   preferNativeQueries={nativeMode}
                   onDeleteTransaction={deleteTransaction}
@@ -751,15 +824,6 @@ export function App() {
                     openTransactionEntry('history', 'basic');
                   }}
                   showFab={showFab}
-                />
-              )}
-
-              {!isTransactionEntryActive && activeTab === 'stats' && (
-                <StatsTab
-                  accountGroups={accountGroups}
-                  transactions={transactions}
-                  preferNativeQueries={nativeMode}
-                  getCategoryEmoji={getCategoryEmoji}
                 />
               )}
 
@@ -1079,6 +1143,42 @@ export function App() {
                   </div>
                 </div>
               )}
+              {isEditingFinancialAccounts && (
+                <FinancialAccountSettingsModal
+                  isOpen={true}
+                  initialType={financialAccountFormType}
+                  accountToEdit={financialAccountToEdit}
+                  accounts={financialAccounts}
+                  summaries={financialAccountSummaries}
+                  transactions={transactions}
+                  onClose={() => {
+                    setFinancialAccountToEdit(null);
+                    setIsEditingFinancialAccounts(false);
+                  }}
+                  onSaveAccount={saveFinancialAccount}
+                  onDeleteAccount={deleteFinancialAccount}
+                />
+              )}
+              {financialAccountDetails && (
+                <FinancialAccountDetailsModal
+                  isOpen={true}
+                  account={financialAccountDetails}
+                  summary={financialAccountSummaries.find(
+                    (summary) => summary.accountId === financialAccountDetails.id
+                  )}
+                  accounts={financialAccounts}
+                  transactions={transactions}
+                  onClose={() => setFinancialAccountDetails(null)}
+                  onAddTransaction={(type) => {
+                    const accountId = financialAccountDetails.id;
+                    setFinancialAccountDetails(null);
+                    openTransactionEntry('history', 'basic', {
+                      type,
+                      financialAccountId: accountId,
+                    });
+                  }}
+                />
+              )}
             </main>
           </div>
         </IonContent>
@@ -1126,16 +1226,16 @@ export function App() {
             <AppIcon name="home" size={20} />
           </button>
           <button
-            onClick={() => setActiveTab('history')}
-            className={`bottom-nav-button ${activeTab === 'history' ? 'active' : ''}`}
+            onClick={() => setActiveTab('activity')}
+            className={`bottom-nav-button ${activeTab === 'activity' ? 'active' : ''}`}
             aria-label="明細"
-            aria-current={activeTab === 'history' ? 'page' : undefined}
+            aria-current={activeTab === 'activity' ? 'page' : undefined}
             style={{
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               background: 'transparent',
-              color: activeTab === 'history' ? 'var(--primary-color)' : 'var(--text-tertiary)',
+              color: activeTab === 'activity' ? 'var(--primary-color)' : 'var(--text-tertiary)',
               fontSize: '0.75rem',
               fontWeight: 500,
               border: 'none',
@@ -1146,23 +1246,23 @@ export function App() {
           </button>
 
           <button
-            onClick={() => setActiveTab('stats')}
-            className={`bottom-nav-button ${activeTab === 'stats' ? 'active' : ''}`}
-            aria-label="分析"
-            aria-current={activeTab === 'stats' ? 'page' : undefined}
+            onClick={() => setActiveTab('financialAccounts')}
+            className={`bottom-nav-button ${activeTab === 'financialAccounts' ? 'active' : ''}`}
+            aria-label="金融帳戶"
+            aria-current={activeTab === 'financialAccounts' ? 'page' : undefined}
             style={{
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               background: 'transparent',
-              color: activeTab === 'stats' ? 'var(--primary-color)' : 'var(--text-tertiary)',
+              color: activeTab === 'financialAccounts' ? 'var(--primary-color)' : 'var(--text-tertiary)',
               fontSize: '0.75rem',
               fontWeight: 500,
               border: 'none',
               cursor: 'pointer',
             }}
           >
-            <AppIcon name="bar-chart" size={20} />
+            <AppIcon name="landmark" size={20} />
           </button>
 
           <button

@@ -1,18 +1,26 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   AccountGroup,
+  calculateFinancialAccountSummaries,
+  FinancialAccount,
+  FinancialAccountSummary,
+  FinancialAccountType,
   Transaction,
   getCurrentMonthExpenseForGroup,
   getDefaultCategoriesForNewGroup,
   getLocalISOString,
   expandInstallment,
   STORAGE_KEYS,
+  validateFinancialAccount,
+  validateFinancialAccountTransaction,
+  getFinancialAccountOpeningAmount,
 } from '@keep-accounts-app/domain';
 import { migrateAccountGroups } from './migrations';
 import {
   isNativePersistenceEnabled,
   loadKeepAccountsSnapshot,
   queryNativeCurrentMonthExpenseForGroup,
+  queryNativeFinancialAccountSummaries,
   queryNativeRecentTransactions,
   queryNativeTransactionById,
   queryNativeInstallmentTransactions,
@@ -23,6 +31,7 @@ import {
   replaceNativeInstallmentGroup,
   reassignNativeTransactionsGroup,
   saveNativeAccountGroups,
+  saveNativeFinancialAccounts,
   saveKeepAccountsSnapshot,
 } from './persistence';
 
@@ -61,6 +70,24 @@ export function useKeepAccounts() {
     return [];
   });
 
+  const [financialAccounts, setFinancialAccounts] = useState<FinancialAccount[]>(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.ACCOUNTS.FINANCIAL_ACCOUNTS);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (e) {
+        console.error(e);
+        return [];
+      }
+    }
+    return [];
+  });
+
+  const [financialAccountSummaries, setFinancialAccountSummaries] = useState<
+    FinancialAccountSummary[]
+  >([]);
+
   // Sync state to localStorage
   useEffect(() => {
     let cancelled = false;
@@ -83,6 +110,10 @@ export function useKeepAccounts() {
       } else if (JSON.stringify(snapshot.transactions) !== JSON.stringify(transactions)) {
         setTransactions(snapshot.transactions);
       }
+      const hydratedFinancialAccounts = snapshot.financialAccounts ?? [];
+      if (JSON.stringify(hydratedFinancialAccounts) !== JSON.stringify(financialAccounts)) {
+        setFinancialAccounts(hydratedFinancialAccounts);
+      }
       hasHydratedPersistenceRef.current = true;
     };
 
@@ -93,22 +124,51 @@ export function useKeepAccounts() {
   }, [nativeMode]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    const updateSummaries = async () => {
+      if (nativeMode) {
+        const nativeSummaries = await queryNativeFinancialAccountSummaries(financialAccounts);
+        if (!cancelled && nativeSummaries) {
+          setFinancialAccountSummaries(nativeSummaries);
+        }
+        return;
+      }
+
+      setFinancialAccountSummaries(
+        calculateFinancialAccountSummaries(financialAccounts, transactions)
+      );
+    };
+
+    void updateSummaries();
+    return () => {
+      cancelled = true;
+    };
+  }, [financialAccounts, transactions, nativeMode]);
+
+  useEffect(() => {
     if (!hasHydratedPersistenceRef.current) {
       return;
     }
 
     localStorage.setItem(STORAGE_KEYS.ACCOUNTS.GROUPS, JSON.stringify(accountGroups));
+    localStorage.setItem(
+      STORAGE_KEYS.ACCOUNTS.FINANCIAL_ACCOUNTS,
+      JSON.stringify(financialAccounts)
+    );
     if (!nativeMode) {
       localStorage.setItem(STORAGE_KEYS.ACCOUNTS.TRANSACTIONS, JSON.stringify(transactions));
       void saveKeepAccountsSnapshot({
         accountGroups,
         transactions,
+        financialAccounts,
       });
       return;
     }
 
     void saveNativeAccountGroups(accountGroups);
-  }, [accountGroups, transactions, nativeMode]);
+    void saveNativeFinancialAccounts(financialAccounts);
+  }, [accountGroups, transactions, financialAccounts, nativeMode]);
 
   // Legacy repair: before installment account-group selection existed, some
   // installment transactions with system category "分期" were saved into source
@@ -153,6 +213,84 @@ export function useKeepAccounts() {
     }
   }, [accountGroups, transactions, nativeMode]);
 
+  const saveFinancialAccount = ({
+    id,
+    name,
+    type,
+    openingAmount,
+    statementClosingDay,
+    paymentDueDay,
+  }: {
+    id?: string;
+    name: string;
+    type: FinancialAccountType;
+    openingAmount: number;
+    statementClosingDay?: number;
+    paymentDueDay?: number;
+  }): boolean => {
+    const accountId = id ?? `financial-account-${Date.now()}`;
+    const account: FinancialAccount = {
+      id: accountId,
+      name: name.trim(),
+      type,
+      openingAmount,
+      statementClosingDay: type === 'credit-card' ? statementClosingDay : undefined,
+      paymentDueDay: type === 'credit-card' ? paymentDueDay : undefined,
+    };
+    const validationError = validateFinancialAccount(account);
+    if (validationError) {
+      alert(validationError);
+      return false;
+    }
+
+    setFinancialAccounts((previous) => {
+      const existing = previous.find((candidate) => candidate.id === account.id);
+      if (!existing) {
+        return [...previous, account];
+      }
+
+      const currentOpeningAmount = getFinancialAccountOpeningAmount(existing);
+      const delta = openingAmount - currentOpeningAmount;
+      const adjustments = [...(existing.openingAmountAdjustments ?? [])];
+      if (delta !== 0) {
+        adjustments.push({
+          id: `financial-account-adjustment-${Date.now()}`,
+          amount: delta,
+          date: getLocalISOString(),
+        });
+      }
+
+      return previous.map((candidate) =>
+        candidate.id === account.id
+          ? {
+              ...account,
+              openingAmount: existing.openingAmount,
+              openingAmountAdjustments: adjustments,
+            }
+          : candidate
+      );
+    });
+    return true;
+  };
+
+  const isFinancialAccountReferenced = (accountId: string) =>
+    transactions.some(
+      (transaction) =>
+        transaction.financialAccountId === accountId ||
+        transaction.transferSourceFinancialAccountId === accountId ||
+        transaction.transferDestinationFinancialAccountId === accountId
+    );
+
+  const deleteFinancialAccount = (accountId: string): boolean => {
+    if (isFinancialAccountReferenced(accountId)) {
+      alert('此金融帳戶已有交易紀錄，不能刪除。');
+      return false;
+    }
+
+    setFinancialAccounts((previous) => previous.filter((account) => account.id !== accountId));
+    return true;
+  };
+
   const saveTransaction = (
     description: string,
     amountStr: string,
@@ -161,7 +299,10 @@ export function useKeepAccounts() {
     date: string,
     accountGroupId: string,
     editingTxId: string | null,
-    installmentPeriods?: number
+    installmentPeriods?: number,
+    financialAccountId?: string,
+    transferSourceFinancialAccountId?: string,
+    transferDestinationFinancialAccountId?: string
   ): boolean => {
     const normalizedAmountStr = amountStr.replace(/,/g, '');
     const amount = parseFloat(normalizedAmountStr);
@@ -174,6 +315,20 @@ export function useKeepAccounts() {
     }
     if (!description.trim()) {
       alert('請輸入描述！');
+      return false;
+    }
+
+    const accountValidationError = validateFinancialAccountTransaction(
+      {
+        type,
+        financialAccountId,
+        transferSourceFinancialAccountId,
+        transferDestinationFinancialAccountId,
+      },
+      financialAccounts
+    );
+    if (accountValidationError) {
+      alert(accountValidationError);
       return false;
     }
 
@@ -266,6 +421,11 @@ export function useKeepAccounts() {
         category,
         date,
         accountGroupId,
+        financialAccountId: type === 'transfer' ? undefined : financialAccountId,
+        transferSourceFinancialAccountId:
+          type === 'transfer' ? transferSourceFinancialAccountId : undefined,
+        transferDestinationFinancialAccountId:
+          type === 'transfer' ? transferDestinationFinancialAccountId : undefined,
       };
 
       if (nativeMode) {
@@ -293,6 +453,11 @@ export function useKeepAccounts() {
         category,
         date: p.date,
         accountGroupId,
+        financialAccountId: type === 'transfer' ? undefined : financialAccountId,
+        transferSourceFinancialAccountId:
+          type === 'transfer' ? transferSourceFinancialAccountId : undefined,
+        transferDestinationFinancialAccountId:
+          type === 'transfer' ? transferDestinationFinancialAccountId : undefined,
         installmentId,
         installmentPeriod: p.period,
         installmentCount: installmentPeriods as number,
@@ -316,6 +481,11 @@ export function useKeepAccounts() {
         category,
         date,
         accountGroupId,
+        financialAccountId: type === 'transfer' ? undefined : financialAccountId,
+        transferSourceFinancialAccountId:
+          type === 'transfer' ? transferSourceFinancialAccountId : undefined,
+        transferDestinationFinancialAccountId:
+          type === 'transfer' ? transferDestinationFinancialAccountId : undefined,
       };
 
       if (nativeMode) {
@@ -493,6 +663,9 @@ export function useKeepAccounts() {
           category: template.category,
           date: settledAt,
           accountGroupId: template.accountGroupId,
+          financialAccountId: template.financialAccountId,
+          transferSourceFinancialAccountId: template.transferSourceFinancialAccountId,
+          transferDestinationFinancialAccountId: template.transferDestinationFinancialAccountId,
           installmentId,
           installmentPeriod: nextPeriod,
           installmentCount: nextPeriod,
@@ -538,6 +711,9 @@ export function useKeepAccounts() {
       category: template.category,
       date: settledAt,
       accountGroupId: template.accountGroupId,
+      financialAccountId: template.financialAccountId,
+      transferSourceFinancialAccountId: template.transferSourceFinancialAccountId,
+      transferDestinationFinancialAccountId: template.transferDestinationFinancialAccountId,
       installmentId,
       installmentPeriod: nextPeriod,
       installmentCount: nextPeriod,
@@ -685,6 +861,11 @@ export function useKeepAccounts() {
     setAccountGroups,
     transactions,
     setTransactions,
+    financialAccounts,
+    setFinancialAccounts,
+    financialAccountSummaries,
+    saveFinancialAccount,
+    deleteFinancialAccount,
     saveTransaction,
     deleteTransaction,
     deleteInstallmentPeriod,

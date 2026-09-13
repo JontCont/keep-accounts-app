@@ -15,6 +15,7 @@ export const STORAGE_KEYS = {
   ACCOUNTS: {
     GROUPS: 'keep_accounts_groups',
     TRANSACTIONS: 'keep_accounts_transactions',
+    FINANCIAL_ACCOUNTS: 'keep_accounts_financial_accounts',
   },
   SYSTEM: {
     IMPORT_HISTORY: 'keep_accounts_import_history',
