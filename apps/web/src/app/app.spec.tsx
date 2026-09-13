@@ -6,6 +6,20 @@ import { useKeepAccounts } from '@keep-accounts-app/state';
 import App from './app';
 import { getCurrentMonthExpenseForGroup, Transaction } from '@keep-accounts-app/domain';
 
+const seedTestFinancialAccount = () => {
+  localStorage.setItem(
+    'keep_accounts_financial_accounts',
+    JSON.stringify([
+      {
+        id: 'test-bank',
+        name: '測試銀行',
+        type: 'bank',
+        openingAmount: 20000,
+      },
+    ])
+  );
+};
+
 const dispatchIonScroll = (container: HTMLElement, scrollTop: number) => {
   const ionContent = container.querySelector('ion-content');
   expect(ionContent).toBeTruthy();
@@ -96,6 +110,26 @@ describe('App', () => {
     expect(getAllByText(new RegExp('Keep Accounts', 'gi')).length > 0).toBeTruthy();
   });
 
+  it('opens the account modal from a financial account section', () => {
+    render(<BrowserRouter><App /></BrowserRouter>);
+
+    fireEvent.click(screen.getByRole('button', { name: '金融帳戶' }));
+    fireEvent.click(screen.getByRole('button', { name: '新增銀行帳戶' }));
+
+    expect(screen.getAllByText('管理銀行、信用卡與現金餘額').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByLabelText('金融帳戶名稱')).toBeTruthy();
+  });
+
+  it('opens the financial accounts page from the bottom navigation', () => {
+    render(<BrowserRouter><App /></BrowserRouter>);
+
+    fireEvent.click(screen.getByRole('button', { name: '金融帳戶' }));
+
+    expect(screen.getAllByRole('heading', { name: '金融帳戶' }).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText('管理銀行、信用卡與現金餘額')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '金融帳戶' }).getAttribute('aria-current')).toBe('page');
+  });
+
   it('keeps bottom navigation icon-only and fixed while scrolling', () => {
     const { container, getByTestId } = render(<BrowserRouter><App /></BrowserRouter>);
 
@@ -118,7 +152,6 @@ describe('App', () => {
     const dashboardButton = within(nav).getByRole('button', { name: '總覽' });
     expect(dashboardButton.getAttribute('aria-current')).toBe('page');
     expect(within(nav).getByRole('button', { name: '明細' }).getAttribute('aria-current')).toBeNull();
-    expect(within(nav).getByRole('button', { name: '分析' }).getAttribute('aria-current')).toBeNull();
     expect(within(nav).getByRole('button', { name: '設定' }).getAttribute('aria-current')).toBeNull();
 
     act(() => {
@@ -158,7 +191,7 @@ describe('App', () => {
     expect(getByText('精緻微型記帳系統')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: '明細' }));
-    expect(getByText('歷史交易明細')).toBeTruthy();
+    expect(getByText('明細分析')).toBeTruthy();
     expect(queryByText('精緻微型記帳系統')).toBeNull();
   });
 
@@ -538,7 +571,7 @@ describe('App', () => {
     expect(getByText('新增收支記帳')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: '返回' }));
-    expect(getByText('歷史交易明細')).toBeTruthy();
+    expect(getByText('明細分析')).toBeTruthy();
   });
 });
 
@@ -647,7 +680,6 @@ describe('Salary source group', () => {
       { id: 'e1', description: '午餐', amount: 5000, type: 'expense', category: '餐飲食品', date: currentMonthDate('06'), accountGroupId: '1' },
     ];
     localStorage.setItem('keep_accounts_transactions', JSON.stringify(mockTxs));
-
     const { getByText, getAllByText } = render(<BrowserRouter><App /></BrowserRouter>);
 
     // 日常開銷: allocated 30% of $45,000 = $13,500, spent $5,000, remaining $8,500
@@ -685,6 +717,7 @@ describe('Salary source group', () => {
 describe('Credit-card installments', () => {
   beforeEach(() => {
     localStorage.clear();
+    seedTestFinancialAccount();
   });
 
   it('repairs legacy installment system-category transactions saved under source group', async () => {
@@ -730,7 +763,8 @@ describe('Credit-card installments', () => {
         '2026-01-15T10:00:00+08:00',
         '1',
         null,
-        10
+        10,
+        'test-bank'
       );
     });
 
@@ -745,6 +779,7 @@ describe('Credit-card installments', () => {
         (t) => t.accountGroupId === '1' && t.category === '購物消費'
       )
     ).toBe(true);
+    expect(installmentTxs.every((t) => t.financialAccountId === 'test-bank')).toBe(true);
 
     const sorted = [...installmentTxs].sort(
       (a, b) => (a.installmentPeriod ?? 0) - (b.installmentPeriod ?? 0)
@@ -769,7 +804,9 @@ describe('Credit-card installments', () => {
         '購物消費',
         '2026-07-10T10:00:00+08:00',
         '1',
-        null
+        null,
+        undefined,
+        'test-bank'
       );
     });
 
@@ -792,6 +829,7 @@ describe('Credit-card installments', () => {
       { id: `${installmentId}-3`, description: '分期消費', amount: 1000, type: 'expense', category: '購物消費', date: '2099-02-01T10:00:00+08:00', accountGroupId: '1', installmentId, installmentPeriod: 3, installmentCount: 3 },
     ];
     localStorage.setItem('keep_accounts_transactions', JSON.stringify(mockTxs));
+    localStorage.setItem('keep_accounts_financial_accounts', '[]');
 
     const { getByText, getAllByText } = render(<BrowserRouter><App /></BrowserRouter>);
 
@@ -877,7 +915,9 @@ describe('Credit-card installments', () => {
         '分期',
         '2026-12-25T12:47:00+08:00',
         '1',
-        `${installmentId}-5`
+        `${installmentId}-5`,
+        undefined,
+        'test-bank'
       );
     });
 
@@ -925,7 +965,9 @@ describe('Credit-card installments', () => {
         '分期',
         '2026-09-25T12:47:00+08:00',
         '1',
-        `${installmentId}-2`
+        `${installmentId}-2`,
+        undefined,
+        'test-bank'
       );
     });
 
@@ -998,7 +1040,9 @@ describe('Credit-card installments', () => {
         '分期',
         '2099-12-10T12:47:00+08:00',
         '1',
-        `${installmentId}-5`
+        `${installmentId}-5`,
+        undefined,
+        'test-bank'
       );
     });
 
@@ -1033,6 +1077,7 @@ describe('getCurrentMonthExpenseForGroup', () => {
 describe('useKeepAccounts defensive checks', () => {
   beforeEach(() => {
     localStorage.clear();
+    seedTestFinancialAccount();
   });
 
   it('should throw an error when saving a transaction with a negative amount', () => {
@@ -1050,6 +1095,141 @@ describe('useKeepAccounts defensive checks', () => {
         );
       });
     }).toThrow('Transaction amount cannot be negative');
+  });
+
+  it('prevents deleting financial accounts referenced by transactions', () => {
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => undefined);
+    const { result } = renderHook(() => useKeepAccounts());
+
+    act(() => {
+      result.current.saveFinancialAccount({
+        name: '台新信用卡',
+        type: 'credit-card',
+        openingAmount: 0,
+        statementClosingDay: 15,
+        paymentDueDay: 5,
+      });
+    });
+
+    const card = result.current.financialAccounts.find((account) => account.name === '台新信用卡');
+    expect(card).toBeTruthy();
+
+    act(() => {
+      result.current.saveTransaction(
+        '刷卡消費',
+        '500',
+        'expense',
+        '餐飲食品',
+        '2026-09-13T10:00:00+08:00',
+        '1',
+        null,
+        undefined,
+        card?.id
+      );
+    });
+
+    let deleted = true;
+    act(() => {
+      deleted = result.current.deleteFinancialAccount(card?.id ?? '');
+    });
+    expect(deleted).toBe(false);
+    expect(alertSpy).toHaveBeenCalledWith('此金融帳戶已有交易紀錄，不能刪除。');
+
+    alertSpy.mockRestore();
+  });
+
+  it('records opening amount changes and includes the adjustment in the total', async () => {
+    const { result } = renderHook(() => useKeepAccounts());
+    let accountId = '';
+
+    act(() => {
+      result.current.saveFinancialAccount({
+        name: '國泰銀行',
+        type: 'bank',
+        openingAmount: 3000,
+      });
+    });
+    accountId = result.current.financialAccounts.find((account) => account.name === '國泰銀行')?.id ?? '';
+
+    act(() => {
+      result.current.saveFinancialAccount({
+        id: accountId,
+        name: '國泰銀行',
+        type: 'bank',
+        openingAmount: 4000,
+      });
+    });
+
+    const account = result.current.financialAccounts.find((candidate) => candidate.id === accountId);
+    expect(account?.openingAmount).toBe(3000);
+    expect(account?.openingAmountAdjustments?.[0].amount).toBe(1000);
+    await waitFor(() => {
+      const summary = result.current.financialAccountSummaries.find(
+        (candidate) => candidate.accountId === accountId
+      );
+      expect(summary).toMatchObject({
+        accountId,
+        amount: 4000,
+      });
+    });
+  });
+
+  it('stores transfers as one non-P&L transaction and rejects the same account on both sides', () => {
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => undefined);
+    const { result } = renderHook(() => useKeepAccounts());
+
+    act(() => {
+      result.current.saveFinancialAccount({
+        name: '台新信用卡',
+        type: 'credit-card',
+        openingAmount: 0,
+        statementClosingDay: 15,
+        paymentDueDay: 5,
+      });
+    });
+    const card = result.current.financialAccounts.find((account) => account.name === '台新信用卡');
+
+    let saved = false;
+    act(() => {
+      saved = result.current.saveTransaction(
+        '繳信用卡費',
+        '500',
+        'transfer',
+        '不計損益',
+        '2026-09-13T11:00:00+08:00',
+        '',
+        null,
+        undefined,
+        undefined,
+        'test-bank',
+        card?.id
+      );
+    });
+    expect(saved).toBe(true);
+    expect(result.current.transactions[0].transferSourceFinancialAccountId).toBe('test-bank');
+    expect(result.current.transactions[0].transferDestinationFinancialAccountId).toBe(card?.id);
+
+    const transactionCount = result.current.transactions.length;
+    act(() => {
+      saved = result.current.saveTransaction(
+        '錯誤轉帳',
+        '100',
+        'transfer',
+        '不計損益',
+        '2026-09-13T12:00:00+08:00',
+        '',
+        null,
+        undefined,
+        undefined,
+        'test-bank',
+        'test-bank'
+      );
+    });
+    expect(saved).toBe(false);
+    expect(result.current.transactions).toHaveLength(transactionCount);
+    expect(alertSpy).toHaveBeenCalledWith('來源與目的金融帳戶必須不同。');
+
+    alertSpy.mockRestore();
   });
 
   it('should allow saving account groups when ratios do not sum to 100%', () => {

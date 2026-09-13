@@ -2,6 +2,9 @@ import { useState, FC, ReactNode } from 'react';
 import {
   Transaction,
   AccountGroup,
+  FinancialAccount,
+  FinancialAccountSummary,
+  getFinancialAccountOpeningAmount,
   getCurrentMonthExpenseForGroup,
 } from '@keep-accounts-app/domain';
 import { AppIcon } from './AppIcon';
@@ -9,6 +12,8 @@ import { TransactionLedgerRow } from './TransactionLedgerRow';
 
 interface DashboardTabProps {
   accountGroups: AccountGroup[];
+  financialAccounts?: FinancialAccount[];
+  financialAccountSummaries?: FinancialAccountSummary[];
   transactions: Transaction[];
   onApplyStarterPreset: () => void;
   onAddTransactionClick: () => void;
@@ -27,6 +32,8 @@ interface DashboardTabProps {
 
 export const DashboardTab: FC<DashboardTabProps> = ({
   accountGroups,
+  financialAccounts = [],
+  financialAccountSummaries = [],
   transactions,
   onApplyStarterPreset,
   onAddTransactionClick,
@@ -58,6 +65,7 @@ export const DashboardTab: FC<DashboardTabProps> = ({
     (tx) => tx.date.substring(0, 10) <= todayStr
   );
 
+
   const totalIncome = realizedTxs
     .filter((tx) => tx.type === 'income')
     .reduce((sum, tx) => sum + tx.amount, 0);
@@ -66,7 +74,20 @@ export const DashboardTab: FC<DashboardTabProps> = ({
     .filter((tx) => tx.type === 'expense')
     .reduce((sum, tx) => sum + tx.amount, 0);
 
-  const totalBalance = totalIncome - totalExpense;
+  const summaryByAccountId = new Map(
+    financialAccountSummaries.map((summary) => [summary.accountId, summary])
+  );
+  const totalFinancialBalance = financialAccounts.reduce((total, account) => {
+    const summary = summaryByAccountId.get(account.id);
+    const amount = summary?.amount ?? getFinancialAccountOpeningAmount(account);
+    if (account.type === 'credit-card') {
+      return total + (summary?.status === 'credit' ? amount : -amount);
+    }
+    return total + amount;
+  }, 0);
+  const totalBalance = financialAccounts.length > 0
+    ? totalFinancialBalance
+    : totalIncome - totalExpense;
 
   const displayIncome = transactions
     .filter((tx) => tx.type === 'income')
@@ -114,17 +135,6 @@ export const DashboardTab: FC<DashboardTabProps> = ({
     .reduce((sum, tx) => sum + tx.amount, 0);
 
   const remainingToday = allowedToday - todayExpenseForDailyGroup;
-
-  const getGroupBalance = (groupId: string) => {
-    const groupTxs = realizedTxs.filter((tx) => tx.accountGroupId === groupId);
-    const income = groupTxs
-      .filter((tx) => tx.type === 'income')
-      .reduce((sum, tx) => sum + tx.amount, 0);
-    const expense = groupTxs
-      .filter((tx) => tx.type === 'expense')
-      .reduce((sum, tx) => sum + tx.amount, 0);
-    return income - expense;
-  };
 
   const sourceGroup = accountGroups.find((g) => g.isSource);
   const hasUsableAllocationSetup =
@@ -546,7 +556,6 @@ export const DashboardTab: FC<DashboardTabProps> = ({
             }}
           >
             {accountGroups.map((group) => {
-              const bal = getGroupBalance(group.id);
               const isSrc = !!group.isSource;
               const targetRatio = group.targetRatio || 0;
               const allocated = getGroupAllocated(targetRatio);
@@ -864,6 +873,7 @@ export const DashboardTab: FC<DashboardTabProps> = ({
                       tx={tx}
                       getCategoryEmoji={getCategoryEmoji}
                       getGroupName={getGroupName}
+                      financialAccounts={financialAccounts}
                       onEditTransaction={tx.installmentId ? undefined : onEditTransactionClick}
                       onDeleteTransaction={
                         tx.installmentId

@@ -3,11 +3,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 type Snapshot = {
   accountGroups: any[];
   transactions: any[];
+  financialAccounts?: any[];
 };
 
 const seedLocalSnapshot = (snapshot: Snapshot) => {
   localStorage.setItem('keep_accounts_groups', JSON.stringify(snapshot.accountGroups));
   localStorage.setItem('keep_accounts_transactions', JSON.stringify(snapshot.transactions));
+  if (snapshot.financialAccounts) {
+    localStorage.setItem(
+      'keep_accounts_financial_accounts',
+      JSON.stringify(snapshot.financialAccounts)
+    );
+  }
 };
 
 describe('persistence', () => {
@@ -49,7 +56,9 @@ describe('persistence', () => {
     vi.doMock('@capacitor/core', () => ({
       Capacitor: {
         isNativePlatform: () => false,
+        getPlatform: () => 'web',
       },
+      registerPlugin: () => ({ updateSummary: async () => undefined }),
     }));
     vi.doMock('@capacitor-community/sqlite', () => ({}));
 
@@ -58,6 +67,48 @@ describe('persistence', () => {
 
     expect(snapshot.accountGroups).toHaveLength(1);
     expect(snapshot.transactions).toHaveLength(1);
+    expect(snapshot.financialAccounts).toEqual([]);
+  });
+
+  it('round-trips financial accounts and transaction references through localStorage', async () => {
+    vi.doMock('@capacitor/core', () => ({
+      Capacitor: {
+        isNativePlatform: () => false,
+        getPlatform: () => 'web',
+      },
+      registerPlugin: () => ({ updateSummary: async () => undefined }),
+    }));
+    vi.doMock('@capacitor-community/sqlite', () => ({}));
+
+    const { loadKeepAccountsSnapshot, saveKeepAccountsSnapshot } = await import('./persistence');
+    await saveKeepAccountsSnapshot({
+      accountGroups: [],
+      transactions: [
+        {
+          id: 'tx-1',
+          financialAccountId: 'bank-1',
+        },
+      ] as any,
+      financialAccounts: [
+        {
+          id: 'bank-1',
+          name: 'Cathay Checking',
+          type: 'bank',
+          openingAmount: 20000,
+        },
+      ],
+    });
+
+    const snapshot = await loadKeepAccountsSnapshot();
+    expect(snapshot.financialAccounts).toEqual([
+      {
+        id: 'bank-1',
+        name: 'Cathay Checking',
+        type: 'bank',
+        openingAmount: 20000,
+      },
+    ]);
+    expect(snapshot.transactions[0].financialAccountId).toBe('bank-1');
   });
 
   it('loads from sqlite rows on native platforms', async () => {
@@ -110,7 +161,9 @@ describe('persistence', () => {
     vi.doMock('@capacitor/core', () => ({
       Capacitor: {
         isNativePlatform: () => true,
+        getPlatform: () => 'android',
       },
+      registerPlugin: () => ({ updateSummary: async () => undefined }),
     }));
     vi.doMock('@capacitor-community/sqlite', () => ({
       CapacitorSQLite: {},
@@ -137,7 +190,9 @@ describe('persistence', () => {
     vi.doMock('@capacitor/core', () => ({
       Capacitor: {
         isNativePlatform: () => true,
+        getPlatform: () => 'android',
       },
+      registerPlugin: () => ({ updateSummary: async () => undefined }),
     }));
     vi.doMock('@capacitor-community/sqlite', () => ({
       CapacitorSQLite: {},

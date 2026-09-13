@@ -144,7 +144,7 @@ export const StatsTab: React.FC<StatsTabProps> = ({
             whiteSpace: 'nowrap',
           }}
         >
-          帳戶：
+          分配群組：
         </span>
         <IonSelect
           value={statsGroup}
@@ -154,7 +154,7 @@ export const StatsTab: React.FC<StatsTabProps> = ({
             fontSize: '0.85rem',
           }}
         >
-          <IonSelectOption value="all">顯示全部帳戶</IonSelectOption>
+          <IonSelectOption value="all">顯示全部分配群組</IonSelectOption>
           {accountGroups.map((g) => (
             <IonSelectOption key={g.id} value={g.id}>
               {g.emoji} {g.name}

@@ -17,6 +17,30 @@ export interface AccountGroup {
   isSource?: boolean;
 }
 
+export type FinancialAccountType = 'bank' | 'credit-card' | 'cash';
+
+export interface FinancialAccountAdjustment {
+  id: string;
+  amount: number;
+  date: string;
+}
+
+export interface FinancialAccount {
+  id: string;
+  name: string;
+  type: FinancialAccountType;
+  openingAmount: number;
+  statementClosingDay?: number;
+  paymentDueDay?: number;
+  openingAmountAdjustments?: FinancialAccountAdjustment[];
+}
+
+export interface FinancialAccountSummary {
+  accountId: string;
+  amount: number;
+  status: 'balance' | 'outstanding' | 'credit';
+}
+
 /**
  * Marks which reporting surfaces a transaction row is allowed to affect.
  * - `cash`: account-group cash balance only (e.g. stock settlement principal).
@@ -41,6 +65,9 @@ export interface Transaction {
   installmentCount?: number; // Total number of periods in the installment
   effect?: TransactionEffect; // Missing means 'both' (backward compatible)
   stockTradeId?: string; // Links this row to the StockTrade that generated it
+  financialAccountId?: string;
+  transferSourceFinancialAccountId?: string;
+  transferDestinationFinancialAccountId?: string;
 }
 
 export type StockSide = 'buy' | 'sell';

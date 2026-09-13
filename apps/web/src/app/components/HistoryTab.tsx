@@ -6,7 +6,7 @@ import {
   IonSelectOption,
   IonSkeletonText,
 } from '@ionic/react';
-import { Transaction, AccountGroup } from '@keep-accounts-app/domain';
+import { Transaction, AccountGroup, FinancialAccount } from '@keep-accounts-app/domain';
 import {
   queryHistoryPage,
   queryNativeHistoryPage,
@@ -16,6 +16,7 @@ import { TransactionLedgerRow } from './TransactionLedgerRow';
 
 interface HistoryTabProps {
   accountGroups: AccountGroup[];
+  financialAccounts?: FinancialAccount[];
   transactions: Transaction[];
   onDeleteTransaction: (id: string) => void;
   onDeleteInstallmentGroup: (installmentId: string) => void;
@@ -33,6 +34,7 @@ const HISTORY_SKELETON_COUNT = 3;
 
 export const HistoryTab: React.FC<HistoryTabProps> = ({
   accountGroups,
+  financialAccounts = [],
   transactions,
   onDeleteTransaction,
   onDeleteInstallmentGroup,
@@ -253,7 +255,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
               whiteSpace: 'nowrap',
             }}
           >
-            帳戶：
+            分配群組：
           </span>
           <IonSelect
             value={filterGroup}
@@ -365,6 +367,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
                       tx={tx}
                       getCategoryEmoji={getCategoryEmoji}
                       getGroupName={getGroupName}
+                      financialAccounts={financialAccounts}
                       onEditTransaction={tx.installmentId ? undefined : onEditTransaction}
                       onDeleteTransaction={
                         tx.installmentId

@@ -1,9 +1,5 @@
 import { useState, useEffect, FC, FormEvent, CSSProperties } from 'react';
-import {
-  IonSelect,
-  IonSelectOption,
-  IonInput,
-} from '@ionic/react';
+import { IonInput } from '@ionic/react';
 import {
   AccountGroup,
   ACCOUNT_EMOJIS,
@@ -344,7 +340,7 @@ export const GroupSettingsModal: FC<GroupSettingsModalProps> = ({
         }}
       >
         <h3 style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>
-          ⚙️ 編輯資金帳戶與設定
+          ⚙️ 編輯分配群組與設定
         </h3>
         <button
           onClick={handleSave}

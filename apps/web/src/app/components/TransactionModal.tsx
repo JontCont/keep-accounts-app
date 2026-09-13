@@ -8,6 +8,7 @@ import {
 import {
   Transaction,
   AccountGroup,
+  FinancialAccount,
   InstallmentReminderConfig,
   getLocalISOString,
 } from '@keep-accounts-app/domain';
@@ -155,11 +156,14 @@ interface TransactionModalProps {
   onClose: () => void;
   editingTx: Transaction | null;
   accountGroups: AccountGroup[];
+  financialAccounts?: FinancialAccount[];
   presentation?: 'modal' | 'page';
   showHeaderTitle?: boolean;
   incomeLocked?: boolean;
   incomeLockMessage?: string;
   initialTab?: 'basic' | 'installment';
+  initialType?: 'income' | 'expense';
+  initialFinancialAccountId?: string;
   onSave: (
     description: string,
     amount: string,
@@ -170,8 +174,12 @@ interface TransactionModalProps {
     installment?: {
       periods: number;
       reminder: InstallmentReminderConfig;
-    } | null
+    } | null,
+    financialAccountId?: string,
+    transferSourceFinancialAccountId?: string,
+    transferDestinationFinancialAccountId?: string,
   ) => void;
+  onCreateFinancialAccount?: () => void;
 }
 
 const DEFAULT_NOTIFICATION_TITLE = '信用卡分期繳費提醒';
@@ -180,6 +188,12 @@ const SYSTEM_INSTALLMENT_CATEGORY = '分期';
 const NON_PNL_CATEGORY = '不計損益';
 const SALARY_CATEGORY_KEYWORDS = ['薪水', '薪資', 'salary'];
 const STOCK_CATEGORY_NAME = '股票';
+
+const getFinancialAccountIcon = (type: FinancialAccount['type']) => {
+  if (type === 'bank') return 'landmark';
+  if (type === 'credit-card') return 'credit-card';
+  return 'wallet';
+};
 
 export const resolveTransactionCategory = (category: string, useInstallment: boolean) => {
   return useInstallment ? SYSTEM_INSTALLMENT_CATEGORY : category;
@@ -336,12 +350,16 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   onClose,
   editingTx,
   accountGroups,
+  financialAccounts = [],
   presentation = 'modal',
   showHeaderTitle = true,
   incomeLocked = false,
   incomeLockMessage = '請先完成首次設定引導。',
   initialTab = 'basic',
+  initialType = 'expense',
+  initialFinancialAccountId,
   onSave,
+  onCreateFinancialAccount,
 }) => {
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
@@ -349,6 +367,9 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const [category, setCategory] = useState('');
   const [date, setDate] = useState(getLocalISOString());
   const [accountGroupId, setAccountGroupId] = useState(resolveDefaultTransactionGroupId(accountGroups));
+  const [financialAccountId, setFinancialAccountId] = useState('');
+  const [transferSourceFinancialAccountId, setTransferSourceFinancialAccountId] = useState('');
+  const [transferDestinationFinancialAccountId, setTransferDestinationFinancialAccountId] = useState('');
 
   // Installment (分期) configuration state
   const [activeTab, setActiveTab] = useState<'basic' | 'installment'>('basic');
@@ -394,6 +415,10 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     () => filterAccountGroupsByTransactionType(accountGroups, type),
     [accountGroups, type]
   );
+  const activeFinancialAccounts = useMemo(
+    () => financialAccounts,
+    [financialAccounts]
+  );
   const isStockCategory = category === STOCK_CATEGORY_NAME;
   const showStockBuyCalculator =
     !isEditingInstallment &&
@@ -413,6 +438,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       setAmount(editingTx.amount.toString());
       setType(editingTx.type);
       setAccountGroupId(editingTx.accountGroupId);
+      setFinancialAccountId(editingTx.financialAccountId ?? '');
+      setTransferSourceFinancialAccountId(editingTx.transferSourceFinancialAccountId ?? '');
+      setTransferDestinationFinancialAccountId(
+        editingTx.transferDestinationFinancialAccountId ?? ''
+      );
       setDate(editingTx.date);
       setCategory(editingTx.category);
 
@@ -436,8 +466,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       const now = getLocalISOString();
       setDescription('');
       setAmount('');
-      setType('expense');
+      setType(initialType);
       setAccountGroupId(resolveDefaultTransactionGroupId(accountGroups));
+      setFinancialAccountId(initialFinancialAccountId ?? '');
+      setTransferSourceFinancialAccountId('');
+      setTransferDestinationFinancialAccountId('');
       setDate(now);
       setInstallmentStartDate(now);
       setStockSymbol('');
@@ -455,7 +488,22 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     setRemindOnDueDate(false);
     setNotificationTitle(DEFAULT_NOTIFICATION_TITLE);
     setNotificationBody(DEFAULT_NOTIFICATION_BODY);
-  }, [editingTx, isOpen, accountGroups, initialTab]);
+  }, [editingTx, initialFinancialAccountId, initialTab, initialType, isOpen, accountGroups]);
+
+  useEffect(() => {
+    if (editingTx || activeFinancialAccounts.length === 0) {
+      return;
+    }
+
+    setFinancialAccountId((current) => current || activeFinancialAccounts[0].id);
+    setTransferSourceFinancialAccountId((current) => current || activeFinancialAccounts[0].id);
+    setTransferDestinationFinancialAccountId((current) => {
+      if (current) {
+        return current;
+      }
+      return activeFinancialAccounts[1]?.id ?? activeFinancialAccounts[0].id;
+    });
+  }, [activeFinancialAccounts, editingTx]);
 
   useEffect(() => {
     if (incomeLocked && !editingTx && type === 'income') {
@@ -603,9 +651,12 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       canConfigureInstallment && activeTab === 'installment' && hasValidInstallment;
     const periodsNum = parseInt(installmentPeriods, 10);
     const submitDate = useInstallment ? installmentStartDate : date;
-    const submitAccountGroupId = useInstallment
-      ? resolveDefaultTransactionGroupId(accountGroups)
-      : accountGroupId;
+    const submitAccountGroupId =
+      type === 'transfer'
+        ? ''
+        : useInstallment
+          ? resolveDefaultTransactionGroupId(accountGroups)
+          : accountGroupId;
     const submitCategory = type === 'transfer' ? NON_PNL_CATEGORY : resolveTransactionCategory(category, useInstallment);
     onSave(
       description,
@@ -623,7 +674,10 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               notificationBody,
             },
           }
-        : null
+        : null,
+      type === 'transfer' ? undefined : financialAccountId,
+      type === 'transfer' ? transferSourceFinancialAccountId : undefined,
+      type === 'transfer' ? transferDestinationFinancialAccountId : undefined,
     );
   };
 
@@ -794,7 +848,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               <span aria-hidden="true">
                 <AppIcon name="arrow-left-right" size={18} />
               </span>
-              <span>不計損益</span>
+              <span>轉帳</span>
             </button>
           </div>
           {incomeLocked && !editingTx && (
@@ -819,7 +873,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               id="transaction-payment-mode-label"
               className="transaction-entry-control-label"
             >
-              付款方式
+              付款型態
             </span>
             <div
               className="transaction-entry-setup-mode"
@@ -827,7 +881,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               aria-labelledby="transaction-payment-mode-label"
             >
               {([
-                { key: 'basic', label: '基本' },
+                { key: 'basic', label: '一次付清' },
                 { key: 'installment', label: '分期' },
               ] as const).map((tab) => (
                 <button
@@ -866,7 +920,9 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         >
         {(!isNewTransaction || isTransactionSetup) && (
         <>
-        {/* Account Group selection */}
+        {type !== 'transfer' && (
+        <>
+        {/* Allocation Group selection */}
         <div>
           <label
             style={{
@@ -876,7 +932,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               marginBottom: '8px',
             }}
           >
-            選擇資金帳戶大項
+            分配群組
           </label>
           {isEditingInstallment ? (
             <div
@@ -899,7 +955,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 label: group.name,
                 icon: group.emoji,
               }))}
-              placeholder="選擇資金帳戶"
+              placeholder="選擇分配群組"
               compact={isNewTransaction}
             />
           )}
@@ -917,19 +973,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
           >
             選擇分類
           </label>
-          {type === 'transfer' ? (
-            <div
-              style={{
-                padding: '10px 0',
-                borderBottom: '1px solid var(--input-border)',
-                color: 'var(--text-primary)',
-                minHeight: '40px',
-                fontSize: '1rem',
-              }}
-            >
-              {NON_PNL_CATEGORY}
-            </div>
-          ) : isEditingInstallment ? (
+          {isEditingInstallment ? (
             <div
               style={{
                 padding: '10px 0',
@@ -960,6 +1004,99 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             />
           )}
         </div>
+
+        </>
+        )}
+
+        {/* Financial account selection */}
+        {type === 'transfer' ? (
+          <>
+            <div>
+              <label
+                style={{
+                  display: 'block',
+                  fontSize: '0.85rem',
+                  color: 'var(--text-secondary)',
+                  marginBottom: '8px',
+                }}
+              >
+                轉出金融帳戶
+              </label>
+              {activeFinancialAccounts.length === 0 ? (
+                <button type="button" onClick={onCreateFinancialAccount}>
+                  <AppIcon name="plus" size={16} /> 建立金融帳戶
+                </button>
+              ) : (
+                <CustomSelect
+                  value={transferSourceFinancialAccountId}
+                  onChange={setTransferSourceFinancialAccountId}
+                  options={activeFinancialAccounts.map((account) => ({
+                    value: account.id,
+                    label: account.name,
+                    icon: getFinancialAccountIcon(account.type),
+                  }))}
+                  placeholder="選擇轉出帳戶"
+                  compact={isNewTransaction}
+                />
+              )}
+            </div>
+            <div>
+              <label
+                style={{
+                  display: 'block',
+                  fontSize: '0.85rem',
+                  color: 'var(--text-secondary)',
+                  marginBottom: '8px',
+                }}
+              >
+                轉入金融帳戶
+              </label>
+              {activeFinancialAccounts.length > 0 && (
+                <CustomSelect
+                  value={transferDestinationFinancialAccountId}
+                  onChange={setTransferDestinationFinancialAccountId}
+                  options={activeFinancialAccounts.map((account) => ({
+                    value: account.id,
+                    label: account.name,
+                    icon: getFinancialAccountIcon(account.type),
+                  }))}
+                  placeholder="選擇轉入帳戶"
+                  compact={isNewTransaction}
+                />
+              )}
+            </div>
+          </>
+        ) : (
+          <div>
+            <label
+              style={{
+                display: 'block',
+                fontSize: '0.85rem',
+                color: 'var(--text-secondary)',
+                marginBottom: '8px',
+              }}
+            >
+              金融帳戶
+            </label>
+            {activeFinancialAccounts.length === 0 && !financialAccountId ? (
+              <button type="button" onClick={onCreateFinancialAccount}>
+                <AppIcon name="plus" size={16} /> 建立金融帳戶
+              </button>
+            ) : (
+              <CustomSelect
+                value={financialAccountId}
+                onChange={setFinancialAccountId}
+                options={financialAccounts.map((account) => ({
+                    value: account.id,
+                    label: account.name,
+                    icon: getFinancialAccountIcon(account.type),
+                  }))}
+                placeholder="選擇金融帳戶"
+                compact={isNewTransaction}
+              />
+            )}
+          </div>
+        )}
 
         </>
         )}

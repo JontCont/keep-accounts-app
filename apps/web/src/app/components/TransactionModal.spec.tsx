@@ -127,7 +127,7 @@ describe('TransactionModal', () => {
       </BrowserRouter>
     );
 
-    expect(getByText('選擇資金帳戶大項')).toBeTruthy();
+    expect(getByText('分配群組')).toBeTruthy();
     fireEvent.click(getByText('分期'));
     expect(getByText('下一步')).toBeTruthy();
     fireEvent.click(getByText('下一步'));
@@ -168,7 +168,7 @@ describe('TransactionModal', () => {
     expect(getByRole('list', { name: '新增記帳步驟' })).toBeTruthy();
     expect(getByText('交易設定')).toBeTruthy();
     expect(getByText('交易類型')).toBeTruthy();
-    expect(getByText('選擇資金帳戶大項')).toBeTruthy();
+    expect(getByText('分配群組')).toBeTruthy();
     expect(getByText('選擇分類')).toBeTruthy();
     expect(getByText('交易日期與時間')).toBeTruthy();
     expect(queryByPlaceholderText('例如: 買咖啡、午餐、薪水')).toBeNull();
@@ -255,7 +255,7 @@ describe('TransactionModal', () => {
     );
 
     expect(getByText('交易類型')).toBeTruthy();
-    expect(getByText('付款方式')).toBeTruthy();
+    expect(getByText('付款型態')).toBeTruthy();
     expect(container.querySelectorAll('.transaction-entry-type-option')).toHaveLength(3);
     expect(getByRole('button', { name: '支出' }).getAttribute('aria-pressed')).toBe('true');
     expect(container.querySelector('.transaction-entry-card')?.className).not.toContain(
@@ -265,10 +265,47 @@ describe('TransactionModal', () => {
     fireEvent.click(getByRole('button', { name: '收入' }));
 
     expect(getByRole('button', { name: '收入' }).getAttribute('aria-pressed')).toBe('true');
-    expect(queryByText('付款方式')).toBeNull();
+    expect(queryByText('付款型態')).toBeNull();
     expect(container.querySelector('.transaction-entry-card')?.className).toContain(
       'transaction-entry-card--content-fit'
     );
+  });
+
+  it('uses separate financial accounts for transfers and hides allocation controls', () => {
+    const accountGroups = [
+      {
+        id: '1',
+        name: '日常開銷',
+        emoji: 'credit-card',
+        color: '#6366f1',
+        categories: [{ name: '餐飲食品', emoji: 'coffee', color: '#f59e0b', type: 'expense' }],
+      },
+    ];
+    const financialAccounts = [
+      { id: 'bank', name: '國泰銀行', type: 'bank', openingAmount: 20000 },
+      { id: 'card', name: '台新信用卡', type: 'credit-card', openingAmount: 0 },
+    ];
+
+    const { getByRole, getByText, queryByText } = render(
+      <BrowserRouter>
+        <TransactionModal
+          isOpen={true}
+          onClose={vi.fn()}
+          editingTx={null}
+          accountGroups={accountGroups as any}
+          financialAccounts={financialAccounts as any}
+          onSave={vi.fn()}
+        />
+      </BrowserRouter>
+    );
+
+    fireEvent.click(getByRole('button', { name: '轉帳' }));
+
+    expect(getByText('轉出金融帳戶')).toBeTruthy();
+    expect(getByText('轉入金融帳戶')).toBeTruthy();
+    expect(queryByText('分配群組')).toBeNull();
+    expect(queryByText('選擇分類')).toBeNull();
+    expect(queryByText('付款型態')).toBeNull();
   });
 
   it('keeps new installment details when returning to setup', () => {
@@ -299,7 +336,7 @@ describe('TransactionModal', () => {
     );
 
     fireEvent.click(getByText('分期'));
-    expect(getByText('選擇資金帳戶大項')).toBeTruthy();
+    expect(getByText('分配群組')).toBeTruthy();
     expect(getByText('選擇分類')).toBeTruthy();
     expect(queryByPlaceholderText('例如: 手機分期、家電分期')).toBeNull();
 

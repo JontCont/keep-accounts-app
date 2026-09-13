@@ -75,12 +75,13 @@ const createTransactions = (
   });
 };
 
-const renderHistoryTab = (transactions: any[]) =>
+const renderHistoryTab = (transactions: any[], financialAccounts: any[] = []) =>
   render(
     <HistoryTab
       accountGroups={[
         { id: '1', name: '日常開銷', emoji: 'credit-card', color: '#6366f1', categories: [] } as any,
       ]}
+      financialAccounts={financialAccounts as any}
       transactions={transactions as any}
       onDeleteTransaction={noop}
       onDeleteInstallmentGroup={noop}
@@ -209,5 +210,50 @@ describe('HistoryTab pagination and loading', () => {
 
     fireEvent.click(trigger);
     expect(screen.queryByTestId('history-skeleton-card')).toBeNull();
+  });
+
+  it('shows financial account identities for expenses, transfers, and legacy rows', () => {
+    renderHistoryTab(
+      [
+        {
+          id: 'expense',
+          description: '刷卡消費',
+          amount: 500,
+          type: 'expense',
+          category: '餐飲食品',
+          date: '2026-02-28T12:00:00+08:00',
+          accountGroupId: '1',
+          financialAccountId: 'card',
+        },
+        {
+          id: 'transfer',
+          description: '繳卡費',
+          amount: 500,
+          type: 'transfer',
+          category: '不計損益',
+          date: '2026-02-27T12:00:00+08:00',
+          accountGroupId: '1',
+          transferSourceFinancialAccountId: 'bank',
+          transferDestinationFinancialAccountId: 'card',
+        },
+        {
+          id: 'legacy',
+          description: '舊交易',
+          amount: 100,
+          type: 'expense',
+          category: '餐飲食品',
+          date: '2026-02-26T12:00:00+08:00',
+          accountGroupId: '1',
+        },
+      ],
+      [
+        { id: 'bank', name: '國泰銀行', type: 'bank', openingAmount: 20000 },
+        { id: 'card', name: '台新信用卡', type: 'credit-card', openingAmount: 0 },
+      ]
+    );
+
+    expect(screen.getByText('金融帳戶：台新信用卡')).toBeTruthy();
+    expect(screen.getByText('金融帳戶：國泰銀行 → 台新信用卡')).toBeTruthy();
+    expect(screen.getByText('金融帳戶：未指定帳戶')).toBeTruthy();
   });
 });

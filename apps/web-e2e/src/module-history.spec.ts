@@ -80,4 +80,65 @@ test.describe('History module', () => {
     await page.getByRole('button', { name: '儲存' }).click();
     await expect(page.getByTestId('history-flat-row').filter({ hasText: 'Mobile installment' }).first()).toBeVisible();
   });
+
+  test('tracks a card purchase and bank payment without double-counting the expense', async ({ page }) => {
+    await page.goto('/');
+    await importTemplateData(page);
+
+    await page.evaluate(() => {
+      localStorage.setItem('keep_accounts_transactions', '[]');
+    });
+    await page.reload();
+    await expect(page.getByRole('heading', { name: 'Keep Accounts' })).toBeVisible();
+
+    await clickBottomNav(page, '金融帳戶');
+    await page.getByRole('button', { name: '新增銀行帳戶' }).click();
+
+    await page.getByLabel('金融帳戶名稱').fill('國泰銀行');
+    await page.getByLabel('金融帳戶類型').selectOption('bank');
+    await page.getByLabel('金融帳戶初始金額').fill('20000');
+    await page.getByTitle('新增金融帳戶').click();
+    await page.getByRole('button', { name: '關閉金融帳戶' }).click();
+
+    await page.getByRole('button', { name: '新增信用卡' }).click();
+    await page.getByLabel('金融帳戶名稱').fill('台新信用卡');
+    await page.getByLabel('金融帳戶類型').selectOption('credit-card');
+    await page.getByLabel('金融帳戶初始金額').fill('0');
+    await page.getByLabel('信用卡結帳日').fill('15');
+    await page.getByLabel('信用卡繳款日').fill('5');
+    await page.getByTitle('新增金融帳戶').click();
+    await page.getByRole('button', { name: '關閉金融帳戶' }).click();
+
+    await clickBottomNav(page, '明細');
+    await page.getByTitle('新增記帳').click();
+    await page.getByRole('button', { name: '一般記帳' }).click();
+    await page.getByText('國泰銀行', { exact: true }).click();
+    await page.getByText('台新信用卡', { exact: true }).click();
+    await page.getByRole('button', { name: '下一步' }).click();
+    await setIonInputValue(page, '例如: 買咖啡、午餐、薪水', '金融帳戶測試消費');
+    await setIonInputValue(page, '輸入金額', '500');
+    await page.getByRole('button', { name: '儲存' }).click();
+    await expect(page.getByTestId('history-flat-row').filter({ hasText: '金融帳戶測試消費' })).toHaveCount(1);
+
+    await page.getByTitle('新增記帳').click();
+    await page.getByRole('button', { name: '一般記帳' }).click();
+    await page.getByRole('button', { name: '轉帳' }).click();
+    await page.getByRole('button', { name: '下一步' }).click();
+    await setIonInputValue(page, '例如: 買咖啡、午餐、薪水', '銀行繳卡費');
+    await setIonInputValue(page, '輸入金額', '500');
+    await page.getByRole('button', { name: '儲存' }).click();
+    await expect(page.getByTestId('history-flat-row').filter({ hasText: '銀行繳卡費' })).toHaveCount(1);
+
+    await page.reload();
+    await expect(page.getByRole('heading', { name: 'Keep Accounts' })).toBeVisible();
+    await clickBottomNav(page, '金融帳戶');
+    await expect(page.getByText('國泰銀行', { exact: true })).toBeVisible();
+    await expect(page.getByText('$19,500')).toBeVisible();
+    await expect(page.getByText('未繳 $0')).toBeVisible();
+
+    await clickBottomNav(page, '明細');
+    await expect(page.getByText('金融帳戶：台新信用卡')).toBeVisible();
+    await expect(page.getByText('金融帳戶：國泰銀行 → 台新信用卡')).toBeVisible();
+    await expect(page.getByText('支出: -$500')).toBeVisible();
+  });
 });

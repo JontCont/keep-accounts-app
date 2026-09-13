@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { queryHistoryPage, queryStatsAggregates } from './query-store';
+import {
+  queryFinancialAccountSummaries,
+  queryHistoryPage,
+  queryStatsAggregates,
+} from './query-store';
 
 const makeTransactions = (count: number) =>
   Array.from({ length: count }).map((_, idx) => ({
@@ -101,5 +105,30 @@ describe('query-store', () => {
     expect(result.totalExpense).toBe(0);
     expect(result.categories).toEqual([]);
     expect(result.trend).toEqual([]);
+  });
+
+  it('derives financial account summaries from the complete transaction history', () => {
+    const financialAccounts = [
+      {
+        id: 'bank-1',
+        name: 'Cathay Checking',
+        type: 'bank',
+        openingAmount: 20000,
+      },
+    ] as any;
+    const transactions = Array.from({ length: 201 }, (_, index) => ({
+      id: `expense-${index}`,
+      description: `Expense ${index}`,
+      amount: 1,
+      type: 'expense',
+      category: 'Food',
+      date: `2026-01-${String((index % 28) + 1).padStart(2, '0')}T09:00:00+08:00`,
+      accountGroupId: 'daily',
+      financialAccountId: 'bank-1',
+    })) as any;
+
+    expect(queryFinancialAccountSummaries({ financialAccounts, transactions })).toEqual([
+      { accountId: 'bank-1', amount: 19799, status: 'balance' },
+    ]);
   });
 });
