@@ -51,20 +51,24 @@ export const validateFinancialAccountTransaction = (
   };
 
   if (transaction.type === 'transfer') {
-    if (!transaction.transferSourceFinancialAccountId || !transaction.transferDestinationFinancialAccountId) {
-      return '轉帳需要選擇來源與目的金融帳戶。';
+    if (!transaction.transferSourceFinancialAccountId && !transaction.transferDestinationFinancialAccountId) {
+      return '轉帳至少需要選擇一個金融帳戶。';
     }
     if (
+      transaction.transferSourceFinancialAccountId &&
+      transaction.transferDestinationFinancialAccountId &&
       transaction.transferSourceFinancialAccountId ===
       transaction.transferDestinationFinancialAccountId
     ) {
       return '來源與目的金融帳戶必須不同。';
     }
-    if (
-      !isActiveAccount(transaction.transferSourceFinancialAccountId) ||
-      !isActiveAccount(transaction.transferDestinationFinancialAccountId)
-    ) {
-      return '來源與目的金融帳戶必須是有效帳戶。';
+    for (const accountId of [
+      transaction.transferSourceFinancialAccountId,
+      transaction.transferDestinationFinancialAccountId,
+    ]) {
+      if (accountId && !isActiveAccount(accountId)) {
+        return '轉帳指定的金融帳戶無效。';
+      }
     }
     return null;
   }

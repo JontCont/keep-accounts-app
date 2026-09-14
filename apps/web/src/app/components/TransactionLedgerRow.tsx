@@ -1,6 +1,7 @@
 import type { FC } from 'react';
 import { FinancialAccount, Transaction } from '@keep-accounts-app/domain';
 import { AppIcon } from './AppIcon';
+import { SharedTableRow } from './SharedTableRow';
 
 interface TransactionLedgerRowProps {
   tx: Transaction;
@@ -34,17 +35,7 @@ export const TransactionLedgerRow: FC<TransactionLedgerRowProps> = ({
       : accountNameById.get(tx.financialAccountId ?? '') ?? '未指定帳戶';
 
   return (
-    <div
-      className="glass-card"
-      data-testid={dataTestId}
-      style={{
-        padding: '16px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        borderRadius: 'var(--border-radius-md)',
-      }}
-    >
+    <SharedTableRow className="glass-card" dataTestId={dataTestId}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', overflow: 'hidden' }}>
         <div className="tx-ledger-badge" data-tx-type={tx.type}>
           <AppIcon name={getCategoryEmoji(tx.category, tx.accountGroupId)} size={22} />
@@ -169,6 +160,6 @@ export const TransactionLedgerRow: FC<TransactionLedgerRowProps> = ({
           )}
         </div>
       </div>
-    </div>
+    </SharedTableRow>
   );
 };

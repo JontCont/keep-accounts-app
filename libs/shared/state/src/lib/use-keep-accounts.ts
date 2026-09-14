@@ -220,6 +220,7 @@ export function useKeepAccounts() {
     openingAmount,
     statementClosingDay,
     paymentDueDay,
+    paymentReminderEnabled,
   }: {
     id?: string;
     name: string;
@@ -227,6 +228,7 @@ export function useKeepAccounts() {
     openingAmount: number;
     statementClosingDay?: number;
     paymentDueDay?: number;
+    paymentReminderEnabled?: boolean;
   }): boolean => {
     const accountId = id ?? `financial-account-${Date.now()}`;
     const account: FinancialAccount = {
@@ -236,6 +238,7 @@ export function useKeepAccounts() {
       openingAmount,
       statementClosingDay: type === 'credit-card' ? statementClosingDay : undefined,
       paymentDueDay: type === 'credit-card' ? paymentDueDay : undefined,
+      paymentReminderEnabled: type === 'credit-card' ? paymentReminderEnabled : undefined,
     };
     const validationError = validateFinancialAccount(account);
     if (validationError) {

@@ -158,6 +158,7 @@ const getSqliteDb = async () => {
           is_archived INTEGER NOT NULL DEFAULT 0,
           statement_closing_day INTEGER,
           payment_due_day INTEGER,
+          payment_reminder_enabled INTEGER NOT NULL DEFAULT 0,
           opening_adjustments_json TEXT NOT NULL DEFAULT '[]'
         );
       `);
@@ -169,11 +170,13 @@ const getSqliteDb = async () => {
           (column) => column.name
         )
       );
-      for (const column of ['statement_closing_day', 'payment_due_day', 'opening_adjustments_json']) {
+      for (const column of ['statement_closing_day', 'payment_due_day', 'payment_reminder_enabled', 'opening_adjustments_json']) {
         if (!existingFinancialAccountColumns.has(column)) {
           const columnDefinition = column === 'opening_adjustments_json'
             ? "TEXT NOT NULL DEFAULT '[]'"
-            : 'INTEGER';
+            : column === 'payment_reminder_enabled'
+              ? 'INTEGER NOT NULL DEFAULT 0'
+              : 'INTEGER';
           await db.execute(`ALTER TABLE keep_accounts_financial_accounts ADD COLUMN ${column} ${columnDefinition}`);
         }
       }
@@ -307,8 +310,8 @@ const writeSqliteFinancialAccounts = async (accounts: FinancialAccount[]) => {
   for (const account of accounts) {
     await db.run(
       `INSERT INTO keep_accounts_financial_accounts
-      (id, name, type, opening_amount, is_archived, statement_closing_day, payment_due_day, opening_adjustments_json)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      (id, name, type, opening_amount, is_archived, statement_closing_day, payment_due_day, payment_reminder_enabled, opening_adjustments_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         account.id,
         account.name,
@@ -317,6 +320,7 @@ const writeSqliteFinancialAccounts = async (accounts: FinancialAccount[]) => {
         0,
         account.statementClosingDay ?? null,
         account.paymentDueDay ?? null,
+        account.paymentReminderEnabled ? 1 : 0,
         JSON.stringify(account.openingAmountAdjustments ?? []),
       ]
     );
@@ -418,6 +422,7 @@ const readSqliteStructuredSnapshot = async (): Promise<KeepAccountsSnapshot | nu
     openingAmount: Number(row.opening_amount),
     statementClosingDay: row.statement_closing_day ?? undefined,
     paymentDueDay: row.payment_due_day ?? undefined,
+    paymentReminderEnabled: Boolean(row.payment_reminder_enabled),
     openingAmountAdjustments: safeParseArray(row.opening_adjustments_json),
   }));
 
@@ -723,6 +728,37 @@ export const queryNativeRecentTransactions = async (
   return ((result?.values ?? []) as Array<any>).map(mapTransactionRow);
 };
 
+export const queryNativeFinancialAccountTransactionsPage = async ({
+  accountId,
+  offset,
+  pageSize,
+}: {
+  accountId: string;
+  offset: number;
+  pageSize: number;
+}): Promise<{ items: Transaction[]; hasMore: boolean } | null> => {
+  const db = await getSqliteDb();
+  if (!db) return null;
+
+  const safeOffset = Math.max(0, offset);
+  const safePageSize = Math.max(1, pageSize);
+  const result = await db.query(
+    `SELECT ${TRANSACTION_SELECT_COLUMNS}
+     FROM keep_accounts_transactions
+     WHERE financial_account_id = ?
+        OR transfer_source_financial_account_id = ?
+        OR transfer_destination_financial_account_id = ?
+     ORDER BY date DESC
+     LIMIT ? OFFSET ?`,
+    [accountId, accountId, accountId, safePageSize + 1, safeOffset]
+  );
+  const rows = ((result?.values ?? []) as Array<any>).map(mapTransactionRow);
+  return {
+    items: rows.slice(0, safePageSize),
+    hasMore: rows.length > safePageSize,
+  };
+};
+
 
 export const queryNativeWidgetSummary = async (
   referenceDate: Date = new Date()
@@ -779,7 +815,7 @@ export const queryNativeFinancialAccounts = async (): Promise<FinancialAccount[]
   if (!db) return null;
 
   const result = await db.query(
-    `SELECT id, name, type, opening_amount, is_archived, statement_closing_day, payment_due_day, opening_adjustments_json
+    `SELECT id, name, type, opening_amount, is_archived, statement_closing_day, payment_due_day, payment_reminder_enabled, opening_adjustments_json
      FROM keep_accounts_financial_accounts
      ORDER BY name ASC`
   );
@@ -790,6 +826,7 @@ export const queryNativeFinancialAccounts = async (): Promise<FinancialAccount[]
     openingAmount: Number(row.opening_amount),
     statementClosingDay: row.statement_closing_day ?? undefined,
     paymentDueDay: row.payment_due_day ?? undefined,
+    paymentReminderEnabled: Boolean(row.payment_reminder_enabled),
     openingAmountAdjustments: safeParseArray(row.opening_adjustments_json),
   }));
 };

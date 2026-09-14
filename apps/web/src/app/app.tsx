@@ -22,7 +22,7 @@ import { FinancialAccountSettingsModal } from './components/FinancialAccountSett
 import { FinancialAccountDetailsModal } from './components/FinancialAccountDetailsModal';
 import { TransactionEntryPage } from './components/TransactionEntryPage';
 import { AppIcon } from './components/AppIcon';
-import { scheduleInstallmentReminders } from './services/notifications';
+import { scheduleInstallmentReminders, syncCreditCardPaymentReminder } from './services/notifications';
 import {
   isNativePlatform,
   getImportHistory,
@@ -99,6 +99,12 @@ export function App() {
     setShowFab(true);
     lastScrollY.current = 0;
   }, [activeTab]);
+
+  useEffect(() => {
+    financialAccounts.forEach((account) => {
+      void syncCreditCardPaymentReminder(account).catch(() => undefined);
+    });
+  }, [financialAccounts]);
 
   // Theme state and runtime application
   const storedTheme = localStorage.getItem('keep_accounts_theme') as 'system' | 'light' | 'dark' | null;
@@ -518,6 +524,24 @@ export function App() {
     }
   };
 
+  const handleConfirmCreditCardPayment = (
+    creditCardAccountId: string,
+    amount: number
+  ) =>
+    saveTransaction(
+      '信用卡繳款',
+      String(amount),
+      'transfer',
+      '不計損益',
+      new Date().toISOString(),
+      '',
+      null,
+      undefined,
+      undefined,
+      undefined,
+      creditCardAccountId
+    );
+
   const handleAdjustTotalBalance = (targetBalance: number) => {
     const todayStr = new Date().toISOString().split('T')[0];
     const realizedTxs = transactions.filter(
@@ -796,6 +820,8 @@ export function App() {
                     setIsEditingFinancialAccounts(true);
                   }}
                   onViewDetails={setFinancialAccountDetails}
+                  showTransactionDetails
+                  preferNativeQueries={nativeMode}
                   showAccountActions
                   accounts={financialAccounts}
                   summaries={financialAccountSummaries}
@@ -803,6 +829,7 @@ export function App() {
                   onClose={() => setActiveTab('dashboard')}
                   onSaveAccount={saveFinancialAccount}
                   onDeleteAccount={deleteFinancialAccount}
+                  onConfirmCreditCardPayment={handleConfirmCreditCardPayment}
                 />
               )}
 

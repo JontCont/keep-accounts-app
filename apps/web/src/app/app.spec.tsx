@@ -1138,7 +1138,7 @@ describe('useKeepAccounts defensive checks', () => {
     alertSpy.mockRestore();
   });
 
-  it('records opening amount changes and includes the adjustment in the total', async () => {
+  it('adds a new account opening amount once and applies later changes as a delta', async () => {
     const { result } = renderHook(() => useKeepAccounts());
     let accountId = '';
 
@@ -1146,30 +1146,78 @@ describe('useKeepAccounts defensive checks', () => {
       result.current.saveFinancialAccount({
         name: '國泰銀行',
         type: 'bank',
-        openingAmount: 3000,
+        openingAmount: 30000,
       });
     });
     accountId = result.current.financialAccounts.find((account) => account.name === '國泰銀行')?.id ?? '';
 
-    act(() => {
-      result.current.saveFinancialAccount({
-        id: accountId,
-        name: '國泰銀行',
-        type: 'bank',
-        openingAmount: 4000,
-      });
-    });
-
-    const account = result.current.financialAccounts.find((candidate) => candidate.id === accountId);
-    expect(account?.openingAmount).toBe(3000);
-    expect(account?.openingAmountAdjustments?.[0].amount).toBe(1000);
     await waitFor(() => {
       const summary = result.current.financialAccountSummaries.find(
         (candidate) => candidate.accountId === accountId
       );
       expect(summary).toMatchObject({
         accountId,
-        amount: 4000,
+        amount: 30000,
+      });
+    });
+
+    act(() => {
+      result.current.saveFinancialAccount({
+        name: '台新信用卡',
+        type: 'credit-card',
+        openingAmount: 5000,
+        statementClosingDay: 15,
+        paymentDueDay: 5,
+      });
+    });
+    const cardId = result.current.financialAccounts.find(
+      (account) => account.name === '台新信用卡'
+    )?.id ?? '';
+
+    act(() => {
+      result.current.saveTransaction(
+        '繳信用卡費',
+        '1000',
+        'transfer',
+        '不計損益',
+        '2026-09-14T12:00:00+08:00',
+        '',
+        null,
+        undefined,
+        undefined,
+        accountId,
+        cardId
+      );
+    });
+
+    await waitFor(() => {
+      expect(result.current.financialAccountSummaries).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ accountId, amount: 29000 }),
+          expect.objectContaining({ accountId: cardId, amount: 4000, status: 'outstanding' }),
+        ])
+      );
+    });
+
+    act(() => {
+      result.current.saveFinancialAccount({
+        id: accountId,
+        name: '國泰銀行',
+        type: 'bank',
+        openingAmount: 25000,
+      });
+    });
+
+    const account = result.current.financialAccounts.find((candidate) => candidate.id === accountId);
+    expect(account?.openingAmount).toBe(30000);
+    expect(account?.openingAmountAdjustments?.[0].amount).toBe(-5000);
+    await waitFor(() => {
+      const summary = result.current.financialAccountSummaries.find(
+        (candidate) => candidate.accountId === accountId
+      );
+      expect(summary).toMatchObject({
+        accountId,
+        amount: 24000,
       });
     });
   });

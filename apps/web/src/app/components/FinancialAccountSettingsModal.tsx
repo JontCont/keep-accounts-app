@@ -1,13 +1,5 @@
 import { useEffect, useState, type FC } from 'react';
-import {
-  IonButton,
-  IonButtons,
-  IonContent,
-  IonHeader,
-  IonModal,
-  IonTitle,
-  IonToolbar,
-} from '@ionic/react';
+import { IonModal, IonToggle } from '@ionic/react';
 import {
   FinancialAccount,
   FinancialAccountSummary,
@@ -15,7 +7,11 @@ import {
   getFinancialAccountOpeningAmount,
   Transaction,
 } from '@keep-accounts-app/domain';
+import { queryNativeFinancialAccountTransactionsPage } from '@keep-accounts-app/state';
 import { AppIcon } from './AppIcon';
+import { SharedTableRow } from './SharedTableRow';
+
+const ACCOUNT_DETAIL_PAGE_SIZE = 50;
 
 interface FinancialAccountSettingsModalProps {
   isOpen: boolean;
@@ -28,7 +24,9 @@ interface FinancialAccountSettingsModalProps {
   showAccountActions?: boolean;
   onEditAccount?: (account: FinancialAccount) => void;
   onViewDetails?: (account: FinancialAccount) => void;
+  onConfirmCreditCardPayment?: (creditCardAccountId: string, amount: number) => boolean;
   showTransactionDetails?: boolean;
+  preferNativeQueries?: boolean;
   accounts: FinancialAccount[];
   summaries: FinancialAccountSummary[];
   transactions?: Transaction[];
@@ -40,6 +38,7 @@ interface FinancialAccountSettingsModalProps {
     openingAmount: number;
     statementClosingDay?: number;
     paymentDueDay?: number;
+    paymentReminderEnabled?: boolean;
   }) => boolean;
   onDeleteAccount: (accountId: string) => boolean;
 }
@@ -60,6 +59,7 @@ const EMPTY_FORM = {
   openingAmount: '',
   statementClosingDay: '',
   paymentDueDay: '',
+  paymentReminderEnabled: false,
 };
 
 const formatAmount = (amount: number) => `$${amount.toLocaleString('zh-TW')}`;
@@ -75,7 +75,9 @@ export const FinancialAccountSettingsModal: FC<FinancialAccountSettingsModalProp
   showAccountActions = allowEditing,
   onEditAccount,
   onViewDetails,
+  onConfirmCreditCardPayment,
   showTransactionDetails = false,
+  preferNativeQueries = false,
   accounts,
   summaries,
   transactions = [],
@@ -84,9 +86,16 @@ export const FinancialAccountSettingsModal: FC<FinancialAccountSettingsModalProp
   onDeleteAccount,
 }) => {
   const [form, setForm] = useState(EMPTY_FORM);
+  const [activeSectionType, setActiveSectionType] = useState<FinancialAccountType>(initialType);
+  const [expandedAccountId, setExpandedAccountId] = useState<string | null>(null);
+  const [visibleDetailCount, setVisibleDetailCount] = useState(ACCOUNT_DETAIL_PAGE_SIZE);
+  const [nativeDetailTransactions, setNativeDetailTransactions] = useState<Transaction[]>([]);
+  const [hasMoreNativeDetails, setHasMoreNativeDetails] = useState(false);
+  const [isLoadingMoreDetails, setIsLoadingMoreDetails] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
+      setActiveSectionType(accountToEdit?.type ?? initialType);
       setForm(
         accountToEdit
           ? {
@@ -100,11 +109,37 @@ export const FinancialAccountSettingsModal: FC<FinancialAccountSettingsModalProp
               paymentDueDay: accountToEdit.paymentDueDay
                 ? String(accountToEdit.paymentDueDay)
                 : '',
+              paymentReminderEnabled: accountToEdit.paymentReminderEnabled ?? false,
             }
           : { ...EMPTY_FORM, type: initialType }
       );
     }
   }, [accountToEdit, initialType, isOpen]);
+
+  useEffect(() => {
+    if (!preferNativeQueries || !expandedAccountId) {
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoadingMoreDetails(true);
+    void queryNativeFinancialAccountTransactionsPage({
+      accountId: expandedAccountId,
+      offset: 0,
+      pageSize: ACCOUNT_DETAIL_PAGE_SIZE,
+    }).then((page) => {
+      if (cancelled || !page) {
+        return;
+      }
+      setNativeDetailTransactions(page.items);
+      setHasMoreNativeDetails(page.hasMore);
+      setIsLoadingMoreDetails(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [expandedAccountId, preferNativeQueries]);
 
   const summaryByAccountId = new Map(summaries.map((summary) => [summary.accountId, summary]));
   const accountNameById = new Map(accounts.map((account) => [account.id, account.name]));
@@ -120,9 +155,13 @@ export const FinancialAccountSettingsModal: FC<FinancialAccountSettingsModalProp
       statementClosingDay:
         form.type === 'credit-card' ? Number(form.statementClosingDay) : undefined,
       paymentDueDay: form.type === 'credit-card' ? Number(form.paymentDueDay) : undefined,
+      paymentReminderEnabled: form.type === 'credit-card' ? form.paymentReminderEnabled : undefined,
     });
     if (saved) {
       setForm(EMPTY_FORM);
+      if (presentation === 'modal') {
+        onClose();
+      }
     }
   };
 
@@ -136,21 +175,26 @@ export const FinancialAccountSettingsModal: FC<FinancialAccountSettingsModalProp
         ? String(account.statementClosingDay)
         : '',
       paymentDueDay: account.paymentDueDay ? String(account.paymentDueDay) : '',
+      paymentReminderEnabled: account.paymentReminderEnabled ?? false,
     });
   };
 
   const content = (
       <div
-        className={presentation === 'page' ? 'fade-in' : undefined}
+        className={presentation === 'page' ? 'fade-in' : 'glass-card financial-account-modal-card'}
         style={{
-          minHeight: '100%',
-          padding: '24px',
-          background: 'var(--bg-color)',
+          width: '100%',
+          maxWidth: presentation === 'page' ? 'none' : '400px',
+          minHeight: presentation === 'page' ? '100%' : undefined,
+          maxHeight: presentation === 'page' ? undefined : 'calc(100dvh - 32px)',
+          overflowY: presentation === 'page' ? undefined : 'hidden',
+          padding: presentation === 'page' ? '24px' : '16px',
           color: 'var(--text-primary)',
           display: 'flex',
           flexDirection: 'column',
           gap: '16px',
-          paddingBottom: presentation === 'page' ? '80px' : '24px',
+          paddingBottom: presentation === 'page' ? '80px' : '16px',
+          margin: presentation === 'page' ? undefined : 'auto',
         }}
       >
         {presentation === 'page' ? (
@@ -164,16 +208,26 @@ export const FinancialAccountSettingsModal: FC<FinancialAccountSettingsModalProp
         </div>
         ) : null}
 
+        {presentation === 'modal' ? (
+          <div className="financial-account-modal-card__header">
+            <div>
+              <h3>{editingAccount ? '編輯金融帳戶' : '新增金融帳戶'}</h3>
+              <p>設定帳戶的起始金額</p>
+            </div>
+            {showCloseButton && (
+              <button type="button" onClick={onClose} title="關閉金融帳戶" aria-label="關閉金融帳戶">
+                <AppIcon name="x" size={20} />
+              </button>
+            )}
+          </div>
+        ) : null}
+
         {allowEditing && <form
-          className={`glass-card financial-account-form ${form.type === 'credit-card' ? 'financial-account-form--credit-card' : ''}`}
+          className={`financial-account-form ${form.type === 'credit-card' ? 'financial-account-form--credit-card' : ''}`}
           onSubmit={handleSubmit}
-          style={{
-            padding: '16px',
-            borderRadius: 'var(--border-radius-md)',
-          }}
         >
-          <label className="financial-account-form__name" style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.78rem' }}>
-            名稱
+          <label className="financial-account-form__name">
+            帳戶名稱
             <input
               aria-label="金融帳戶名稱"
               value={form.name}
@@ -181,26 +235,24 @@ export const FinancialAccountSettingsModal: FC<FinancialAccountSettingsModalProp
               placeholder="例如：國泰銀行"
             />
           </label>
-          <label className="financial-account-form__type" style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.78rem' }}>
-            類型
-            <select
-              aria-label="金融帳戶類型"
-              value={form.type}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  type: event.target.value as FinancialAccountType,
-                }))
-              }
-            >
+          <fieldset className="financial-account-form__type" aria-label="金融帳戶類型">
+            <legend>帳戶類型</legend>
+            <div className="segment-btn-group financial-account-type-options" role="group" aria-label="金融帳戶類型">
               {ACCOUNT_SECTIONS.map((section) => (
-                <option key={section.type} value={section.type}>
+                <button
+                  key={section.type}
+                  type="button"
+                  className={`segment-btn financial-account-type-option${form.type === section.type ? ' active' : ''}`}
+                  aria-pressed={form.type === section.type}
+                  onClick={() => setForm((current) => ({ ...current, type: section.type }))}
+                >
+                  <AppIcon name={section.icon} size={18} />
                   {section.label}
-                </option>
+                </button>
               ))}
-            </select>
-          </label>
-          <label className="financial-account-form__opening" style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.78rem' }}>
+            </div>
+          </fieldset>
+          <label className="financial-account-form__opening">
             {form.type === 'credit-card' ? '初始未繳' : '初始餘額'}
             <input
               aria-label="金融帳戶初始金額"
@@ -214,13 +266,14 @@ export const FinancialAccountSettingsModal: FC<FinancialAccountSettingsModalProp
           </label>
           {form.type === 'credit-card' && (
             <>
-              <label className="financial-account-form__closing" style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.78rem' }}>
+              <label className="financial-account-form__closing">
                 結帳日
                 <input
                   aria-label="信用卡結帳日"
                   type="number"
                   min="1"
                   max="31"
+                  required
                   value={form.statementClosingDay}
                   onChange={(event) =>
                     setForm((current) => ({ ...current, statementClosingDay: event.target.value }))
@@ -228,13 +281,14 @@ export const FinancialAccountSettingsModal: FC<FinancialAccountSettingsModalProp
                   placeholder="例如 15"
                 />
               </label>
-              <label className="financial-account-form__due" style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.78rem' }}>
+              <label className="financial-account-form__due">
                 繳款日
                 <input
                   aria-label="信用卡繳款日"
                   type="number"
                   min="1"
                   max="31"
+                  required
                   value={form.paymentDueDay}
                   onChange={(event) =>
                     setForm((current) => ({ ...current, paymentDueDay: event.target.value }))
@@ -242,6 +296,16 @@ export const FinancialAccountSettingsModal: FC<FinancialAccountSettingsModalProp
                   placeholder="例如 5"
                 />
               </label>
+              <div className="financial-account-form__reminder">
+                <span>繳款日提醒</span>
+                <IonToggle
+                  aria-label="信用卡繳款提醒"
+                  checked={form.paymentReminderEnabled}
+                  onIonChange={(event) =>
+                    setForm((current) => ({ ...current, paymentReminderEnabled: event.detail.checked }))
+                  }
+                />
+              </div>
             </>
           )}
           <button className="financial-account-form__submit" type="submit" title={editingAccount ? '儲存金融帳戶' : '新增金融帳戶'}>
@@ -250,59 +314,47 @@ export const FinancialAccountSettingsModal: FC<FinancialAccountSettingsModalProp
           </button>
         </form>}
 
-        {presentation === 'page' && <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {ACCOUNT_SECTIONS.map((section) => {
-            const sectionAccounts = accounts.filter((account) => account.type === section.type);
-            return (
-              <section key={section.type} aria-labelledby={`financial-account-${section.type}`}>
-                <div
-                    className="financial-account-section-header"
-                    style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                      padding: '8px 12px',
-                      background: 'var(--sub-card-bg)',
-                      border: '1px solid var(--sub-card-border)',
-                      borderRadius: 'var(--border-radius-sm)',
-                  }}
+        {presentation === 'page' && (() => {
+          const activeSection = ACCOUNT_SECTIONS.find((section) => section.type === activeSectionType) ?? ACCOUNT_SECTIONS[0];
+          const sectionAccounts = accounts.filter((account) => account.type === activeSection.type);
+          return <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div className="segment-btn-group financial-account-page-tabs" role="tablist" aria-label="金融帳戶類型">
+              {ACCOUNT_SECTIONS.map((section) => (
+                <button
+                  key={section.type}
+                  type="button"
+                  role="tab"
+                  className={`segment-btn${activeSectionType === section.type ? ' active' : ''}`}
+                  aria-selected={activeSectionType === section.type}
+                  onClick={() => setActiveSectionType(section.type)}
                 >
-                  <AppIcon name={section.icon} size={18} style={{ color: 'var(--primary-color)' }} />
-                  <h3 id={`financial-account-${section.type}`} style={{ margin: 0, fontSize: '0.95rem' }}>
-                    {section.label}
-                  </h3>
-                  {(allowEditing || onOpenManager) && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (allowEditing) {
-                          setForm({ ...EMPTY_FORM, type: section.type });
-                          return;
-                        }
-                        onOpenManager?.(section.type);
-                      }}
-                      title={`新增${section.label}`}
-                      aria-label={`新增${section.label}`}
-                      style={{
-                        marginLeft: 'auto',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        padding: '4px 8px',
-                        borderRadius: 'var(--border-radius-sm)',
-                        background: 'var(--input-bg)',
-                        color: 'var(--primary-color)',
-                        border: '1px solid var(--input-border)',
-                        fontSize: '0.75rem',
-                        fontWeight: 600,
-                      }}
-                    >
-                      <AppIcon name="plus" size={14} />
-                      <span>新增</span>
-                    </button>
-                  )}
-                </div>
-                {sectionAccounts.length === 0 ? (
+                  <AppIcon name={section.icon} size={17} />
+                  {section.label}
+                </button>
+              ))}
+            </div>
+            <section aria-labelledby={`financial-account-${activeSection.type}`}>
+              <div className="financial-account-section-header">
+                <h3 id={`financial-account-${activeSection.type}`}>{activeSection.label}</h3>
+                {(allowEditing || onOpenManager) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (allowEditing) {
+                        setForm({ ...EMPTY_FORM, type: activeSection.type });
+                        return;
+                      }
+                      onOpenManager?.(activeSection.type);
+                    }}
+                    title={`新增${activeSection.label}`}
+                    aria-label={`新增${activeSection.label}`}
+                  >
+                    <AppIcon name="plus" size={15} />
+                    <span>新增</span>
+                  </button>
+                )}
+              </div>
+              {sectionAccounts.length === 0 ? (
                   <p style={{ margin: '12px 0 0', color: 'var(--text-tertiary)', fontSize: '0.82rem' }}>
                     尚未建立
                   </p>
@@ -318,24 +370,28 @@ export const FinancialAccountSettingsModal: FC<FinancialAccountSettingsModalProp
                             transaction.transferDestinationFinancialAccountId === account.id
                         )
                         .sort((left, right) => right.date.localeCompare(left.date));
+                      const detailTransactions =
+                        preferNativeQueries && expandedAccountId === account.id
+                          ? nativeDetailTransactions
+                          : accountTransactions.slice(0, visibleDetailCount);
                       const transactionSections = [
                         {
                           key: 'income',
                           label: '收入',
                           color: 'var(--income-color)',
-                          items: accountTransactions.filter((transaction) => transaction.type === 'income'),
+                          items: detailTransactions.filter((transaction) => transaction.type === 'income'),
                         },
                         {
                           key: 'expense',
                           label: '支出',
                           color: 'var(--expense-color)',
-                          items: accountTransactions.filter((transaction) => transaction.type === 'expense'),
+                          items: detailTransactions.filter((transaction) => transaction.type === 'expense'),
                         },
                         {
                           key: 'transfer',
                           label: '轉帳',
                           color: 'var(--primary-color)',
-                          items: accountTransactions.filter((transaction) => transaction.type === 'transfer'),
+                          items: detailTransactions.filter((transaction) => transaction.type === 'transfer'),
                         },
                       ];
                       const amountLabel =
@@ -344,20 +400,18 @@ export const FinancialAccountSettingsModal: FC<FinancialAccountSettingsModalProp
                             ? `溢繳 ${formatAmount(summary.amount)}`
                             : `未繳 ${formatAmount(summary?.amount ?? getFinancialAccountOpeningAmount(account))}`
                           : formatAmount(summary?.amount ?? getFinancialAccountOpeningAmount(account));
+                      const outstandingAmount =
+                        account.type === 'credit-card' && summary?.status !== 'credit'
+                          ? summary?.amount ?? getFinancialAccountOpeningAmount(account)
+                          : 0;
                       return (
                         <div key={account.id}>
-                          <div
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              gap: '12px',
-                              padding: '12px',
-                              borderRadius: 'var(--border-radius-md)',
-                              opacity: 1,
-                            }}
-                          >
-                            <div style={{ minWidth: 0 }}>
+                          <SharedTableRow className="financial-account-row">
+                            <div className="financial-account-row__identity">
+                              <div className="financial-account-row__icon">
+                                <AppIcon name={activeSection.icon} size={20} />
+                              </div>
+                              <div style={{ minWidth: 0 }}>
                               <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                 {account.name}
                               </div>
@@ -370,15 +424,31 @@ export const FinancialAccountSettingsModal: FC<FinancialAccountSettingsModalProp
                                   {account.paymentDueDay ?? '-'} 日
                                 </div>
                               )}
+                              </div>
                             </div>
-                            <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                            <div className="financial-account-row__actions">
                               {onViewDetails && (
-                                <button type="button" onClick={() => onViewDetails(account)} title="查看明細">
-                                  <AppIcon name="book-open" size={16} />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (showTransactionDetails) {
+                                      setExpandedAccountId((current) =>
+                                        current === account.id ? null : account.id
+                                      );
+                                      setVisibleDetailCount(ACCOUNT_DETAIL_PAGE_SIZE);
+                                      return;
+                                    }
+                                    onViewDetails(account);
+                                  }}
+                                  title={expandedAccountId === account.id ? '收合明細' : '查看明細'}
+                                  aria-label={`${expandedAccountId === account.id ? '收合' : '查看'}${account.name}明細`}
+                                  aria-expanded={expandedAccountId === account.id}
+                                >
+                                  <AppIcon name={expandedAccountId === account.id ? 'chevron-up' : 'book-open'} size={16} />
                                 </button>
                               )}
                             {showAccountActions && (
-                              <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                              <div className="financial-account-row__actions">
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -389,6 +459,7 @@ export const FinancialAccountSettingsModal: FC<FinancialAccountSettingsModalProp
                                     }
                                   }}
                                   title="編輯金融帳戶"
+                                  aria-label={`編輯${account.name}`}
                                 >
                                   <AppIcon name="edit" size={16} />
                                 </button>
@@ -396,15 +467,28 @@ export const FinancialAccountSettingsModal: FC<FinancialAccountSettingsModalProp
                                   type="button"
                                   onClick={() => onDeleteAccount(account.id)}
                                   title="刪除金融帳戶"
+                                  aria-label={`刪除${account.name}`}
                                 >
                                   <AppIcon name="trash" size={16} />
                                 </button>
                               </div>
                             )}
                             </div>
-                          </div>
+                            {account.type === 'credit-card' && outstandingAmount > 0 && onConfirmCreditCardPayment && (
+                              <div className="financial-account-row__payment">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    onConfirmCreditCardPayment(account.id, outstandingAmount)
+                                  }
+                                >
+                                  確認繳費
+                                </button>
+                              </div>
+                            )}
+                          </SharedTableRow>
 
-                          {showTransactionDetails && transactionSections.some((transactionSection) => transactionSection.items.length > 0) && (
+                          {showTransactionDetails && expandedAccountId === account.id && (
                             <div
                               aria-label={`${account.name} 收支明細`}
                               style={{
@@ -419,7 +503,7 @@ export const FinancialAccountSettingsModal: FC<FinancialAccountSettingsModalProp
                                 gap: '10px',
                               }}
                             >
-                              {transactionSections.map((transactionSection) =>
+                              {transactionSections.some((transactionSection) => transactionSection.items.length > 0) ? transactionSections.map((transactionSection) =>
                                 transactionSection.items.length > 0 ? (
                                   <div key={transactionSection.key}>
                                     <div
@@ -468,6 +552,35 @@ export const FinancialAccountSettingsModal: FC<FinancialAccountSettingsModalProp
                                     })}
                                   </div>
                                 ) : null
+                              ) : <p style={{ color: 'var(--text-tertiary)', fontSize: '0.82rem' }}>尚無記帳明細</p>}
+                              {((preferNativeQueries && hasMoreNativeDetails) ||
+                                (!preferNativeQueries && visibleDetailCount < accountTransactions.length)) && (
+                                <button
+                                  type="button"
+                                  className="financial-account-details-more"
+                                  disabled={isLoadingMoreDetails}
+                                  onClick={() => {
+                                    if (!preferNativeQueries) {
+                                      setVisibleDetailCount((count) => count + ACCOUNT_DETAIL_PAGE_SIZE);
+                                      return;
+                                    }
+
+                                    setIsLoadingMoreDetails(true);
+                                    void queryNativeFinancialAccountTransactionsPage({
+                                      accountId: account.id,
+                                      offset: nativeDetailTransactions.length,
+                                      pageSize: ACCOUNT_DETAIL_PAGE_SIZE,
+                                    }).then((page) => {
+                                      if (page) {
+                                        setNativeDetailTransactions((current) => [...current, ...page.items]);
+                                        setHasMoreNativeDetails(page.hasMore);
+                                      }
+                                      setIsLoadingMoreDetails(false);
+                                    });
+                                  }}
+                                >
+                                  {isLoadingMoreDetails ? '載入中' : '載入更多明細'}
+                                </button>
                               )}
                             </div>
                           )}
@@ -477,9 +590,8 @@ export const FinancialAccountSettingsModal: FC<FinancialAccountSettingsModalProp
                   </div>
                 )}
               </section>
-            );
-          })}
-        </div>}
+          </div>;
+        })()}
       </div>
   );
 
@@ -488,22 +600,27 @@ export const FinancialAccountSettingsModal: FC<FinancialAccountSettingsModalProp
   }
 
   return (
-    <IonModal isOpen={isOpen} onDidDismiss={onClose}>
-      <IonHeader>
-        <IonToolbar>
-          <IonTitle>金融帳戶</IonTitle>
-          {showCloseButton && (
-            <IonButtons slot="end">
-              <IonButton onClick={() => onClose()} title="關閉金融帳戶" aria-label="關閉金融帳戶">
-                <AppIcon name="x" size={20} />
-              </IonButton>
-            </IonButtons>
-          )}
-        </IonToolbar>
-      </IonHeader>
-      <IonContent>
-        {content}
-      </IonContent>
+    <IonModal
+      isOpen={isOpen}
+      onDidDismiss={onClose}
+      className="modal-overlay"
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'var(--modal-backdrop-bg)',
+        backdropFilter: 'blur(10px)',
+        WebkitBackdropFilter: 'blur(10px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1100,
+        padding: '16px',
+      }}
+    >
+      {content}
     </IonModal>
   );
 };

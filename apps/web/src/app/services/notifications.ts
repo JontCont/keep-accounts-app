@@ -1,5 +1,6 @@
 import {
   expandInstallment,
+  FinancialAccount,
   InstallmentReminderConfig,
 } from '@keep-accounts-app/domain';
 import { isNativePlatform } from './backup';
@@ -23,6 +24,27 @@ const notificationId = (installmentId: string, period: number): number => {
     hash = (hash * 31 + installmentId.charCodeAt(i)) % 20000000;
   }
   return hash * 100 + period;
+};
+
+const creditCardReminderId = (accountId: string): number => notificationId(accountId, 99);
+
+export const syncCreditCardPaymentReminder = async (account: FinancialAccount): Promise<void> => {
+  if (!isNativePlatform() || account.type !== 'credit-card') return;
+
+  const { LocalNotifications } = await import('@capacitor/local-notifications');
+  const id = creditCardReminderId(account.id);
+  await LocalNotifications.cancel({ notifications: [{ id }] });
+  if (!account.paymentReminderEnabled || !account.paymentDueDay) return;
+  if (!(await requestNotificationPermission())) return;
+
+  await LocalNotifications.schedule({
+    notifications: [{
+      id,
+      title: `${account.name} 繳款提醒`,
+      body: '今天是信用卡繳款日，完成繳費後請在帳戶頁確認繳費。',
+      schedule: { on: { day: account.paymentDueDay, hour: 9 }, repeats: true, every: 'month' },
+    }],
+  });
 };
 
 export const requestNotificationPermission = async (): Promise<boolean> => {

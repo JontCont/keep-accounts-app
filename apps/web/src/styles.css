@@ -168,6 +168,73 @@ ion-content {
   border-color: var(--card-hover-border);
 }
 
+.shared-table-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--card-border);
+  border-radius: var(--border-radius-md);
+  background: var(--card-bg);
+  box-shadow: var(--card-shadow);
+  color: var(--text-primary);
+}
+
+.financial-account-row__identity,
+.financial-account-row__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.financial-account-row__actions {
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.financial-account-row__icon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--primary-glow);
+  color: var(--primary-color);
+}
+
+.financial-account-row__actions button {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-tertiary);
+}
+
+.financial-account-row__actions button:hover {
+  background: var(--input-bg);
+  color: var(--text-primary);
+}
+
+.financial-account-details-more {
+  align-self: center;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--input-bg);
+  color: var(--primary-color);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.financial-account-details-more:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
 /* Button & Inputs Styling */
 input, select, textarea {
   width: 100%;
@@ -387,16 +454,31 @@ ion-action-sheet::part(button-active) {
 
 .financial-account-form {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(130px, 0.8fr) minmax(110px, 0.7fr) auto;
-  grid-template-areas: 'name type opening submit';
-  gap: 10px 12px;
-  align-items: end;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-areas:
+    'name name'
+    'type type'
+    'opening opening'
+    'submit submit';
+  gap: 18px;
+  padding: 4px 0 0;
+}
+
+.financial-account-modal-card .financial-account-form {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 2px 2px 0;
 }
 
 .financial-account-form--credit-card {
   grid-template-areas:
-    'name type opening submit'
-    'name closing due submit';
+    'name name'
+    'type type'
+    'opening opening'
+    'closing due'
+    'reminder reminder'
+    'submit submit';
 }
 
 .financial-account-form__name { grid-area: name; }
@@ -404,9 +486,119 @@ ion-action-sheet::part(button-active) {
 .financial-account-form__opening { grid-area: opening; }
 .financial-account-form__closing { grid-area: closing; }
 .financial-account-form__due { grid-area: due; }
+.financial-account-form__reminder {
+  grid-area: reminder;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+  margin-top: 2px;
+  padding: 8px 0;
+  border-top: 1px solid var(--input-border);
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.financial-account-form label,
+.financial-account-form legend {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.financial-account-form label input {
+  margin-top: 6px;
+}
+
+.financial-account-form__type {
+  min-width: 0;
+  border: 0;
+}
+
+.financial-account-form__type legend {
+  margin-bottom: 8px;
+}
+
+.financial-account-type-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3px;
+  padding: 3px;
+}
+
+.financial-account-page-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3px;
+  padding: 3px;
+}
+
+.financial-account-page-tabs .segment-btn {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.financial-account-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--sub-card-border);
+}
+
+.financial-account-section-header h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.financial-account-section-header button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  margin-left: auto;
+  padding: 4px 8px;
+  border-radius: var(--border-radius-sm);
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  color: var(--primary-color);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.financial-account-type-option {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.financial-account-type-option[aria-pressed="true"] {
+  background: var(--input-bg-focus);
+  color: var(--text-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
 
 .financial-account-form__submit {
   grid-area: submit;
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
   min-height: 42px;
   padding: 10px 14px;
   display: inline-flex;
@@ -424,22 +616,53 @@ ion-action-sheet::part(button-active) {
   background: var(--primary-hover);
 }
 
+.financial-account-modal-card {
+  border-radius: var(--border-radius-lg);
+  border: 1px solid var(--card-border);
+  background: var(--modal-card-bg) !important;
+  box-shadow: var(--card-shadow);
+}
+
+.financial-account-modal-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--card-border);
+}
+
+.financial-account-modal-card__header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.financial-account-modal-card__header p {
+  margin: 4px 0 0;
+  color: var(--text-tertiary);
+  font-size: 0.78rem;
+}
+
+.financial-account-modal-card__header button {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: var(--border-radius-sm);
+  background: var(--input-bg);
+  color: var(--text-secondary);
+}
+
+.financial-account-modal-card__header button:hover {
+  background: var(--input-bg-focus);
+  color: var(--text-primary);
+}
+
 @media (max-width: 600px) {
   .financial-account-form,
   .financial-account-form--credit-card {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-areas:
-      'name name'
-      'type opening'
-      'submit submit';
-  }
-
-  .financial-account-form--credit-card {
-    grid-template-areas:
-      'name name'
-      'type opening'
-      'closing due'
-      'submit submit';
+    padding-top: 4px;
   }
 }
 
@@ -703,14 +926,6 @@ ion-modal.modal-overlay {
   border-color: var(--primary-color);
   background: var(--primary-color);
   color: #fff;
-  box-shadow: 0 0 12px var(--primary-glow);
-}
-
-.transaction-entry-step.is-complete {
-  color: var(--income-color);
-  font-weight: 600;
-}
-
 .transaction-entry-step.is-complete .transaction-entry-step__number {
   border-color: var(--income-color);
   background: var(--income-color);

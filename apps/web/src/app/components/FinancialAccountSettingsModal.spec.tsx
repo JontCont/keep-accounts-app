@@ -5,19 +5,20 @@ import { FinancialAccountSettingsModal } from './FinancialAccountSettingsModal';
 vi.mock('@ionic/react', () => ({
   IonModal: ({ children, isOpen }: { children: unknown; isOpen: boolean }) =>
     isOpen ? <div data-testid="ion-modal">{children}</div> : null,
-  IonButton: ({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
-    <button {...props}>{children}</button>
+  IonToggle: ({ checked, onIonChange, ...props }: any) => (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      {...props}
+      onClick={() => onIonChange({ detail: { checked: !checked } })}
+    />
   ),
-  IonButtons: ({ children }: { children: unknown }) => <div>{children}</div>,
-  IonContent: ({ children }: { children: unknown }) => <div>{children}</div>,
-  IonHeader: ({ children }: { children: unknown }) => <div>{children}</div>,
-  IonTitle: ({ children }: { children: unknown }) => <div>{children}</div>,
-  IonToolbar: ({ children }: { children: unknown }) => <div>{children}</div>,
 }));
 
 describe('FinancialAccountSettingsModal', () => {
   it('groups bank and credit-card accounts and shows derived amounts', () => {
-    const { getAllByText, getByText } = render(
+    const { getAllByText, getByRole, getByText } = render(
       <FinancialAccountSettingsModal
         isOpen={true}
         presentation="page"
@@ -56,21 +57,27 @@ describe('FinancialAccountSettingsModal', () => {
         onClose={vi.fn()}
         onSaveAccount={vi.fn(() => true)}
         onDeleteAccount={vi.fn(() => true)}
+        onViewDetails={vi.fn()}
       />
     );
 
     expect(getAllByText('銀行帳戶').length).toBeGreaterThanOrEqual(1);
     expect(getAllByText('信用卡').length).toBeGreaterThanOrEqual(1);
     expect(getByText('國泰銀行')).toBeTruthy();
-    expect(getByText('未繳 $500')).toBeTruthy();
     expect(getByText('$19,500')).toBeTruthy();
-    expect(getByText('收入')).toBeTruthy();
-    expect(getByText('支出')).toBeTruthy();
+
+    fireEvent.click(getByRole('tab', { name: '信用卡' }));
+    expect(getByText('未繳 $500')).toBeTruthy();
+
+    fireEvent.click(getByRole('tab', { name: '銀行帳戶' }));
+    fireEvent.click(getByRole('button', { name: '查看國泰銀行明細' }));
     expect(getByText('薪資')).toBeTruthy();
-    expect(getByText('午餐')).toBeTruthy();
+    expect(
+      getByRole('button', { name: '收合國泰銀行明細' }).getAttribute('aria-expanded')
+    ).toBe('true');
   });
 
-  it('closes through the Ionic header button', () => {
+  it('closes through the modal card header button', () => {
     const onClose = vi.fn();
     const { getByRole } = render(
       <FinancialAccountSettingsModal
@@ -85,6 +92,69 @@ describe('FinancialAccountSettingsModal', () => {
 
     fireEvent.click(getByRole('button', { name: '關閉金融帳戶' }));
     expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('loads account details in pages of 50 transactions', () => {
+    const transactions = Array.from({ length: 51 }, (_, index) => ({
+      id: `transaction-${index + 1}`,
+      description: `交易 ${index + 1}`,
+      amount: 100,
+      type: 'expense' as const,
+      category: '餐飲食品',
+      date: `2026-09-${String(99 - index).padStart(2, '0')}T12:00:00+08:00`,
+      accountGroupId: 'daily',
+      financialAccountId: 'bank',
+    }));
+    const { getByRole, getByText, queryByText } = render(
+      <FinancialAccountSettingsModal
+        isOpen={true}
+        presentation="page"
+        allowEditing={false}
+        showTransactionDetails={true}
+        accounts={[{ id: 'bank', name: '國泰銀行', type: 'bank', openingAmount: 0 }]}
+        summaries={[{ accountId: 'bank', amount: 0, status: 'balance' }]}
+        transactions={transactions}
+        onClose={vi.fn()}
+        onSaveAccount={vi.fn(() => true)}
+        onDeleteAccount={vi.fn(() => true)}
+        onViewDetails={vi.fn()}
+      />
+    );
+
+    fireEvent.click(getByRole('button', { name: '查看國泰銀行明細' }));
+    expect(getByText('交易 50')).toBeTruthy();
+    expect(queryByText('交易 51')).toBeNull();
+
+    fireEvent.click(getByRole('button', { name: '載入更多明細' }));
+    expect(getByText('交易 51')).toBeTruthy();
+  });
+
+  it('confirms credit-card payment as a transfer from the selected bank', () => {
+    const onConfirmCreditCardPayment = vi.fn(() => true);
+    const { getByLabelText, getByRole } = render(
+      <FinancialAccountSettingsModal
+        isOpen={true}
+        presentation="page"
+        allowEditing={false}
+        accounts={[
+          { id: 'bank', name: '國泰銀行', type: 'bank', openingAmount: 20000 },
+          { id: 'card', name: '台新信用卡', type: 'credit-card', openingAmount: 0 },
+        ]}
+        summaries={[
+          { accountId: 'bank', amount: 20000, status: 'balance' },
+          { accountId: 'card', amount: 1500, status: 'outstanding' },
+        ]}
+        onClose={vi.fn()}
+        onSaveAccount={vi.fn(() => true)}
+        onDeleteAccount={vi.fn(() => true)}
+        onConfirmCreditCardPayment={onConfirmCreditCardPayment}
+      />
+    );
+
+    fireEvent.click(getByRole('tab', { name: '信用卡' }));
+    fireEvent.click(getByRole('button', { name: '確認繳費' }));
+
+    expect(onConfirmCreditCardPayment).toHaveBeenCalledWith('card', 1500);
   });
 
   it('submits a new account and supports delete actions', () => {
@@ -102,7 +172,7 @@ describe('FinancialAccountSettingsModal', () => {
     );
 
     fireEvent.change(getByLabelText('金融帳戶名稱'), { target: { value: '台新信用卡' } });
-    fireEvent.change(getByLabelText('金融帳戶類型'), { target: { value: 'credit-card' } });
+    fireEvent.click(getByRole('button', { name: '信用卡' }));
     fireEvent.change(getByLabelText('金融帳戶初始金額'), { target: { value: '0' } });
     fireEvent.change(getByLabelText('信用卡結帳日'), { target: { value: '15' } });
     fireEvent.change(getByLabelText('信用卡繳款日'), { target: { value: '5' } });
@@ -115,8 +185,47 @@ describe('FinancialAccountSettingsModal', () => {
       openingAmount: 0,
       statementClosingDay: 15,
       paymentDueDay: 5,
+      paymentReminderEnabled: false,
     });
 
     expect(onDeleteAccount).not.toHaveBeenCalled();
+  });
+
+  it('closes the modal after successfully saving an account', () => {
+    const onClose = vi.fn();
+    const { getByLabelText, getByTitle } = render(
+      <FinancialAccountSettingsModal
+        isOpen={true}
+        accounts={[]}
+        summaries={[]}
+        onClose={onClose}
+        onSaveAccount={vi.fn(() => true)}
+        onDeleteAccount={vi.fn(() => true)}
+      />
+    );
+
+    fireEvent.change(getByLabelText('金融帳戶名稱'), { target: { value: '國泰銀行' } });
+    fireEvent.change(getByLabelText('金融帳戶初始金額'), { target: { value: '1000' } });
+    fireEvent.click(getByTitle('新增金融帳戶'));
+
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('requires a statement closing day and payment due day for credit cards', () => {
+    const { getByLabelText, getByRole } = render(
+      <FinancialAccountSettingsModal
+        isOpen={true}
+        accounts={[]}
+        summaries={[]}
+        onClose={vi.fn()}
+        onSaveAccount={vi.fn(() => true)}
+        onDeleteAccount={vi.fn(() => true)}
+      />
+    );
+
+    fireEvent.click(getByRole('button', { name: '信用卡' }));
+
+    expect(getByLabelText('信用卡結帳日').getAttribute('required')).not.toBeNull();
+    expect(getByLabelText('信用卡繳款日').getAttribute('required')).not.toBeNull();
   });
 });

@@ -32,6 +32,7 @@ export interface FinancialAccount {
   openingAmount: number;
   statementClosingDay?: number;
   paymentDueDay?: number;
+  paymentReminderEnabled?: boolean;
   openingAmountAdjustments?: FinancialAccountAdjustment[];
 }
 
