@@ -144,13 +144,11 @@ describe('financial account validation', () => {
         }),
         [bank, card]
       )
-    ).toBe('來源與目的金融帳戶必須是有效帳戶。');
+      ).toBe('轉帳指定的金融帳戶無效。');
   });
 
-  it('requires an active account for income and expense transactions', () => {
-    expect(validateFinancialAccountTransaction(baseTransaction({}), [bank, card])).toBe(
-      '請選擇金融帳戶。'
-    );
+  it('allows income and expense transactions without a financial account', () => {
+    expect(validateFinancialAccountTransaction(baseTransaction({}), [bank, card])).toBe(null);
     expect(validateFinancialAccountTransaction(baseTransaction({ financialAccountId: 'card' }), [card])).toBe(
       null
     );

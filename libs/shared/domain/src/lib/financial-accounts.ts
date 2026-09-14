@@ -73,13 +73,12 @@ export const validateFinancialAccountTransaction = (
     return null;
   }
 
-  if (transaction.type === 'income' || transaction.type === 'expense') {
-    if (!transaction.financialAccountId) {
-      return '請選擇金融帳戶。';
-    }
-    if (!isActiveAccount(transaction.financialAccountId)) {
-      return '請選擇有效的金融帳戶。';
-    }
+  if (
+    (transaction.type === 'income' || transaction.type === 'expense') &&
+    transaction.financialAccountId &&
+    !isActiveAccount(transaction.financialAccountId)
+  ) {
+    return '請選擇有效的金融帳戶。';
   }
 
   return null;

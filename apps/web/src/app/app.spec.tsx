@@ -1210,15 +1210,42 @@ describe('useKeepAccounts defensive checks', () => {
 
     const account = result.current.financialAccounts.find((candidate) => candidate.id === accountId);
     expect(account?.openingAmount).toBe(30000);
-    expect(account?.openingAmountAdjustments?.[0].amount).toBe(-5000);
+    expect(account?.openingAmountAdjustments ?? []).toEqual([]);
+    expect(result.current.transactions[0]).toMatchObject({
+      type: 'expense',
+      category: '餘額調整',
+      amount: 4000,
+      financialAccountId: accountId,
+    });
     await waitFor(() => {
       const summary = result.current.financialAccountSummaries.find(
         (candidate) => candidate.accountId === accountId
       );
       expect(summary).toMatchObject({
         accountId,
-        amount: 24000,
+        amount: 25000,
       });
+    });
+
+    act(() => {
+      result.current.saveFinancialAccount({
+        id: accountId,
+        name: '國泰銀行',
+        type: 'bank',
+        openingAmount: 25001,
+      });
+    });
+
+    expect(result.current.transactions[0]).toMatchObject({
+      type: 'income',
+      category: '餘額調整',
+      amount: 1,
+      financialAccountId: accountId,
+    });
+    await waitFor(() => {
+      expect(result.current.financialAccountSummaries).toEqual(
+        expect.arrayContaining([expect.objectContaining({ accountId, amount: 25001 })])
+      );
     });
   });
 

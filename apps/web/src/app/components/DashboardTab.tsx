@@ -3,8 +3,6 @@ import {
   Transaction,
   AccountGroup,
   FinancialAccount,
-  FinancialAccountSummary,
-  getFinancialAccountOpeningAmount,
   getCurrentMonthExpenseForGroup,
 } from '@keep-accounts-app/domain';
 import { AppIcon } from './AppIcon';
@@ -13,7 +11,6 @@ import { TransactionLedgerRow } from './TransactionLedgerRow';
 interface DashboardTabProps {
   accountGroups: AccountGroup[];
   financialAccounts?: FinancialAccount[];
-  financialAccountSummaries?: FinancialAccountSummary[];
   transactions: Transaction[];
   onApplyStarterPreset: () => void;
   onAddTransactionClick: () => void;
@@ -33,7 +30,6 @@ interface DashboardTabProps {
 export const DashboardTab: FC<DashboardTabProps> = ({
   accountGroups,
   financialAccounts = [],
-  financialAccountSummaries = [],
   transactions,
   onApplyStarterPreset,
   onAddTransactionClick,
@@ -74,20 +70,9 @@ export const DashboardTab: FC<DashboardTabProps> = ({
     .filter((tx) => tx.type === 'expense')
     .reduce((sum, tx) => sum + tx.amount, 0);
 
-  const summaryByAccountId = new Map(
-    financialAccountSummaries.map((summary) => [summary.accountId, summary])
-  );
-  const totalFinancialBalance = financialAccounts.reduce((total, account) => {
-    const summary = summaryByAccountId.get(account.id);
-    const amount = summary?.amount ?? getFinancialAccountOpeningAmount(account);
-    if (account.type === 'credit-card') {
-      return total + (summary?.status === 'credit' ? amount : -amount);
-    }
-    return total + amount;
-  }, 0);
-  const totalBalance = financialAccounts.length > 0
-    ? totalFinancialBalance
-    : totalIncome - totalExpense;
+  // Dashboard total tracks the income/expense ledger only. Financial account
+  // balances are independent and remain available on the Financial Accounts page.
+  const totalBalance = totalIncome - totalExpense;
 
   const displayIncome = transactions
     .filter((tx) => tx.type === 'income')

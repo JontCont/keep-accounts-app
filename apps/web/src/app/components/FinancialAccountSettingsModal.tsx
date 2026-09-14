@@ -102,7 +102,10 @@ export const FinancialAccountSettingsModal: FC<FinancialAccountSettingsModalProp
               id: accountToEdit.id,
               name: accountToEdit.name,
               type: accountToEdit.type,
-              openingAmount: String(accountToEdit.openingAmount),
+              openingAmount: String(
+                summaries.find((summary) => summary.accountId === accountToEdit.id)?.amount ??
+                  getFinancialAccountOpeningAmount(accountToEdit)
+              ),
               statementClosingDay: accountToEdit.statementClosingDay
                 ? String(accountToEdit.statementClosingDay)
                 : '',
@@ -114,7 +117,7 @@ export const FinancialAccountSettingsModal: FC<FinancialAccountSettingsModalProp
           : { ...EMPTY_FORM, type: initialType }
       );
     }
-  }, [accountToEdit, initialType, isOpen]);
+  }, [accountToEdit, initialType, isOpen, summaries]);
 
   useEffect(() => {
     if (!preferNativeQueries || !expandedAccountId) {
@@ -170,7 +173,10 @@ export const FinancialAccountSettingsModal: FC<FinancialAccountSettingsModalProp
       id: account.id,
       name: account.name,
       type: account.type,
-      openingAmount: String(getFinancialAccountOpeningAmount(account)),
+      openingAmount: String(
+        summaries.find((summary) => summary.accountId === account.id)?.amount ??
+          getFinancialAccountOpeningAmount(account)
+      ),
       statementClosingDay: account.statementClosingDay
         ? String(account.statementClosingDay)
         : '',
@@ -374,6 +380,9 @@ export const FinancialAccountSettingsModal: FC<FinancialAccountSettingsModalProp
                         preferNativeQueries && expandedAccountId === account.id
                           ? nativeDetailTransactions
                           : accountTransactions.slice(0, visibleDetailCount);
+                      const accountAdjustments = [...(account.openingAmountAdjustments ?? [])].sort(
+                        (left, right) => right.date.localeCompare(left.date)
+                      );
                       const transactionSections = [
                         {
                           key: 'income',
@@ -503,6 +512,50 @@ export const FinancialAccountSettingsModal: FC<FinancialAccountSettingsModalProp
                                 gap: '10px',
                               }}
                             >
+                                {accountAdjustments.length > 0 && (
+                                  <div>
+                                    <div
+                                      style={{
+                                        color: 'var(--primary-color)',
+                                        fontSize: '0.75rem',
+                                        fontWeight: 700,
+                                        marginBottom: '5px',
+                                      }}
+                                    >
+                                      調整
+                                    </div>
+                                    {accountAdjustments.map((adjustment) => (
+                                      <div
+                                        key={adjustment.id}
+                                        style={{
+                                          display: 'flex',
+                                          justifyContent: 'space-between',
+                                          gap: '10px',
+                                          padding: '5px 0',
+                                          fontSize: '0.76rem',
+                                          borderTop: '1px solid var(--card-border)',
+                                        }}
+                                      >
+                                        <div>
+                                          <div>帳戶餘額調整</div>
+                                          <div style={{ color: 'var(--text-tertiary)', fontSize: '0.68rem' }}>
+                                            {adjustment.date.substring(0, 10)}
+                                          </div>
+                                        </div>
+                                        <strong
+                                          style={{
+                                            color: adjustment.amount >= 0
+                                              ? 'var(--income-color)'
+                                              : 'var(--expense-color)',
+                                            whiteSpace: 'nowrap',
+                                          }}
+                                        >
+                                          {adjustment.amount >= 0 ? '+' : '-'}{formatAmount(Math.abs(adjustment.amount))}
+                                        </strong>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
                               {transactionSections.some((transactionSection) => transactionSection.items.length > 0) ? transactionSections.map((transactionSection) =>
                                 transactionSection.items.length > 0 ? (
                                   <div key={transactionSection.key}>

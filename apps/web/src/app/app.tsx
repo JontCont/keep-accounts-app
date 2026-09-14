@@ -768,7 +768,6 @@ export function App() {
                   <DashboardTab
                     accountGroups={accountGroups}
                     financialAccounts={financialAccounts}
-                    financialAccountSummaries={financialAccountSummaries}
                     transactions={transactions}
                         onApplyStarterPreset={handleApplyStarterPreset}
                     onAddTransactionClick={() => {

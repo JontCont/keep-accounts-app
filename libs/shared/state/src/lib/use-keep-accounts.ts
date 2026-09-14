@@ -252,28 +252,57 @@ export function useKeepAccounts() {
         return [...previous, account];
       }
 
-      const currentOpeningAmount = getFinancialAccountOpeningAmount(existing);
-      const delta = openingAmount - currentOpeningAmount;
-      const adjustments = [...(existing.openingAmountAdjustments ?? [])];
-      if (delta !== 0) {
-        adjustments.push({
-          id: `financial-account-adjustment-${Date.now()}`,
-          amount: delta,
-          date: getLocalISOString(),
-        });
-      }
+      const currentAmount = financialAccountSummaries.find(
+        (summary) => summary.accountId === existing.id
+      )?.amount ?? getFinancialAccountOpeningAmount(existing);
+      const delta = openingAmount - currentAmount;
 
       return previous.map((candidate) =>
         candidate.id === account.id
           ? {
               ...account,
               openingAmount: existing.openingAmount,
-              openingAmountAdjustments: adjustments,
+              openingAmountAdjustments: existing.openingAmountAdjustments,
             }
           : candidate
       );
     });
-    return true;
+
+    const existing = financialAccounts.find((candidate) => candidate.id === accountId);
+    if (!existing) {
+      return true;
+    }
+
+    const currentAmount = financialAccountSummaries.find(
+      (summary) => summary.accountId === accountId
+    )?.amount ?? getFinancialAccountOpeningAmount(existing);
+    const delta = openingAmount - currentAmount;
+    if (delta === 0) {
+      return true;
+    }
+
+    const targetGroup = accountGroups.find((group) => group.isSource) ?? accountGroups[0];
+    if (!targetGroup) {
+      alert('請先建立至少一個帳戶群組，才能調整金融帳戶餘額。');
+      return false;
+    }
+
+    const increasesBalance = existing.type !== 'credit-card';
+    const adjustmentType: 'income' | 'expense' =
+      (delta > 0) === increasesBalance ? 'income' : 'expense';
+    const direction = delta > 0 ? '增加' : '減少';
+    const formatBalance = (value: number) => `$${value.toLocaleString('zh-TW')}`;
+    return saveTransaction(
+      `手動調整金融帳戶（${direction}：${formatBalance(currentAmount)} -> ${formatBalance(openingAmount)}）`,
+      String(Math.abs(delta)),
+      adjustmentType,
+      '餘額調整',
+      getLocalISOString(),
+      targetGroup.id,
+      null,
+      undefined,
+      accountId
+    );
   };
 
   const isFinancialAccountReferenced = (accountId: string) =>

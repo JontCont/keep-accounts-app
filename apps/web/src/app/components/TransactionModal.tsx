@@ -495,7 +495,6 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       return;
     }
 
-    setFinancialAccountId((current) => current || activeFinancialAccounts[0].id);
     setTransferSourceFinancialAccountId((current) => current || activeFinancialAccounts[0].id);
     setTransferDestinationFinancialAccountId((current) => {
       if (current) {
@@ -1076,13 +1075,9 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 marginBottom: '8px',
               }}
             >
-              金融帳戶
+              金融帳戶（選填）
             </label>
-            {activeFinancialAccounts.length === 0 && !financialAccountId ? (
-              <button type="button" onClick={onCreateFinancialAccount}>
-                <AppIcon name="plus" size={16} /> 建立金融帳戶
-              </button>
-            ) : (
+            {activeFinancialAccounts.length > 0 && (
               <CustomSelect
                 value={financialAccountId}
                 onChange={setFinancialAccountId}
@@ -1091,7 +1086,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                     label: account.name,
                     icon: getFinancialAccountIcon(account.type),
                   }))}
-                placeholder="選擇金融帳戶"
+                placeholder="不指定金融帳戶"
                 compact={isNewTransaction}
               />
             )}

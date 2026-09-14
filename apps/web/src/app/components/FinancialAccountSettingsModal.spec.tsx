@@ -25,7 +25,15 @@ describe('FinancialAccountSettingsModal', () => {
         allowEditing={false}
         showTransactionDetails={true}
         accounts={[
-          { id: 'bank', name: '國泰銀行', type: 'bank', openingAmount: 20000 },
+          {
+            id: 'bank',
+            name: '國泰銀行',
+            type: 'bank',
+            openingAmount: 20000,
+            openingAmountAdjustments: [
+              { id: 'adjustment-1', amount: 500, date: '2026-09-03T12:00:00+08:00' },
+            ],
+          },
           { id: 'card', name: '台新信用卡', type: 'credit-card', openingAmount: 0 },
         ]}
         summaries={[
@@ -72,6 +80,7 @@ describe('FinancialAccountSettingsModal', () => {
     fireEvent.click(getByRole('tab', { name: '銀行帳戶' }));
     fireEvent.click(getByRole('button', { name: '查看國泰銀行明細' }));
     expect(getByText('薪資')).toBeTruthy();
+    expect(getByText('帳戶餘額調整')).toBeTruthy();
     expect(
       getByRole('button', { name: '收合國泰銀行明細' }).getAttribute('aria-expanded')
     ).toBe('true');
@@ -92,6 +101,28 @@ describe('FinancialAccountSettingsModal', () => {
 
     fireEvent.click(getByRole('button', { name: '關閉金融帳戶' }));
     expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('prefills an account editor with its current derived balance', () => {
+    const { getByLabelText } = render(
+      <FinancialAccountSettingsModal
+        isOpen={true}
+        accountToEdit={{
+          id: 'bank',
+          name: '國泰銀行',
+          type: 'bank',
+          openingAmount: 60000,
+          openingAmountAdjustments: [{ id: 'adjustment', amount: 1000, date: '2026-09-14' }],
+        }}
+        accounts={[]}
+        summaries={[{ accountId: 'bank', amount: 121900, status: 'balance' }]}
+        onClose={vi.fn()}
+        onSaveAccount={vi.fn(() => true)}
+        onDeleteAccount={vi.fn(() => true)}
+      />
+    );
+
+    expect(getByLabelText('金融帳戶初始金額').getAttribute('value')).toBe('121900');
   });
 
   it('loads account details in pages of 50 transactions', () => {
