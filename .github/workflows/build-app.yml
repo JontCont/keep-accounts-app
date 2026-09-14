@@ -1,7 +1,7 @@
 name: Mobile Builds CI
 
 env:
-  APP_VERSION: 0.3.0
+  APP_VERSION: 0.3.1
 
 on:
   push:
@@ -172,9 +172,9 @@ jobs:
           path: ${{ needs.build.outputs.version }}.ipa
           retention-days: 1
 
-  # Stage 3: Only publish master builds as GitHub Release downloads.
+  # Stage 3: Publish master builds as latest releases and develop builds as pre-releases.
   publish-mobile-build:
-    if: github.ref == 'refs/heads/master'
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop'
     needs: [build, package-android, package-ios]
     runs-on: ubuntu-latest
     permissions:
@@ -235,7 +235,8 @@ jobs:
         with:
           tag_name: build-${{ needs.build.outputs.version }}
           name: v${{ env.APP_VERSION }} - 記帳 App
-          prerelease: true
+          prerelease: ${{ github.ref == 'refs/heads/develop' }}
+          make_latest: ${{ github.ref == 'refs/heads/master' }}
           body_path: release-assets/CHANGELOG.md
           files: |
             release-assets/${{ needs.build.outputs.version }}.apk

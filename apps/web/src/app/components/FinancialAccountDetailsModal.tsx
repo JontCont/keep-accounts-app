@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useState, type FC } from 'react';
-import { IonModal } from '@ionic/react';
+import {
+  IonButton,
+  IonButtons,
+  IonContent,
+  IonHeader,
+  IonModal,
+  IonTitle,
+  IonToolbar,
+} from '@ionic/react';
 import {
   FinancialAccount,
   FinancialAccountSummary,
@@ -112,6 +120,17 @@ export const FinancialAccountDetailsModal: FC<FinancialAccountDetailsModalProps>
       onDidDismiss={onClose}
       className="financial-account-details-modal"
     >
+      <IonHeader>
+        <IonToolbar>
+          <IonTitle>{account?.name ?? '帳戶明細'}</IonTitle>
+          <IonButtons slot="end">
+            <IonButton onClick={() => onClose()} title="關閉帳戶明細" aria-label="關閉帳戶明細">
+              <AppIcon name="x" size={20} />
+            </IonButton>
+          </IonButtons>
+        </IonToolbar>
+      </IonHeader>
+      <IonContent>
       <div className="fade-in" style={{ minHeight: '100%', padding: '24px', background: 'var(--bg-color)', color: 'var(--text-primary)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
           <div style={{ minWidth: 0 }}>
@@ -123,9 +142,6 @@ export const FinancialAccountDetailsModal: FC<FinancialAccountDetailsModalProps>
               {amountLabel}
             </div>
           </div>
-          <button type="button" onClick={onClose} title="關閉帳戶明細" aria-label="關閉帳戶明細">
-            <AppIcon name="x" size={20} />
-          </button>
         </div>
 
         <div
@@ -228,6 +244,32 @@ export const FinancialAccountDetailsModal: FC<FinancialAccountDetailsModalProps>
           </section>
         )}
 
+        {account && (
+          <section style={{ marginTop: '18px' }} aria-label="初始餘額">
+            <div
+              style={{
+                padding: '8px 12px',
+                background: 'var(--sub-card-bg)',
+                border: '1px solid var(--sub-card-border)',
+                borderRadius: 'var(--border-radius-sm)',
+                color: 'var(--text-secondary)',
+                fontSize: '0.82rem',
+                fontWeight: 600,
+              }}
+            >
+              初始餘額
+            </div>
+            <div className="glass-card" style={{ marginTop: '8px', padding: '12px 14px', borderRadius: 'var(--border-radius-md)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px' }}>
+                <div style={{ fontWeight: 600 }}>帳戶建立金額</div>
+                <strong style={{ color: 'var(--text-secondary)' }}>
+                  {formatAmount(getFinancialAccountOpeningAmount(account))}
+                </strong>
+              </div>
+            </div>
+          </section>
+        )}
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '18px' }}>
           {Object.keys(groupedTransactions).length === 0 ? (
             <div className="glass-card" style={{ padding: '24px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
@@ -308,6 +350,7 @@ export const FinancialAccountDetailsModal: FC<FinancialAccountDetailsModalProps>
           </button>
         )}
       </div>
+      </IonContent>
     </IonModal>
   );
 };

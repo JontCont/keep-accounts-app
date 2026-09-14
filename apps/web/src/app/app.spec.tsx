@@ -116,7 +116,7 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: '金融帳戶' }));
     fireEvent.click(screen.getByRole('button', { name: '新增銀行帳戶' }));
 
-    expect(screen.getAllByText('管理銀行、信用卡與現金餘額').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText('管理銀行帳戶與信用卡餘額').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByLabelText('金融帳戶名稱')).toBeTruthy();
   });
 
@@ -126,7 +126,7 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: '金融帳戶' }));
 
     expect(screen.getAllByRole('heading', { name: '金融帳戶' }).length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText('管理銀行、信用卡與現金餘額')).toBeTruthy();
+    expect(screen.getByText('管理銀行帳戶與信用卡餘額')).toBeTruthy();
     expect(screen.getByRole('button', { name: '金融帳戶' }).getAttribute('aria-current')).toBe('page');
   });
 

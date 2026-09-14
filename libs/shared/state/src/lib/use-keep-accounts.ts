@@ -38,7 +38,7 @@ import {
 export function useKeepAccounts() {
   const nativeMode = isNativePersistenceEnabled();
   const RECENT_CACHE_LIMIT = 200;
-  const hasHydratedPersistenceRef = useRef(true);
+  const [hasHydratedPersistence, setHasHydratedPersistence] = useState(() => !nativeMode);
   const [accountGroups, setAccountGroups] = useState<AccountGroup[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.ACCOUNTS.GROUPS);
     if (saved) {
@@ -114,7 +114,7 @@ export function useKeepAccounts() {
       if (JSON.stringify(hydratedFinancialAccounts) !== JSON.stringify(financialAccounts)) {
         setFinancialAccounts(hydratedFinancialAccounts);
       }
-      hasHydratedPersistenceRef.current = true;
+      setHasHydratedPersistence(true);
     };
 
     void hydrate();
@@ -147,7 +147,7 @@ export function useKeepAccounts() {
   }, [financialAccounts, transactions, nativeMode]);
 
   useEffect(() => {
-    if (!hasHydratedPersistenceRef.current) {
+    if (!hasHydratedPersistence) {
       return;
     }
 
@@ -168,7 +168,7 @@ export function useKeepAccounts() {
 
     void saveNativeAccountGroups(accountGroups);
     void saveNativeFinancialAccounts(financialAccounts);
-  }, [accountGroups, transactions, financialAccounts, nativeMode]);
+  }, [accountGroups, transactions, financialAccounts, hasHydratedPersistence, nativeMode]);
 
   // Legacy repair: before installment account-group selection existed, some
   // installment transactions with system category "分期" were saved into source

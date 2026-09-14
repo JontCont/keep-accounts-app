@@ -1,5 +1,13 @@
 import { useEffect, useState, type FC } from 'react';
-import { IonModal } from '@ionic/react';
+import {
+  IonButton,
+  IonButtons,
+  IonContent,
+  IonHeader,
+  IonModal,
+  IonTitle,
+  IonToolbar,
+} from '@ionic/react';
 import {
   FinancialAccount,
   FinancialAccountSummary,
@@ -43,7 +51,6 @@ const ACCOUNT_SECTIONS: Array<{
 }> = [
   { type: 'bank', label: '銀行帳戶', icon: 'landmark' },
   { type: 'credit-card', label: '信用卡', icon: 'credit-card' },
-  { type: 'cash', label: '現金', icon: 'wallet' },
 ];
 
 const EMPTY_FORM = {
@@ -146,21 +153,16 @@ export const FinancialAccountSettingsModal: FC<FinancialAccountSettingsModalProp
           paddingBottom: presentation === 'page' ? '80px' : '24px',
         }}
       >
+        {presentation === 'page' ? (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
           <div>
             <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 600 }}>金融帳戶</h2>
             <p style={{ margin: '6px 0 0', color: 'var(--text-secondary)', fontSize: '0.82rem' }}>
-              管理銀行、信用卡與現金餘額
+              管理銀行帳戶與信用卡餘額
             </p>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {showCloseButton && (
-              <button type="button" onClick={onClose} title="關閉金融帳戶" aria-label="關閉金融帳戶">
-                <AppIcon name="x" size={20} />
-              </button>
-            )}
-          </div>
         </div>
+        ) : null}
 
         {allowEditing && <form
           className={`glass-card financial-account-form ${form.type === 'credit-card' ? 'financial-account-form--credit-card' : ''}`}
@@ -487,7 +489,21 @@ export const FinancialAccountSettingsModal: FC<FinancialAccountSettingsModalProp
 
   return (
     <IonModal isOpen={isOpen} onDidDismiss={onClose}>
-      {content}
+      <IonHeader>
+        <IonToolbar>
+          <IonTitle>金融帳戶</IonTitle>
+          {showCloseButton && (
+            <IonButtons slot="end">
+              <IonButton onClick={() => onClose()} title="關閉金融帳戶" aria-label="關閉金融帳戶">
+                <AppIcon name="x" size={20} />
+              </IonButton>
+            </IonButtons>
+          )}
+        </IonToolbar>
+      </IonHeader>
+      <IonContent>
+        {content}
+      </IonContent>
     </IonModal>
   );
 };

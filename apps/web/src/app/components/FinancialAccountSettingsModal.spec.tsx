@@ -5,10 +5,18 @@ import { FinancialAccountSettingsModal } from './FinancialAccountSettingsModal';
 vi.mock('@ionic/react', () => ({
   IonModal: ({ children, isOpen }: { children: unknown; isOpen: boolean }) =>
     isOpen ? <div data-testid="ion-modal">{children}</div> : null,
+  IonButton: ({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
+    <button {...props}>{children}</button>
+  ),
+  IonButtons: ({ children }: { children: unknown }) => <div>{children}</div>,
+  IonContent: ({ children }: { children: unknown }) => <div>{children}</div>,
+  IonHeader: ({ children }: { children: unknown }) => <div>{children}</div>,
+  IonTitle: ({ children }: { children: unknown }) => <div>{children}</div>,
+  IonToolbar: ({ children }: { children: unknown }) => <div>{children}</div>,
 }));
 
 describe('FinancialAccountSettingsModal', () => {
-  it('groups bank, credit-card, and cash accounts and shows derived amounts', () => {
+  it('groups bank and credit-card accounts and shows derived amounts', () => {
     const { getAllByText, getByText } = render(
       <FinancialAccountSettingsModal
         isOpen={true}
@@ -18,12 +26,10 @@ describe('FinancialAccountSettingsModal', () => {
         accounts={[
           { id: 'bank', name: '國泰銀行', type: 'bank', openingAmount: 20000 },
           { id: 'card', name: '台新信用卡', type: 'credit-card', openingAmount: 0 },
-          { id: 'cash', name: '現金', type: 'cash', openingAmount: 500 },
         ]}
         summaries={[
           { accountId: 'bank', amount: 19500, status: 'balance' },
           { accountId: 'card', amount: 500, status: 'outstanding' },
-          { accountId: 'cash', amount: 500, status: 'balance' },
         ]}
         transactions={[
           {
@@ -55,7 +61,6 @@ describe('FinancialAccountSettingsModal', () => {
 
     expect(getAllByText('銀行帳戶').length).toBeGreaterThanOrEqual(1);
     expect(getAllByText('信用卡').length).toBeGreaterThanOrEqual(1);
-    expect(getAllByText('現金').length).toBeGreaterThanOrEqual(1);
     expect(getByText('國泰銀行')).toBeTruthy();
     expect(getByText('未繳 $500')).toBeTruthy();
     expect(getByText('$19,500')).toBeTruthy();
@@ -63,6 +68,23 @@ describe('FinancialAccountSettingsModal', () => {
     expect(getByText('支出')).toBeTruthy();
     expect(getByText('薪資')).toBeTruthy();
     expect(getByText('午餐')).toBeTruthy();
+  });
+
+  it('closes through the Ionic header button', () => {
+    const onClose = vi.fn();
+    const { getByRole } = render(
+      <FinancialAccountSettingsModal
+        isOpen={true}
+        accounts={[]}
+        summaries={[]}
+        onClose={onClose}
+        onSaveAccount={vi.fn(() => true)}
+        onDeleteAccount={vi.fn(() => true)}
+      />
+    );
+
+    fireEvent.click(getByRole('button', { name: '關閉金融帳戶' }));
+    expect(onClose).toHaveBeenCalledOnce();
   });
 
   it('submits a new account and supports delete actions', () => {
