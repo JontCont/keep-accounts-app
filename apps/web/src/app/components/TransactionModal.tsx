@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
   IonModal,
   IonDatetimeButton,
@@ -31,18 +32,48 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
   compact = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState<{
+    left: number;
+    width: number;
+    maxHeight: number;
+    top?: number;
+    bottom?: number;
+  } | null>(null);
+  const triggerRef = useRef<HTMLDivElement>(null);
   const selectedOption = options.find(o => o.value === value);
 
   const toggleMenu = () => {
+    if (isOpen) {
+      setIsOpen(false);
+      return;
+    }
+
     if (!isOpen && document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
-    setIsOpen((current) => !current);
+
+    const triggerBounds = triggerRef.current?.getBoundingClientRect();
+    if (triggerBounds) {
+      const menuHeight = Math.min(220, options.length * 44 + 10);
+      const availableBelow = window.innerHeight - triggerBounds.bottom - 8;
+      const availableAbove = triggerBounds.top - 8;
+      const openAbove = availableBelow < menuHeight && triggerBounds.top > availableBelow;
+
+      setMenuPosition({
+        left: triggerBounds.left,
+        width: triggerBounds.width,
+        maxHeight: Math.min(220, openAbove ? availableAbove : availableBelow),
+        top: openAbove ? undefined : triggerBounds.bottom + 4,
+        bottom: openAbove ? window.innerHeight - triggerBounds.top + 4 : undefined,
+      });
+    }
+    setIsOpen(true);
   };
 
   return (
     <div style={{ position: 'relative', width: '100%' }}>
       <div
+        ref={triggerRef}
         onClick={toggleMenu}
         style={{
           display: 'flex',
@@ -71,9 +102,10 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
         <AppIcon name="chevron-down" size={16} style={{ color: 'var(--text-tertiary)' }} />
       </div>
 
-      {isOpen && (
+      {isOpen && menuPosition && createPortal(
         <>
           <div
+            className="transaction-custom-select-backdrop"
             onClick={() => setIsOpen(false)}
             style={{
               position: 'fixed',
@@ -81,22 +113,24 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
               left: 0,
               right: 0,
               bottom: 0,
-              zIndex: 9999,
+              zIndex: 100000,
               background: 'transparent',
             }}
           />
           <div
+            className="transaction-custom-select-menu"
             style={{
-              position: 'absolute',
-              top: 'calc(100% + 4px)',
-              left: 0,
-              right: 0,
+              position: 'fixed',
+              top: menuPosition.top,
+              bottom: menuPosition.bottom,
+              left: menuPosition.left,
+              width: menuPosition.width,
               background: 'var(--modal-card-bg)',
               border: '1px solid var(--card-border)',
               borderRadius: 'var(--border-radius-sm)',
               boxShadow: 'var(--card-shadow)',
-              zIndex: 10000,
-              maxHeight: '220px',
+              zIndex: 100001,
+              maxHeight: menuPosition.maxHeight,
               overflowY: 'auto',
               display: 'flex',
               flexDirection: 'column',
@@ -145,7 +179,8 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
               </div>
             ))}
           </div>
-        </>
+        </>,
+        document.body
       )}
     </div>
   );

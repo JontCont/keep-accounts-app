@@ -7,19 +7,19 @@
   --text-primary: #ffffff;
   --text-secondary: rgba(255, 255, 255, 0.65);
   --text-tertiary: rgba(255, 255, 255, 0.4);
-  
+
   --primary-color: #6366f1; /* Indigo */
   --primary-hover: #4f46e5;
   --primary-glow: rgba(99, 102, 241, 0.35);
-  
+
   --income-color: #10b981; /* Teal */
   --income-bg: rgba(16, 185, 129, 0.12);
   --income-glow: rgba(16, 185, 129, 0.25);
-  
+
   --expense-color: #f43f5e; /* Rose */
   --expense-bg: rgba(244, 63, 94, 0.12);
   --expense-glow: rgba(244, 63, 94, 0.25);
-  
+
   --border-radius-lg: 20px;
   --border-radius-md: 14px;
   --border-radius-sm: 8px;
@@ -62,10 +62,10 @@
   --text-secondary: #475569;
   --text-tertiary: #94a3b8;
   --primary-glow: rgba(99, 102, 241, 0.12);
-  
+
   --income-bg: rgba(16, 185, 129, 0.08);
   --expense-bg: rgba(244, 63, 94, 0.08);
-  
+
   --ion-text-color: var(--text-primary);
   --ion-text-color-rgb: 15, 23, 42;
 
@@ -91,7 +91,7 @@
 
 [data-theme="light"] body {
   background-color: var(--bg-color);
-  background-image: 
+  background-image:
     radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.05) 0px, transparent 50%),
     radial-gradient(at 100% 100%, rgba(244, 63, 94, 0.03) 0px, transparent 50%);
 }
@@ -127,7 +127,7 @@ body {
   min-height: 100vh;
   line-height: 1.5;
   overflow-x: hidden;
-  background-image: 
+  background-image:
     radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.12) 0px, transparent 50%),
     radial-gradient(at 100% 100%, rgba(244, 63, 94, 0.08) 0px, transparent 50%);
   background-attachment: fixed;
@@ -697,7 +697,6 @@ ion-modal.modal-overlay {
 
 .transaction-entry-actions {
   flex: 0 0 auto;
-  padding-bottom: calc(16px + env(safe-area-inset-bottom));
 }
 
 .transaction-entry-card--modal {

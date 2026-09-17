@@ -174,6 +174,12 @@ describe('TransactionModal', () => {
     expect(queryByText('金融帳戶（選填）')).toBeNull();
     expect(queryByPlaceholderText('例如: 買咖啡、午餐、薪水')).toBeNull();
 
+    fireEvent.click(getByText('購物消費'));
+    const selectMenu = document.body.querySelector('.transaction-custom-select-menu');
+    expect(selectMenu?.parentElement).toBe(document.body);
+    expect((selectMenu as HTMLElement).style.position).toBe('fixed');
+    fireEvent.click(document.body.querySelector('.transaction-custom-select-backdrop') as HTMLElement);
+
     fireEvent.click(getByRole('button', { name: '下一步' }));
 
     expect(getByText('詳細資料')).toBeTruthy();
