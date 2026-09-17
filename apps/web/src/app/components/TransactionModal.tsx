@@ -1006,7 +1006,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
         </>
         )}
+        </>
+        )}
 
+        {(!isNewTransaction || isTransactionDetails) && (
+        <>
         {/* Financial account selection */}
         {type === 'transfer' ? (
           <>
@@ -1299,6 +1303,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         </>
         )}
 
+        {(!isNewTransaction || isTransactionDetails) && (
         <>
         {/* Date & Time */}
         <div>
@@ -1345,6 +1350,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
           </IonModal>
         </div>
         </>
+        )}
 
         {/* 分期 (Installment) tab */}
         {isInstallmentDetails && (

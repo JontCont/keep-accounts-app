@@ -153,7 +153,7 @@ describe('TransactionModal', () => {
     ];
     const onSave = vi.fn();
 
-    const { getByRole, getByTestId, getByText, queryByPlaceholderText } = render(
+    const { getByRole, getByText, queryByPlaceholderText, queryByText } = render(
       <BrowserRouter>
         <TransactionModal
           isOpen={true}
@@ -170,7 +170,8 @@ describe('TransactionModal', () => {
     expect(getByText('交易類型')).toBeTruthy();
     expect(getByText('分配群組')).toBeTruthy();
     expect(getByText('選擇分類')).toBeTruthy();
-    expect(getByText('交易日期與時間')).toBeTruthy();
+    expect(queryByText('交易日期與時間')).toBeNull();
+    expect(queryByText('金融帳戶（選填）')).toBeNull();
     expect(queryByPlaceholderText('例如: 買咖啡、午餐、薪水')).toBeNull();
 
     fireEvent.click(getByRole('button', { name: '下一步' }));
@@ -178,7 +179,7 @@ describe('TransactionModal', () => {
     expect(getByText('詳細資料')).toBeTruthy();
     expect(queryByPlaceholderText('例如: 買咖啡、午餐、薪水')).toBeTruthy();
     expect(getByText('交易日期與時間')).toBeTruthy();
-    expect(getByTestId('datetime-button').getAttribute('data-datetime')).toBe('tx-datetime');
+    expect(getByText('金融帳戶（選填）')).toBeTruthy();
     expect(onSave).not.toHaveBeenCalled();
   });
 
@@ -301,6 +302,14 @@ describe('TransactionModal', () => {
 
     fireEvent.click(getByRole('button', { name: '轉帳' }));
 
+    expect(queryByText('轉出金融帳戶')).toBeNull();
+    expect(queryByText('轉入金融帳戶')).toBeNull();
+    expect(queryByText('分配群組')).toBeNull();
+    expect(queryByText('選擇分類')).toBeNull();
+    expect(queryByText('付款型態')).toBeNull();
+
+    fireEvent.click(getByRole('button', { name: '下一步' }));
+
     expect(getByText('轉出金融帳戶')).toBeTruthy();
     expect(getByText('轉入金融帳戶')).toBeTruthy();
     expect(queryByText('分配群組')).toBeNull();
@@ -369,7 +378,7 @@ describe('TransactionModal', () => {
       },
     ];
 
-    const { container } = render(
+    const { container, getByRole } = render(
       <BrowserRouter>
         <TransactionModal
           isOpen={true}
@@ -381,6 +390,8 @@ describe('TransactionModal', () => {
         />
       </BrowserRouter>
     );
+
+    fireEvent.click(getByRole('button', { name: '下一步' }));
 
     expect(container.querySelector('[data-testid="datetime-button"]')?.getAttribute('data-datetime')).toBe('tx-datetime');
     expect(container.querySelector('[data-testid="datetime"]')?.getAttribute('data-datetime-id')).toBe('tx-datetime');
